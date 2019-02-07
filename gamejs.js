@@ -516,6 +516,8 @@ GameJS = {
         game.currentRenderFPS = 60
         game.mouseX = 0
         game.mouseY = 0
+        game.mouseDown = false
+
         /*
         game.internal.loadingGif = document.createElement("img")
         var tmp = [
@@ -535,13 +537,24 @@ GameJS = {
 
         var game = game
         game.internal.renderer.canvas = document.createElement("canvas")
-        var listener = game.internal.renderer.canvas.addEventListener("mousemove", function(context) {
+        game.internal.renderer.canvas.addEventListener("mousemove", function(context) {
             var game = context.target.game
 
             var rect = game.internal.renderer.canvas.getBoundingClientRect()
             game.mouseX = Math.round(((context.clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width)
             game.mouseY = Math.round(((context.clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height)
         }, false)
+        game.internal.renderer.canvas.addEventListener("mousedown", function(context) {
+            var game = context.target.game
+
+            game.mouseDown = true
+        }, false)
+        game.internal.renderer.canvas.addEventListener("mouseup", function(context) {
+            var game = context.target.game
+
+            game.mouseDown = false
+        }, false)
+
         game.internal.renderer.canvas.game = game
 
         if (game.config.display.fillScreen) {
@@ -989,6 +1002,13 @@ GameJS = {
                             "object"
                         ],
                         "description": "An object you can use to store data for the sprite."
+                    },
+                    "alpha": {
+                        "default": startSprite.alpha,
+                        "types": [
+                            "number"
+                        ],
+                        "description": "The alpha of the sprite. 1 = Fully visible. 0 = Invisible."
                     }
                 }, "function cloneSprite cloning the sprite " + JSON.stringify(data.spriteToClone) + ".")
             }
@@ -1251,6 +1271,13 @@ GameJS = {
                                 "string"
                             ],
                             "description": "The type of the sprite (sprite, canvas)."
+                        },
+                        "alpha": {
+                            "default": 1,
+                            "types": [
+                                "number"
+                            ],
+                            "description": "The alpha of the sprite. 1 = Fully visible. 0 = Invisible."
                         }
                     }, "GameJSON.game.sprites item " + data.i + ".")
                 }
@@ -1786,7 +1813,9 @@ GameJS = {
                             "height": GameJS.internal.render.scale.height(sprite.height, renderer, canvas)
                         }
                         if (sprite.visible) {
+                            ctx.globalAlpha = 1
                             if (sprite.type == "sprite") {
+                                ctx.globalAlpha = sprite.alpha
                                 ctx.drawImage(game.internal.assets.imgs[sprite.img].img, scaled.x, scaled.y, scaled.width, scaled.height)
                             }
                             else {
@@ -1886,6 +1915,8 @@ GameJS = {
             return newSprite
         },
         "AABBTouching": function(spriteID) {
+            // Am *I* touching the sprite or set of sprite clones identified
+            // by SpriteID?
             if (GameJS.internal.current.game.internal.IDIndex[spriteID] == null) {
                 console.error("Oops. You are trying to perform AABB collision detection against a sprite that doesn't exist. The sprite was " + JSON.stringify(spriteID) + ".")
                 debugger
@@ -1898,6 +1929,8 @@ GameJS = {
             // TODO: What if the sprite doesn't exist?
             // TODO: What if there's no game?
             // TODO: What if you don't specify the sprite
+
+            // Get the parent sprite which 'contains' the clones to check
             var sprite = GameJS.internal.current.game.game.sprites[GameJS.internal.current.game.internal.IDIndex[spriteID]]
             if (sprite.internal.cloneCount > 0) {
                 if (GameJS.config.flags.useQTrees) {

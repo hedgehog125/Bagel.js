@@ -2,7 +2,7 @@
 <meta name="Touching" content="Demonstrates AABB collision detection in Game.js.">
 
 <title>
-    Touching
+    Touching with AABB collision detection
 </title>
 <body bgColor="black">
 
@@ -16,6 +16,9 @@
 // TODO: Made the parent invisible
 
 //GameJS.config.flags.useQTrees = false
+
+click = false
+
 Game = GameJS.init({
     "game": {
         "assets": {
@@ -24,30 +27,6 @@ Game = GameJS.init({
                     "src": "assets/imgs/orange.png",
                     "id": "orange"
                 },
-                {
-                    "src": "assets/imgs/Tile_1.png",
-                    "id": "Tile_1"
-                },
-                {
-                    "src": "assets/imgs/Tile_2.png",
-                    "id": "Tile_2"
-                },
-                {
-                    "src": "assets/imgs/Tile_3.png",
-                    "id": "Tile_3"
-                },
-                {
-                    "src": "assets/imgs/Tile_4.png",
-                    "id": "Tile_4"
-                },
-                {
-                    "src": "assets/imgs/Tile_5.png",
-                    "id": "Tile_5"
-                },
-                {
-                    "src": "assets/imgs/Tile_6.png",
-                    "id": "Tile_6"
-                }
             ],
             "snds": []
         },
@@ -58,6 +37,7 @@ Game = GameJS.init({
                 "scale": 10,
                 "img": "orange",
                 "id": "orange",
+                "alpha": 0.5,
                 "vars": {
                     "IDWas": null
                 },
@@ -69,40 +49,28 @@ Game = GameJS.init({
                                 me.visible = false
 
                                 var i = 0
-                                while (i < 1) {
+                                while (i < 10) {
                                     var y = (i + 1) * 15
 
-                                    var x = 100
-                                    var c = 0
-                                    while (c < 2) {
-                                        GameJS.methods.cloneSprite(me.id, {
-                                            "x": x,
-                                            "y": y,
-                                            "visible": true,
-                                            "vars": {
-                                                "direction": 1
-                                            }
-                                        })
-                                        x = x + 30
-                                        c++
-                                    }
-
-                                    var x = 700
-                                    var c = 0
-                                    while (c < 1) {
-                                        GameJS.methods.cloneSprite(me.id, {
-                                            "x": x,
-                                            "y": y,
-                                            "visible": true,
-                                            "vars": {
-                                                "direction": -1
-                                            }
-                                        })
-                                        x = x - 30
-                                        c++
+                                    // Generate left and right side sprites
+                                    for (x of [100,700]) {
+                                        // Left or right?
+                                        var direction = (x < 500) ? 1 : -1
+                                        for (var c=0; c < 5; c++) {
+                                            GameJS.methods.cloneSprite(me.id, {
+                                                "x": x,
+                                                "y": y,
+                                                "visible": true,
+                                                "vars": {
+                                                    "direction": direction
+                                                }
+                                            })
+                                            x = x + (30 * direction)
+                                        }
                                     }
                                     i++
                                 }
+                                // Put one in the middle of the screen
                                 GameJS.methods.cloneSprite(me.id, {
                                     "x": Game.width / 2,
                                     "y": 200,
@@ -120,22 +88,26 @@ Game = GameJS.init({
                     "scripts": {
                         "init": [
                             function(gameref, me) {
-                                me.width = me.width / 40
-                                me.height = me.height / 40
+                                me.width = me.width / 20
+                                me.height = me.height / 20
                             }
                         ],
                         "main": [
                             function(gameRef, me) {
-                                if (me.internal.collision.qtree.IDs != me.vars.IDWas) {
-                                    //console.log(me.id + ", " + me.vars.IDWas + " -> " + me.internal.collision.qtree.IDs)
-                                    me.vars.IDWas = me.internal.collision.qtree.IDs
-                                }
-
                                 if (! GameJS.methods.AABBTouching("orange")) {
-                                    me.x = me.x + (1 * me.vars.direction)
+                                    var speed = 2
+                                    me.x = me.x + (speed * me.vars.direction)
                                 }
-                                if (GameJS.methods.touchingMouse()) {
-                                    //console.log(me)
+                                if (Game.mouseDown) {
+                                    if (! click) {
+                                        if (GameJS.methods.touchingMouse()) {
+                                            click = true
+                                            console.log(me)
+                                        }
+                                    }
+                                }
+                                else {
+                                    click = false
                                 }
                             }
                         ]
