@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<meta name="Touching" content="Demonstrates AABB collision detection in Game.js.">
+
+<title>
+    Touching
+</title>
+<body bgColor="black">
+
+</body>
+<p id="canvas"></p>
+<p id="FPS" style="color: white"></p>
+
+<script src="gamejs.js"></script>
+<script>
+
+// TODO: Made the parent invisible
+
+//GameJS.config.flags.useQTrees = false
+Game = GameJS.init({
+    "game": {
+        "assets": {
+            "imgs": [
+                {
+                    "src": "assets/imgs/orange.png",
+                    "id": "orange"
+                },
+                {
+                    "src": "assets/imgs/Tile_1.png",
+                    "id": "Tile_1"
+                },
+                {
+                    "src": "assets/imgs/Tile_2.png",
+                    "id": "Tile_2"
+                },
+                {
+                    "src": "assets/imgs/Tile_3.png",
+                    "id": "Tile_3"
+                },
+                {
+                    "src": "assets/imgs/Tile_4.png",
+                    "id": "Tile_4"
+                },
+                {
+                    "src": "assets/imgs/Tile_5.png",
+                    "id": "Tile_5"
+                },
+                {
+                    "src": "assets/imgs/Tile_6.png",
+                    "id": "Tile_6"
+                }
+            ],
+            "snds": []
+        },
+        "sprites": [
+            {
+                "x": 100,
+                "y": 225,
+                "scale": 10,
+                "img": "orange",
+                "id": "orange",
+                "vars": {
+                    "IDWas": null
+                },
+                "scripts": {
+                    "init": [
+                        {
+                            "stateToRun": "Game",
+                            "code": function(gameRef, me) {
+                                me.visible = false
+
+                                var i = 0
+                                while (i < 1) {
+                                    var y = (i + 1) * 15
+
+                                    var x = 100
+                                    var c = 0
+                                    while (c < 2) {
+                                        GameJS.methods.cloneSprite(me.id, {
+                                            "x": x,
+                                            "y": y,
+                                            "visible": true,
+                                            "vars": {
+                                                "direction": 1
+                                            }
+                                        })
+                                        x = x + 30
+                                        c++
+                                    }
+
+                                    var x = 700
+                                    var c = 0
+                                    while (c < 1) {
+                                        GameJS.methods.cloneSprite(me.id, {
+                                            "x": x,
+                                            "y": y,
+                                            "visible": true,
+                                            "vars": {
+                                                "direction": -1
+                                            }
+                                        })
+                                        x = x - 30
+                                        c++
+                                    }
+                                    i++
+                                }
+                                GameJS.methods.cloneSprite(me.id, {
+                                    "x": Game.width / 2,
+                                    "y": 200,
+                                    "visible": true,
+                                    "vars": {
+                                        "direction": 0
+                                    }
+                                })
+                            }
+                        }
+                    ],
+                    "main": []
+                },
+                "clones": {
+                    "scripts": {
+                        "init": [
+                            function(gameref, me) {
+                                me.width = me.width / 40
+                                me.height = me.height / 40
+                            }
+                        ],
+                        "main": [
+                            function(gameRef, me) {
+                                if (me.internal.collision.qtree.IDs != me.vars.IDWas) {
+                                    //console.log(me.id + ", " + me.vars.IDWas + " -> " + me.internal.collision.qtree.IDs)
+                                    me.vars.IDWas = me.internal.collision.qtree.IDs
+                                }
+
+                                if (! GameJS.methods.AABBTouching("orange")) {
+                                    me.x = me.x + (1 * me.vars.direction)
+                                }
+                                if (GameJS.methods.touchingMouse()) {
+                                    //console.log(me)
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        ],
+        "scripts": {}
+    },
+    "config": {
+        "state": "Game",
+        "display": {
+            "fillScreen": true
+        }
+    },
+    "ID": "Game",
+    "width": 800,
+    "height": 450,
+    "htmlElementID": "canvas"
+})
+
+clones = 0
+setInterval(function() {
+    document.getElementById("FPS").innerHTML = Math.round(Game.currentFPS) + "<br>" + clones
+}, 30)
+
+</script>
