@@ -1838,6 +1838,15 @@ GameJS = {
         "games": {},
         "collision": {
             "methods": {
+                "spriteRect": function(sprite) {
+                    // Return the rectangle that this sprite occupies
+                    return {
+                        "x": sprite.x - (sprite.width / 2),
+                        "y": sprite.y - (sprite.height / 2),
+                        "width": sprite.width,
+                        "height": sprite.height
+                    }
+                },
                 "AABB": function(rect1, rect2) {
                     if (rect1.x <= rect2.x + rect2.width) {
                         if (rect1.x + rect1.width >= rect2.x) {
@@ -1931,22 +1940,14 @@ GameJS = {
             // TODO: What if you don't specify the sprite
 
             // Get the parent sprite which 'contains' the clones to check
-            var sprite = GameJS.internal.current.game.game.sprites[GameJS.internal.current.game.internal.IDIndex[spriteID]]
-            if (sprite.internal.cloneCount > 0) {
+            var parentsprite = GameJS.internal.current.game.game.sprites[GameJS.internal.current.game.internal.IDIndex[spriteID]]
+            if (parentsprite.internal.cloneCount > 0) {
                 if (GameJS.config.flags.useQTrees) {
-                    if (sprite.visible) {
-                        if (GameJS.internal.collision.methods.AABB({
-                            "x": me.x - (me.width / 2),
-                            "y": me.y - (me.height / 2),
-                            "width": me.width,
-                            "height": me.height
-                        }, {
-                            "x": sprite.x - (sprite.width / 2),
-                            "y": sprite.y - (sprite.height / 2),
-                            "width": sprite.width,
-                            "height": sprite.height
-                        })) {
-                            return true
+                    if (parentsprite.visible) {
+                        if (GameJS.internal.collision.methods.AABB(
+                                GameJS.internal.collision.methods.spriteRect(me),
+                                GameJS.internal.collision.methods.spriteRect(parentsprite))) {
+                                    return true
                         }
                     }
 
@@ -2027,20 +2028,10 @@ GameJS = {
                             }
                             //console.log("banana")
 
-
-
-                            if (GameJS.internal.collision.methods.AABB({
-                                "x": me.x - (me.width / 2),
-                                "y": me.y - (me.height / 2),
-                                "width": me.width,
-                                "height": me.height
-                            }, {
-                                "x": clone.x - (clone.width / 2),
-                                "y": clone.y - (clone.height / 2),
-                                "width": clone.width,
-                                "height": clone.height
-                            })) {
-                                return true
+                            if (GameJS.internal.collision.methods.AABB(
+                                    GameJS.internal.collision.methods.spriteRect(me),
+                                    GameJS.internal.collision.methods.spriteRect(clone))) {
+                                        return true
                             }
                             c++
                         }
@@ -2054,27 +2045,20 @@ GameJS = {
                     return false
                 }
                 else {
-                    if (sprite.visible) {
-                        if (GameJS.internal.collision.methods.AABB({
-                            "x": me.x - (me.width / 2),
-                            "y": me.y - (me.height / 2),
-                            "width": me.width,
-                            "height": me.height
-                        }, {
-                            "x": sprite.x - (sprite.width / 2),
-                            "y": sprite.y - (sprite.height / 2),
-                            "width": sprite.width,
-                            "height": sprite.height
-                        })) {
-                            return true
+                    // We're not using QTrees
+                    if (parentsprite.visible) {
+                        if (GameJS.internal.collision.methods.AABB(
+                                GameJS.internal.collision.methods.spriteRect(me),
+                                GameJS.internal.collision.methods.spriteRect(parentsprite))) {
+                                    return true
                         }
                     }
                     var i = 0
-                    for (i in sprite.internal.cloneIDs) {
-                        if (sprite.internal.cloneIDs[i] == null) {
+                    for (i in parentsprite.internal.cloneIDs) {
+                        if (parentsprite.internal.cloneIDs[i] == null) {
                             continue
                         }
-                        var clone = GameJS.internal.current.game.game.sprites[sprite.internal.cloneIDs[i]]
+                        var clone = GameJS.internal.current.game.game.sprites[parentsprite.internal.cloneIDs[i]]
                         if (me.id == spriteID + "#" + i && spriteID == me.cloneOf) {
                             continue
                         }
@@ -2082,18 +2066,10 @@ GameJS = {
                             continue
                         }
 
-                        if (GameJS.internal.collision.methods.AABB({
-                            "x": me.x - (me.width / 2),
-                            "y": me.y - (me.height / 2),
-                            "width": me.width,
-                            "height": me.height
-                        }, {
-                            "x": clone.x - (clone.width / 2),
-                            "y": clone.y - (clone.height / 2),
-                            "width": clone.width,
-                            "height": clone.height
-                        })) {
-                            return true
+                        if (GameJS.internal.collision.methods.AABB(
+                                GameJS.internal.collision.methods.spriteRect(me),
+                                GameJS.internal.collision.methods.spriteRect(clone))) {
+                                    return true
                         }
                     }
                 }

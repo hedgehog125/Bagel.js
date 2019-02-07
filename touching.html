@@ -15,7 +15,7 @@
 
 // TODO: Made the parent invisible
 
-//GameJS.config.flags.useQTrees = false
+GameJS.config.flags.useQTrees = false
 
 click = false
 
@@ -94,8 +94,14 @@ Game = GameJS.init({
                         ],
                         "main": [
                             function(gameRef, me) {
-                                if (! GameJS.methods.AABBTouching("orange")) {
-                                    var speed = 2
+                                var speed = 2
+                                if (GameJS.methods.AABBTouching("orange")) {
+                                    //me.x = me.x - (speed * me.vars.direction)
+                                    //if (! GameJS.methods.AABBTouching("orange")) {
+                                    //    me.x = me.x + (speed * me.vars.direction)
+                                    //}
+                                }
+                                else {
                                     me.x = me.x + (speed * me.vars.direction)
                                 }
                                 if (Game.mouseDown) {
