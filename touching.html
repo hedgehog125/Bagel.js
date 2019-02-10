@@ -15,7 +15,7 @@
 
 // TODO: Made the parent invisible
 
-GameJS.config.flags.useQTrees = false
+//GameJS.config.flags.useQTrees = false
 
 click = false
 
@@ -48,14 +48,19 @@ Game = GameJS.init({
                             "code": function(gameRef, me) {
                                 me.visible = false
 
+                                canvas = document.createElement("canvas")
+                                ctx = canvas.getContext("2d")
+                                document.body.appendChild(canvas)
+                                Game.internal.collision.qtree.methods.debugDisplay(canvas, ctx, Game)
+
                                 var i = 0
-                                while (i < 10) {
-                                    var y = (i + 1) * 15
+                                while (i < 2) {
+                                    var y = ((i + 15) + 1) * 15
 
                                     // Generate left and right side sprites
-                                    for (x of [100,700]) {
+                                    for (x of [250,700]) {
                                         // Left or right?
-                                        var direction = (x < 500) ? 1 : -1
+                                        var direction = (x < (Game.width / 2)) ? 1 : -1
                                         for (var c=0; c < 5; c++) {
                                             GameJS.methods.cloneSprite(me.id, {
                                                 "x": x,
@@ -82,7 +87,14 @@ Game = GameJS.init({
                             }
                         }
                     ],
-                    "main": []
+                    "main": [
+                        {
+                            "stateToRun": "Game",
+                            "code": function(gameRef, me) {
+                                Game.internal.collision.qtree.methods.debugDisplay(canvas, ctx, Game)
+                            }
+                        }
+                    ]
                 },
                 "clones": {
                     "scripts": {
@@ -94,7 +106,7 @@ Game = GameJS.init({
                         ],
                         "main": [
                             function(gameRef, me) {
-                                var speed = 2
+                                var speed = 1
                                 if (GameJS.methods.AABBTouching("orange")) {
                                     //me.x = me.x - (speed * me.vars.direction)
                                     //if (! GameJS.methods.AABBTouching("orange")) {

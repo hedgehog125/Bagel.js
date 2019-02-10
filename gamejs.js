@@ -415,15 +415,15 @@ GameJS = {
                         return items
                     },
                     "processSprite": function(sprite, game) {
-                        var apple = false
                         if (sprite.internal.collision.qtree.IDs != null) {
                             var updatedIDs = game.internal.collision.qtree.methods.findTheRects(sprite, game, true)
+
 
                             if (updatedIDs.toString() == sprite.internal.collision.qtree.IDs.toString()) {
                                 return
                             }
                             else {
-                                apple = true
+                                console.log("Changed")
                             }
 
 
@@ -492,6 +492,32 @@ GameJS = {
                             dataIDs[dataIDs.length] = Object.keys(rectangle.objectData).length - 1
                         }
                         return [ids, dataIDs]
+                    },
+                    "debugDisplay": function(canvas, ctx, game) {
+                        canvas.width = game.width
+                        canvas.height = game.height
+                        ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+                        canvas.style.removeProperty("width")
+                        canvas.style.setProperty("width", (canvas.width / 4) + "px", "important")
+                        canvas.style.removeProperty("height")
+                        canvas.style.setProperty("height", (canvas.height / 4) + "px", "important")
+
+                        ctx.strokeStyle = "green"
+                        ctx.lineWidth = 2
+                        var i = 0
+                        for (i in game.internal.collision.qtree.index.rectangles) {
+                            rectangle = game.internal.collision.qtree.index.rectangles[i]
+                            ctx.beginPath()
+                            ctx.moveTo(rectangle.x, rectangle.y)
+                            ctx.lineTo(rectangle.x + rectangle.width, rectangle.y)
+                            ctx.lineTo(rectangle.x + rectangle.width, rectangle.y + rectangle.height)
+                            ctx.lineTo(rectangle.x, rectangle.y + rectangle.height)
+                            ctx.lineTo(rectangle.x, rectangle.y)
+                            ctx.stroke()
+                        }
+
+
                     },
                     "canvasDataCache": function(game, update) {
                         if (game.internal.collision.qtree.index.canvasDataCache == null || update) {
