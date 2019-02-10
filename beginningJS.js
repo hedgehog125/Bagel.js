@@ -89,6 +89,8 @@ BeginningJS = {
                 "description": "The game configuration settings."
             }
         }, "GameJSON")
+        BeginningJS.internal.current.game = game
+
         game.config = BeginningJS.internal.checkOb(game.config, {}, {
             "state": {
                 "default": "game",
@@ -455,6 +457,14 @@ BeginningJS = {
                         }
                         */
                     },
+                    "splitRects": function() { // Debug
+                        var game = BeginningJS.internal.current.game
+
+                        var i = 0
+                        for (i in game.internal.collision.qtree.index.rectangles) {
+                            game.internal.collision.qtree.rectsToSplit.push(i)
+                        }
+                    },
                     "addObject": function(object, game, centred) {
                         var ids = game.internal.collision.qtree.methods.findTheRects(object, game, centred)
                         var dataIDs = []
@@ -478,7 +488,8 @@ BeginningJS = {
                                 if (rectangle.width >= 2) {
                                     if (rectangle.height >= 2) {
                                         if (! game.internal.collision.qtree.rectsToSplit.includes(ids[i])) {
-                                            game.internal.collision.qtree.rectsToSplit[game.internal.collision.qtree.rectsToSplit.length] = ids[i]
+                                            //game.internal.collision.qtree.rectsToSplit.push(ids[i])
+                                            //game.internal.collision.qtree.methods.splitRects()
                                         }
                                     }
                                 }
@@ -537,6 +548,7 @@ BeginningJS = {
         game.internal.collision.qtree.methods.addRect(game, qTreeCanvas.width / 2, 0, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
         game.internal.collision.qtree.methods.addRect(game, 0, qTreeCanvas.height / 2, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
         game.internal.collision.qtree.methods.addRect(game, qTreeCanvas.width / 2, qTreeCanvas.height / 2, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
+        game.internal.collision.qtree.methods.splitRects()
 
         game.currentFPS = 60
         game.currentRenderFPS = 60
@@ -919,6 +931,8 @@ BeginningJS = {
         }
 
         BeginningJS.internal.games[game.ID] = game
+
+        BeginningJS.internal.current.game = null
 
         return game
     },
@@ -1675,10 +1689,14 @@ BeginningJS = {
 
 
                 if (BeginningJS.internal.games[i].loaded) {
-                    BeginningJS.internal.current.game = BeginningJS.internal.games[i]
-                    BeginningJS.internal.current.game.internal.collision.tick(BeginningJS.internal.current.game)
-                    BeginningJS.internal.scripts(BeginningJS.internal.games[i])
-                    BeginningJS.internal.render.renderFrame[BeginningJS.internal.games[i].internal.renderer.type](BeginningJS.internal.games[i], BeginningJS.internal.games[i].internal.renderer.canvas, BeginningJS.internal.games[i].internal.renderer.ctx, BeginningJS.internal.games[i].internal.renderer)
+                    var game = BeginningJS.internal.games[i]
+                    BeginningJS.internal.current.game = game
+
+
+                    BeginningJS.internal.processSprites(game)
+                    BeginningJS.internal.scripts(game)
+                    game.internal.collision.tick(game)
+                    BeginningJS.internal.render.renderFrame[game.internal.renderer.type](game, game.internal.renderer.canvas, game.internal.renderer.ctx, game.internal.renderer)
                 }
                 else {
                     ctx.fillStyle = "black"
@@ -1735,7 +1753,6 @@ BeginningJS = {
             BeginningJS.internal.requestAnimationFrame.call(window, BeginningJS.internal.tick)
         },
         "scripts": function(game) {
-            BeginningJS.internal.current.game = game
             if (game.internal.lastState != game.state) {
                 BeginningJS.internal.current.sprite = null
                 var i = 0
@@ -1775,6 +1792,15 @@ BeginningJS = {
             BeginningJS.internal.current.sprite = null
             BeginningJS.internal.current.game = null
 
+        },
+        "processSprites": function(game) { // TODO: Only do sprites where collision is enabled
+            if (BeginningJS.config.flags.useQTrees) {
+                var i = 0
+                for (i in game.game.sprites) { // TODO: Which sprites can use collision detection?
+                    var sprite = game.game.sprites[i]
+                    game.internal.collision.qtree.methods.processSprite(sprite, game) // TODO: What if a sprite doesn't need it?
+                }
+            }
         },
         "render": {
             "vars": {
@@ -1853,9 +1879,6 @@ BeginningJS = {
                                     ctx.drawImage(sprite.canvas, scaled.x, scaled.y, scaled.width, scaled.height)
                                 }
                             }
-                        }
-                        if (BeginningJS.config.flags.useQTrees) {
-                            game.internal.collision.qtree.methods.processSprite(sprite, game) // TODO: What if a sprite doesn't need it?
                         }
                     }
                 }
