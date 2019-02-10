@@ -41,21 +41,21 @@
 // Back icon -> https://www.flaticon.com/authors/itim2101
 // Cross icon -> https://www.flaticon.com/authors/srip
 
-GameJS = {
+BeginningJS = {
     "init": function(gameJSON) {
         if (typeof gameJSON != "object") {
             console.error("Oh no! Your game JSON appears to be the wrong type. It must be the type 'object', you used " + JSON.stringify(gameJSON) + ".")
-            console.error("Game.js hit a critical error, look at the error above for more information.")
+            console.error("Beginning.js hit a critical error, look at the error above for more information.")
             debugger
         }
         var error = false
         if (document.getElementById(gameJSON.htmlElementID) == null && gameJSON.htmlElementID != null) { // Make sure the element exists
             console.error("Oops, you specified the element to add the game canvas to but it doesn't seem to exist. \nThis is specified in 'GameJSON.htmlElementID' and is set to " + JSON.stringify(gameJSON.htmlElementID) + ". You might want to check that the HTML that creates the element is before your JavaScript.")
-            console.error("Game.js hit a critical error, look at the error above for more information.")
+            console.error("Beginning.js hit a critical error, look at the error above for more information.")
             error = true
         }
 
-        var game = GameJS.internal.checkOb(gameJSON, {
+        var game = BeginningJS.internal.checkOb(gameJSON, {
             "ID": {
                 "types": ["string"],
                 "description": "An ID for the game canvas so it can be referenced later in the program."
@@ -89,7 +89,7 @@ GameJS = {
                 "description": "The game configuration settings."
             }
         }, "GameJSON")
-        game.config = GameJS.internal.checkOb(game.config, {}, {
+        game.config = BeginningJS.internal.checkOb(game.config, {}, {
             "state": {
                 "default": "game",
                 "types": null,
@@ -103,7 +103,7 @@ GameJS = {
                 "description": "The element to append the game canvas to."
             }
         }, "GameJSON.config")
-        game.config.display = GameJS.internal.checkOb(game.config.display, {}, {
+        game.config.display = BeginningJS.internal.checkOb(game.config.display, {}, {
             "fillScreen": {
                 "default": false,
                 "types": [
@@ -112,7 +112,7 @@ GameJS = {
                 "description": "Determines if the game will be upscaled to fit the screen."
             }
         }, "GameJSON.config")
-        game.game = GameJS.internal.checkOb(game.game, {}, {
+        game.game = BeginningJS.internal.checkOb(game.game, {}, {
             "assets": {
                 "default": {
                     "imgs": [],
@@ -140,7 +140,7 @@ GameJS = {
                 "description": "The object that contains all the game scripts that aren't for a particular sprite."
             },
         }, "GameJSON.game")
-        game.game.assets = GameJS.internal.checkOb(game.game.assets, {
+        game.game.assets = BeginningJS.internal.checkOb(game.game.assets, {
             "imgs": {
                 "types": ["array"],
                 "description": "The array that contains all the images to be loaded for the game."
@@ -150,7 +150,7 @@ GameJS = {
                 "description": "The array that contains all the images to be loaded for the game."
             }
         }, {}, "GameJSON.game.assets")
-        game.game.scripts = GameJS.internal.checkOb(game.game.scripts, {}, {
+        game.game.scripts = BeginningJS.internal.checkOb(game.game.scripts, {}, {
             "preload": {
                 "default": [],
                 "types": [
@@ -174,9 +174,9 @@ GameJS = {
         game.loaded = false
 
 
-        if (GameJS.internal.games.hasOwnProperty(game.ID)) {
+        if (BeginningJS.internal.games.hasOwnProperty(game.ID)) {
             console.error("Oh no! You used an ID for your game that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.ID) + " in 'GameJSON.htmlElementID'.")
-            console.error("Game.js hit a critical error, look at the error above for more information.")
+            console.error("Beginning.js hit a critical error, look at the error above for more information.")
             error = true
         }
 
@@ -598,8 +598,8 @@ GameJS = {
         document.addEventListener("readystatechange", function() {
             if (document.readyState == "complete") {
                 var i = 0
-                for (i in GameJS.internal.games) {
-                    var game = GameJS.internal.games[i]
+                for (i in BeginningJS.internal.games) {
+                    var game = BeginningJS.internal.games[i]
                     if (game.htmlElementID == null) {
                         try {
                             document.body.appendChild(game.internal.renderer.canvas)
@@ -639,12 +639,12 @@ GameJS = {
         }
         var i = 0
         for (i in game.game.assets.imgs) {
-            if (GameJS.internal.getTypeOf(game.game.assets.imgs[i]) != "object") {
-                console.error("Oh no! You need to use the type 'object' to define an asset. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(game.game.assets.imgs[i])) + " in ''GameJSON.game.assets.imgs' item '" + i + "'.")
-                console.error("Game.js hit a critical error, look at the error above for more information.")
+            if (BeginningJS.internal.getTypeOf(game.game.assets.imgs[i]) != "object") {
+                console.error("Oh no! You need to use the type 'object' to define an asset. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.assets.imgs[i])) + " in ''GameJSON.game.assets.imgs' item '" + i + "'.")
+                console.error("Beginning.js hit a critical error, look at the error above for more information.")
                 error = true
             }
-            game.game.assets.imgs[i] = GameJS.internal.checkOb(game.game.assets.imgs[i], {
+            game.game.assets.imgs[i] = BeginningJS.internal.checkOb(game.game.assets.imgs[i], {
                 "src": {
                     "types": [
                         "string"
@@ -660,7 +660,7 @@ GameJS = {
             }, {}, "GameJSON.game.assets.imgs item " + i + ".")
             if (game.internal.assets.imgs.hasOwnProperty(game.game.assets.imgs[i].id)) {
                 console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i  + "'.")
-                console.error("Game.js hit a critical error, look at the error above for more information.")
+                console.error("Beginning.js hit a critical error, look at the error above for more information.")
                 error = true
             }
             var img = new Image()
@@ -669,7 +669,7 @@ GameJS = {
                 game.internal.assets.loaded++
             }
             img.onerror = function() {
-                console.warn("Unable to load asset(s) using " + JSON.stringify(this.src) + " as the src. This may be due to it being a online asset and your computer being offline or because the asset doesn't exist. \nGame.js will continue to retry.")
+                console.warn("Unable to load asset(s) using " + JSON.stringify(this.src) + " as the src. This may be due to it being a online asset and your computer being offline or because the asset doesn't exist. \nBeginning.js will continue to retry.")
                 this.onerror = function() {
                     setTimeout(function(img) {
                         var tmp = img.src
@@ -690,12 +690,12 @@ GameJS = {
         // Scripts
         var i = 0
         for (i in game.game.scripts.init) {
-            if (GameJS.internal.getTypeOf(game.game.scripts.init[i]) != "object") {
-                console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(game.game.scripts.init[i])) + " in ''GameJSON.game.scripts.init' item " + i + ".")
-                console.error("Game.js hit a critical error, look at the error above for more information.")
+            if (BeginningJS.internal.getTypeOf(game.game.scripts.init[i]) != "object") {
+                console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.scripts.init[i])) + " in ''GameJSON.game.scripts.init' item " + i + ".")
+                console.error("Beginning.js hit a critical error, look at the error above for more information.")
                 error = true
             }
-            game.game.scripts.init[i] = GameJS.internal.checkOb(game.game.scripts.init[i], {
+            game.game.scripts.init[i] = BeginningJS.internal.checkOb(game.game.scripts.init[i], {
                 "stateToRun": {
                     "types": [
                         "string",
@@ -717,12 +717,12 @@ GameJS = {
         }
         var i = 0
         for (i in game.game.scripts.main) {
-            if (GameJS.internal.getTypeOf(game.game.scripts.main[i]) != "object") {
-                console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(game.game.scripts.main[i])) + " in ''GameJSON.game.scripts.main' item " + i + ".")
-                console.error("Game.js hit a critical error, look at the error above for more information.")
+            if (BeginningJS.internal.getTypeOf(game.game.scripts.main[i]) != "object") {
+                console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.scripts.main[i])) + " in ''GameJSON.game.scripts.main' item " + i + ".")
+                console.error("Beginning.js hit a critical error, look at the error above for more information.")
                 error = true
             }
-            game.game.scripts.main[i] = GameJS.internal.checkOb(game.game.scripts.main[i], {
+            game.game.scripts.main[i] = BeginningJS.internal.checkOb(game.game.scripts.main[i], {
                 "stateToRun": {
                     "types": [
                         "string",
@@ -746,19 +746,19 @@ GameJS = {
         // Sprites
         var i = 0
         for (i in game.game.sprites) {
-            var sprite = GameJS.internal.createSprite({
+            var sprite = BeginningJS.internal.createSprite({
                 "isClone": false,
                 "i": i,
                 "game": game,
             }, game.game.sprites[i])
 
             /*
-            if (GameJS.internal.getTypeOf(game.game.sprites[i]) != "object") {
-                console.error("Oh no! You need to use the type 'object' to define a sprite. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(game.game.sprites[i])) + " in ''GameJSON.game.sprites' item '" + i + "'.")
-                console.error("Game.js hit a critical error, look at the error above for more information.")
+            if (BeginningJS.internal.getTypeOf(game.game.sprites[i]) != "object") {
+                console.error("Oh no! You need to use the type 'object' to define a sprite. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.sprites[i])) + " in ''GameJSON.game.sprites' item '" + i + "'.")
+                console.error("Beginning.js hit a critical error, look at the error above for more information.")
                 error = true
             }
-            game.game.sprites[i] = GameJS.internal.checkOb(game.game.sprites[i], {
+            game.game.sprites[i] = BeginningJS.internal.checkOb(game.game.sprites[i], {
                 "x": {
                     "types": [
                         "number"
@@ -816,7 +816,7 @@ GameJS = {
                     "description": "The sprite's scripts."
                 },
             }, "GameJSON.game.sprites item " + i + ".")
-            game.game.sprites[i].scripts = GameJS.internal.checkOb(game.game.sprites[i].scripts, {}, {
+            game.game.sprites[i].scripts = BeginningJS.internal.checkOb(game.game.sprites[i].scripts, {}, {
                 "init": {
                     "default": [],
                     "types": [
@@ -841,19 +841,19 @@ GameJS = {
 
             if (ids.includes(game.game.sprites[i].id)) {
                 console.error("Oh no! You used an ID for a sprite that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.sprites[i].id) + " in 'GameJSON.game.sprites item " + i  + "'.")
-                console.error("Game.js hit a critical error, look at the error above for more information.")
+                console.error("Beginning.js hit a critical error, look at the error above for more information.")
                 error = true
             }
             ids[ids.length] = game.game.sprites[i].id
 
             var c = 0
             for (c in game.game.sprites[i].scripts.init) {
-                if (GameJS.internal.getTypeOf(game.game.sprites[i].scripts.init[c]) != "object") {
-                    console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(game.game.sprites[i].scripts.init[c])) + " in ''GameJSON.game.sprites' item " + c + " -> scripts.init.")
-                    console.error("Game.js hit a critical error, look at the error above for more information.")
+                if (BeginningJS.internal.getTypeOf(game.game.sprites[i].scripts.init[c]) != "object") {
+                    console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.sprites[i].scripts.init[c])) + " in ''GameJSON.game.sprites' item " + c + " -> scripts.init.")
+                    console.error("Beginning.js hit a critical error, look at the error above for more information.")
                     error = true
                 }
-                game.game.sprites[i].scripts.init[c] = GameJS.internal.checkOb(game.game.sprites[i].scripts.init[c], {
+                game.game.sprites[i].scripts.init[c] = BeginningJS.internal.checkOb(game.game.sprites[i].scripts.init[c], {
                     "stateToRun": {
                         "types": [
                             "string",
@@ -878,12 +878,12 @@ GameJS = {
             }
             var c = 0
             for (c in game.game.sprites[i].scripts.main) {
-                if (GameJS.internal.getTypeOf(game.game.sprites[i].scripts.main[c]) != "object") {
-                    console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(game.game.sprites[i].scripts.main[c])) + " in ''GameJSON.game.sprites' item " + c + " -> scripts.main.")
-                    console.error("Game.js hit a critical error, look at the error above for more information.")
+                if (BeginningJS.internal.getTypeOf(game.game.sprites[i].scripts.main[c]) != "object") {
+                    console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.sprites[i].scripts.main[c])) + " in ''GameJSON.game.sprites' item " + c + " -> scripts.main.")
+                    console.error("Beginning.js hit a critical error, look at the error above for more information.")
                     error = true
                 }
-                game.game.sprites[i].scripts.main[c] = GameJS.internal.checkOb(game.game.sprites[i].scripts.main[c], {
+                game.game.sprites[i].scripts.main[c] = BeginningJS.internal.checkOb(game.game.sprites[i].scripts.main[c], {
                     "stateToRun": {
                         "types": [
                             "string",
@@ -918,7 +918,7 @@ GameJS = {
             }
         }
 
-        GameJS.internal.games[game.ID] = game
+        BeginningJS.internal.games[game.ID] = game
 
         return game
     },
@@ -953,7 +953,7 @@ GameJS = {
                 var type = data.type
             }
             if (type == "sprite") {
-                var sprite = GameJS.internal.checkOb(startSprite.clones, {}, {
+                var sprite = BeginningJS.internal.checkOb(startSprite.clones, {}, {
                     "x": {
                         "default": startSprite.x,
                         "types": [
@@ -1040,7 +1040,7 @@ GameJS = {
             }
             else {
                 if (type == "canvas") {
-                    var sprite = GameJS.internal.checkOb(startSprite.clones, {}, {
+                    var sprite = BeginningJS.internal.checkOb(startSprite.clones, {}, {
                         "x": {
                             "default": startSprite.x,
                             "types": [
@@ -1122,11 +1122,11 @@ GameJS = {
                 else {
                     console.log(startSprite)
                     console.error("Oh no! You used an invalid type for a clone. \nYou used " + JSON.stringify(type) + " in 'GameJSON.game.sprites item' " + data.i  + ". While cloning sprite " + JSON.stringify(startSprite.id) + ".")
-                    console.error("Game.js hit a critical error, look at the error above for more information.")
+                    console.error("Beginning.js hit a critical error, look at the error above for more information.")
                     debugger
                 }
             }
-            sprite.scripts = GameJS.internal.checkOb(sprite.scripts, {}, {
+            sprite.scripts = BeginningJS.internal.checkOb(sprite.scripts, {}, {
                 "init": {
                     "default": [],
                     "types": [
@@ -1145,26 +1145,26 @@ GameJS = {
 
             var c = 0
             for (c in sprite.scripts.init) {
-                if (GameJS.internal.getTypeOf(sprite.scripts.init[c]) != "function") {
-                    console.error("Oh no! You need to use the type 'function' in a clone's array of init scripts. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(sprite.scripts.init[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
+                if (BeginningJS.internal.getTypeOf(sprite.scripts.init[c]) != "function") {
+                    console.error("Oh no! You need to use the type 'function' in a clone's array of init scripts. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(sprite.scripts.init[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
                     //console.log(sprite.scripts.init[c])
-                    console.error("Game.js hit a critical error, look at the error above for more information.")
+                    console.error("Beginning.js hit a critical error, look at the error above for more information.")
                     debugger
                 }
             }
             var c = 0
             for (c in sprite.scripts.main) {
-                if (GameJS.internal.getTypeOf(sprite.scripts.main[c]) != "function") {
-                    console.error("Oh no! You need to use the type 'function' in a clone's array of main scripts. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(sprite.scripts.main[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
+                if (BeginningJS.internal.getTypeOf(sprite.scripts.main[c]) != "function") {
+                    console.error("Oh no! You need to use the type 'function' in a clone's array of main scripts. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(sprite.scripts.main[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
                     //console.log(sprite.scripts.main[c])
-                    console.error("Game.js hit a critical error, look at the error above for more information.")
+                    console.error("Beginning.js hit a critical error, look at the error above for more information.")
                     debugger
                 }
             }
         },
         "createSprite": function(data, spriteData, game) {
             if (data.isClone) {
-                GameJS.internal.checkClones(spriteData, data)
+                BeginningJS.internal.checkClones(spriteData, data)
                 var sprite = spriteData
 
                 var c = 0
@@ -1206,14 +1206,14 @@ GameJS = {
                 sprite.canvas.width = sprite.width
                 sprite.canvas.height = sprite.height
                 sprite.ctx = sprite.canvas.getContext("2d")
-                GameJS.internal.spriteTick(sprite, game)
+                BeginningJS.internal.spriteTick(sprite, game)
             }
             else {
                 if (spriteData.type == null) {
                     spriteData.type = "sprite"
                 }
                 if (spriteData.type == "sprite") {
-                    var sprite = GameJS.internal.checkOb(spriteData, {
+                    var sprite = BeginningJS.internal.checkOb(spriteData, {
                         "x": {
                             "types": [
                                 "number"
@@ -1309,7 +1309,7 @@ GameJS = {
                 }
                 else {
                     if (spriteData.type == "canvas") {
-                        var sprite = GameJS.internal.checkOb(spriteData, {
+                        var sprite = BeginningJS.internal.checkOb(spriteData, {
                             "x": {
                                 "types": [
                                     "number"
@@ -1388,12 +1388,12 @@ GameJS = {
                     }
                     else {
                         console.error("Oh no! You used an invalid type for a sprite. \nYou used " + JSON.stringify(sprite.type) + " in 'GameJSON.game.sprites item' " + data.i  + ".")
-                        console.error("Game.js hit a critical error, look at the error above for more information.")
+                        console.error("Beginning.js hit a critical error, look at the error above for more information.")
                         debugger
                     }
                 }
 
-                sprite.scripts = GameJS.internal.checkOb(sprite.scripts, {}, {
+                sprite.scripts = BeginningJS.internal.checkOb(sprite.scripts, {}, {
                     "init": {
                         "default": [],
                         "types": [
@@ -1424,7 +1424,7 @@ GameJS = {
                 }
                 if (data.game.internal.ids.includes(sprite.id)) {
                     console.error("Oh no! You used an ID for a sprite that is already being used. Try and think of something else. \nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item' " + data.i  + ".")
-                    console.error("Game.js hit a critical error, look at the error above for more information.")
+                    console.error("Beginning.js hit a critical error, look at the error above for more information.")
                     debugger
                 }
                 data.game.internal.ids[data.game.internal.ids.length] = sprite.id
@@ -1433,12 +1433,12 @@ GameJS = {
 
                 var c = 0
                 for (c in data.game.game.sprites[data.i].scripts.init) {
-                    if (GameJS.internal.getTypeOf(data.game.game.sprites[data.i].scripts.init[c]) != "object") {
-                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(data.game.game.sprites[data.i].scripts.init[c])) + " in ''GameJSON.data.game.game.sprites' item " + c + " -> scripts.init.")
-                        console.error("data.game.js hit a critical error, look at the error above for more information.")
+                    if (BeginningJS.internal.getTypeOf(data.game.game.sprites[data.i].scripts.init[c]) != "object") {
+                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(data.game.game.sprites[data.i].scripts.init[c])) + " in ''GameJSON.data.game.game.sprites' item " + c + " -> scripts.init.")
+                        console.error("data.Beginning.js hit a critical error, look at the error above for more information.")
                         debugger
                     }
-                    data.game.game.sprites[data.i].scripts.init[c] = GameJS.internal.checkOb(data.game.game.sprites[data.i].scripts.init[c], {
+                    data.game.game.sprites[data.i].scripts.init[c] = BeginningJS.internal.checkOb(data.game.game.sprites[data.i].scripts.init[c], {
                         "stateToRun": {
                             "types": [
                                 "string",
@@ -1463,12 +1463,12 @@ GameJS = {
                 }
                 var c = 0
                 for (c in data.game.game.sprites[data.i].scripts.main) {
-                    if (GameJS.internal.getTypeOf(data.game.game.sprites[data.i].scripts.main[c]) != "object") {
-                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(GameJS.internal.getTypeOf(data.game.game.sprites[data.i].scripts.main[c])) + " in ''GameJSON.data.game.game.sprites' item " + c + " -> scripts.main.")
-                        console.error("data.game.js hit a critical error, look at the error above for more information.")
+                    if (BeginningJS.internal.getTypeOf(data.game.game.sprites[data.i].scripts.main[c]) != "object") {
+                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(data.game.game.sprites[data.i].scripts.main[c])) + " in ''GameJSON.data.game.game.sprites' item " + c + " -> scripts.main.")
+                        console.error("data.Beginning.js hit a critical error, look at the error above for more information.")
                         debugger
                     }
-                    data.game.game.sprites[data.i].scripts.main[c] = GameJS.internal.checkOb(data.game.game.sprites[data.i].scripts.main[c], {
+                    data.game.game.sprites[data.i].scripts.main[c] = BeginningJS.internal.checkOb(data.game.game.sprites[data.i].scripts.main[c], {
                         "stateToRun": {
                             "types": [
                                 "string",
@@ -1515,7 +1515,7 @@ GameJS = {
                 else {
                     if (ob.hasOwnProperty(i)) {
                         if (required[i].types != null) {
-                            if (! required[i].types.includes(GameJS.internal.getTypeOf(ob[i]))) {
+                            if (! required[i].types.includes(BeginningJS.internal.getTypeOf(ob[i]))) {
                                 wrongTypes[wrongTypes.length] = i
                             }
                         }
@@ -1526,7 +1526,7 @@ GameJS = {
             for (i in optional) {
                 if (ob.hasOwnProperty(i)) {
                     if (optional[i].types != null) {
-                        if (! optional[i].types.includes(GameJS.internal.getTypeOf(ob[i]))) {
+                        if (! optional[i].types.includes(BeginningJS.internal.getTypeOf(ob[i]))) {
                             wrongTypes[wrongTypes.length] = i
                         }
                     }
@@ -1581,10 +1581,10 @@ GameJS = {
                     var c = wrongTypes[i]
                     if (required.hasOwnProperty(c)) {
                         if (required[c].types.length == 1) {
-                            message[message.length] = " " + c + " -> " + required[c].description + " \n You used the type " + JSON.stringify(GameJS.internal.getTypeOf(ob[c])) + ", it can only be " + JSON.stringify(required[c].types[0]) + ". \n"
+                            message[message.length] = " " + c + " -> " + required[c].description + " \n You used the type " + JSON.stringify(BeginningJS.internal.getTypeOf(ob[c])) + ", it can only be " + JSON.stringify(required[c].types[0]) + ". \n"
                         }
                         else {
-                            message[message.length] = " " + c + " -> " + required[c].description + " \n You used the type " + JSON.stringify(GameJS.internal.getTypeOf(ob[c])) + ", it has to be one of these types: \n"
+                            message[message.length] = " " + c + " -> " + required[c].description + " \n You used the type " + JSON.stringify(BeginningJS.internal.getTypeOf(ob[c])) + ", it has to be one of these types: \n"
                             var a = 0
                             for (a in required[c].types) {
                                 message[message.length] = "  " + JSON.stringify(required[c].types[a]) + " \n"
@@ -1593,10 +1593,10 @@ GameJS = {
                     }
                     else {
                         if (optional[c].types.length == 1) {
-                            message[message.length] = " " + c + " -> " + optional[c].description + " \n You used the type " + JSON.stringify(GameJS.internal.getTypeOf(ob[c])) + ", it can only be type " + JSON.stringify(optional[c].types[0]) + ". \n"
+                            message[message.length] = " " + c + " -> " + optional[c].description + " \n You used the type " + JSON.stringify(BeginningJS.internal.getTypeOf(ob[c])) + ", it can only be type " + JSON.stringify(optional[c].types[0]) + ". \n"
                         }
                         else {
-                            message[message.length] = " " + c + " -> " + optional[c].description + " \n You used the type " + JSON.stringify(GameJS.internal.getTypeOf(ob[c])) + ", it has to be one of these types: \n"
+                            message[message.length] = " " + c + " -> " + optional[c].description + " \n You used the type " + JSON.stringify(BeginningJS.internal.getTypeOf(ob[c])) + ", it has to be one of these types: \n"
                             var a = 0
                             for (a in optional[c].types) {
                                 message[message.length] = "  " + JSON.stringify(optional[c].types[a]) + " \n"
@@ -1607,7 +1607,7 @@ GameJS = {
 
                 console.error(message.join(""))
             }
-            if (GameJS.config.flags.warnOfUselessParameters) { // Check the flag
+            if (BeginningJS.config.flags.warnOfUselessParameters) { // Check the flag
                 if (useless.length > 0) {
                     var message = []
                     if (useless.length == 1) {
@@ -1627,13 +1627,13 @@ GameJS = {
                         message[message.length] = " " + i + " -> " + optional[i].description + " \n"
                     }
 
-                    message[message.length] = "Alternatively, you can disable these warnings by editing the 'warnOfUselessParameters' flag. \nUse this code: 'GameJS.config.flags.warnOfUselessParameters = false'"
+                    message[message.length] = "Alternatively, you can disable these warnings by editing the 'warnOfUselessParameters' flag. \nUse this code: 'BeginningJS.config.flags.warnOfUselessParameters = false'"
                     console.warn(message.join(""))
                 }
             }
 
             if (missing.length > 0 || wrongTypes.length > 0) { // Was there an error?
-                console.error("Game.js hit a critical error, look at the error above for more information.")
+                console.error("Beginning.js hit a critical error, look at the error above for more information.")
                 debugger
             }
             return newOb
@@ -1641,11 +1641,11 @@ GameJS = {
         "requestAnimationFrame": window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,
         "tick": function() {
             var i = 0
-            for (i in GameJS.internal.games) {
+            for (i in BeginningJS.internal.games) {
                 var start = new Date()
-                var ctx = GameJS.internal.games[i].internal.renderer.ctx
-                var canvas = GameJS.internal.games[i].internal.renderer.canvas
-                var game = GameJS.internal.games[i]
+                var ctx = BeginningJS.internal.games[i].internal.renderer.ctx
+                var canvas = BeginningJS.internal.games[i].internal.renderer.canvas
+                var game = BeginningJS.internal.games[i]
 
                 var newWidth = window.innerWidth
                 var newHeight = window.innerHeight
@@ -1674,11 +1674,11 @@ GameJS = {
                 }
 
 
-                if (GameJS.internal.games[i].loaded) {
-                    GameJS.internal.current.game = GameJS.internal.games[i]
-                    GameJS.internal.current.game.internal.collision.tick(GameJS.internal.current.game)
-                    GameJS.internal.scripts(GameJS.internal.games[i])
-                    GameJS.internal.render.renderFrame[GameJS.internal.games[i].internal.renderer.type](GameJS.internal.games[i], GameJS.internal.games[i].internal.renderer.canvas, GameJS.internal.games[i].internal.renderer.ctx, GameJS.internal.games[i].internal.renderer)
+                if (BeginningJS.internal.games[i].loaded) {
+                    BeginningJS.internal.current.game = BeginningJS.internal.games[i]
+                    BeginningJS.internal.current.game.internal.collision.tick(BeginningJS.internal.current.game)
+                    BeginningJS.internal.scripts(BeginningJS.internal.games[i])
+                    BeginningJS.internal.render.renderFrame[BeginningJS.internal.games[i].internal.renderer.type](BeginningJS.internal.games[i], BeginningJS.internal.games[i].internal.renderer.canvas, BeginningJS.internal.games[i].internal.renderer.ctx, BeginningJS.internal.games[i].internal.renderer)
                 }
                 else {
                     ctx.fillStyle = "black"
@@ -1703,41 +1703,41 @@ GameJS = {
                     //Game.internal.loadingGif.style.top = Game.internal.renderer.canvas.height
 
 
-                    if (GameJS.internal.games[i].internal.assets.loading == 0) {
-                        GameJS.internal.games[i].internal.loadedDelay++
-                        if (GameJS.internal.games[i].internal.loadedDelay > 100) {
-                            GameJS.internal.games[i].loaded = true
+                    if (BeginningJS.internal.games[i].internal.assets.loading == 0) {
+                        BeginningJS.internal.games[i].internal.loadedDelay++
+                        if (BeginningJS.internal.games[i].internal.loadedDelay > 100) {
+                            BeginningJS.internal.games[i].loaded = true
                             var c = 0
-                            for (c in GameJS.internal.games[i].game.sprites) {
-                                var sprite = GameJS.internal.games[i].game.sprites[c]
+                            for (c in BeginningJS.internal.games[i].game.sprites) {
+                                var sprite = BeginningJS.internal.games[i].game.sprites[c]
 
                                 var customDimentions = true
                                 if (sprite.width == "auto") {
-                                    sprite.width = GameJS.internal.games[i].internal.assets.imgs[sprite.img].img.width
+                                    sprite.width = BeginningJS.internal.games[i].internal.assets.imgs[sprite.img].img.width
                                     customDimentions = false
                                 }
                                 if (sprite.height == "auto") {
-                                    sprite.height = GameJS.internal.games[i].internal.assets.imgs[sprite.img].img.height
+                                    sprite.height = BeginningJS.internal.games[i].internal.assets.imgs[sprite.img].img.height
                                     customDimentions = false
                                 }
                                 if (! customDimentions) {
-                                    sprite.width = GameJS.internal.games[i].internal.assets.imgs[sprite.img].img.width * sprite.scale
-                                    sprite.height = GameJS.internal.games[i].internal.assets.imgs[sprite.img].img.height * sprite.scale
+                                    sprite.width = BeginningJS.internal.games[i].internal.assets.imgs[sprite.img].img.width * sprite.scale
+                                    sprite.height = BeginningJS.internal.games[i].internal.assets.imgs[sprite.img].img.height * sprite.scale
                                 }
                             }
                         }
                     }
                 }
-                GameJS.internal.games[i].internal.FPSFrames++
-                GameJS.internal.games[i].currentRenderFPS = 1000 / (new Date() - start)
-                GameJS.internal.games[i].internal.renderer.lastRender = new Date()
+                BeginningJS.internal.games[i].internal.FPSFrames++
+                BeginningJS.internal.games[i].currentRenderFPS = 1000 / (new Date() - start)
+                BeginningJS.internal.games[i].internal.renderer.lastRender = new Date()
             }
-            GameJS.internal.requestAnimationFrame.call(window, GameJS.internal.tick)
+            BeginningJS.internal.requestAnimationFrame.call(window, BeginningJS.internal.tick)
         },
         "scripts": function(game) {
-            GameJS.internal.current.game = game
+            BeginningJS.internal.current.game = game
             if (game.internal.lastState != game.state) {
-                GameJS.internal.current.sprite = null
+                BeginningJS.internal.current.sprite = null
                 var i = 0
                 for (i in game.internal.scripts.index.init[game.state]) {
                     var script = game.game.scripts.init[game.internal.scripts.index.init[game.state][i]]
@@ -1746,14 +1746,14 @@ GameJS = {
                 var i = 0
                 for (i in game.internal.scripts.index.spritesInit[game.state]) {
                     var sprite = game.internal.scripts.index.spritesInit[game.state][i].sprite
-                    GameJS.internal.current.sprite = game.game.sprites[game.internal.ids.indexOf(sprite.id)] // What if it's null?
+                    BeginningJS.internal.current.sprite = game.game.sprites[game.internal.ids.indexOf(sprite.id)] // What if it's null?
                     var script = sprite.scripts.init[game.internal.scripts.index.spritesInit[game.state][i].script]
                     script.code(game, sprite)
                 }
                 game.internal.lastState = game.state
             }
 
-            GameJS.internal.current.sprite = null
+            BeginningJS.internal.current.sprite = null
             var i = 0
             for (i in game.internal.scripts.index.main[game.state]) {
                 var script = game.game.scripts.main[game.internal.scripts.index.main[game.state][i]]
@@ -1762,9 +1762,9 @@ GameJS = {
             var i = 0
             for (i in game.internal.scripts.index.spritesMain[game.state]) {
                 var sprite = game.internal.scripts.index.spritesMain[game.state][i].sprite
-                GameJS.internal.current.sprite = game.game.sprites[game.internal.IDIndex[sprite.id]] // What if it's null?
+                BeginningJS.internal.current.sprite = game.game.sprites[game.internal.IDIndex[sprite.id]] // What if it's null?
                 if (game.internal.scripts.index.spritesMain[game.state][i].isClone) {
-                    GameJS.internal.current.sprite = sprite
+                    BeginningJS.internal.current.sprite = sprite
                     sprite.scripts.main[game.internal.scripts.index.spritesMain[game.state][i].script](game, sprite)
                 }
                 else {
@@ -1772,8 +1772,8 @@ GameJS = {
                     script.code(game, sprite)
                 }
             }
-            GameJS.internal.current.sprite = null
-            GameJS.internal.current.game = null
+            BeginningJS.internal.current.sprite = null
+            BeginningJS.internal.current.game = null
 
         },
         "render": {
@@ -1833,10 +1833,10 @@ GameJS = {
                         var y = sprite.y - (sprite.height / 2)
 
                         var scaled = {
-                            "x": GameJS.internal.render.scale.x(x, renderer, canvas),
-                            "y": GameJS.internal.render.scale.y(y, renderer, canvas),
-                            "width": GameJS.internal.render.scale.width(sprite.width, renderer, canvas),
-                            "height": GameJS.internal.render.scale.height(sprite.height, renderer, canvas)
+                            "x": BeginningJS.internal.render.scale.x(x, renderer, canvas),
+                            "y": BeginningJS.internal.render.scale.y(y, renderer, canvas),
+                            "width": BeginningJS.internal.render.scale.width(sprite.width, renderer, canvas),
+                            "height": BeginningJS.internal.render.scale.height(sprite.height, renderer, canvas)
                         }
                         if (sprite.visible) {
                             ctx.globalAlpha = 1
@@ -1854,7 +1854,7 @@ GameJS = {
                                 }
                             }
                         }
-                        if (GameJS.config.flags.useQTrees) {
+                        if (BeginningJS.config.flags.useQTrees) {
                             game.internal.collision.qtree.methods.processSprite(sprite, game) // TODO: What if a sprite doesn't need it?
                         }
                     }
@@ -1901,15 +1901,15 @@ GameJS = {
     "methods": {
         "cloneSprite": function(spriteID, inputCloneData) {
             if (spriteID == null) {
-                // What if GameJS.internal.current.sprite is null?
-                var sprite = GameJS.internal.current.sprite
+                // What if BeginningJS.internal.current.sprite is null?
+                var sprite = BeginningJS.internal.current.sprite
             }
             else {
-                if (GameJS.internal.current.game.internal.IDIndex[spriteID] == null) {
+                if (BeginningJS.internal.current.game.internal.IDIndex[spriteID] == null) {
                     console.error("Oops. You are trying to clone a sprite that doesn't exist. You tried to clone " + JSON.stringify(spriteID) + ".")
                     debugger
                 }
-                var sprite = GameJS.internal.current.game.game.sprites[GameJS.internal.current.game.internal.IDIndex[spriteID]]
+                var sprite = BeginningJS.internal.current.game.game.sprites[BeginningJS.internal.current.game.internal.IDIndex[spriteID]]
             }
             if (inputCloneData == null) {
                 var cloneData = {}
@@ -1918,8 +1918,8 @@ GameJS = {
                 var cloneData = inputCloneData
             }
 
-            var id = GameJS.internal.findCloneID(sprite, GameJS.internal.current.game)
-            var cloneSpriteID = GameJS.internal.findSpriteID(GameJS.internal.current.game)
+            var id = BeginningJS.internal.findCloneID(sprite, BeginningJS.internal.current.game)
+            var cloneSpriteID = BeginningJS.internal.findSpriteID(BeginningJS.internal.current.game)
             sprite.internal.cloneIDs[id] = cloneSpriteID
             sprite.internal.cloneCount++
 
@@ -1933,46 +1933,46 @@ GameJS = {
                 newSpriteData[i] = cloneData[i]
             }
 
-            var newSprite = GameJS.internal.createSprite({
+            var newSprite = BeginningJS.internal.createSprite({
                 "isClone": true,
                 "cloneOf": sprite.id
-            }, newSpriteData, GameJS.internal.current.game)
+            }, newSpriteData, BeginningJS.internal.current.game)
             newSprite.id = sprite.id + "#" + id
             newSprite.cloneID = id
-            GameJS.internal.current.game.game.sprites[cloneSpriteID] = newSprite
-            GameJS.internal.current.game.internal.IDIndex[spriteID + "#" + id] = cloneSpriteID
+            BeginningJS.internal.current.game.game.sprites[cloneSpriteID] = newSprite
+            BeginningJS.internal.current.game.internal.IDIndex[spriteID + "#" + id] = cloneSpriteID
 
 
             var i = 0
             for (i in newSprite.scripts.init) {
-                newSprite.scripts.init[i](GameJS.internal.current.game, newSprite)
+                newSprite.scripts.init[i](BeginningJS.internal.current.game, newSprite)
             }
             return newSprite
         },
         "AABBTouching": function(spriteID) {
             // Am *I* touching the sprite or set of sprite clones identified
             // by SpriteID?
-            if (GameJS.internal.current.game.internal.IDIndex[spriteID] == null) {
+            if (BeginningJS.internal.current.game.internal.IDIndex[spriteID] == null) {
                 console.error("Oops. You are trying to perform AABB collision detection against a sprite that doesn't exist. The sprite was " + JSON.stringify(spriteID) + ".")
                 debugger
             }
-            if (GameJS.internal.current.sprite == null) {
+            if (BeginningJS.internal.current.sprite == null) {
                 console.error("Oops. You are trying to perform AABB collision detection but you don't seem to be running it as a sprite.")
                 debugger
             }
-            var me = GameJS.internal.current.sprite
+            var me = BeginningJS.internal.current.sprite
             // TODO: What if the sprite doesn't exist?
             // TODO: What if there's no game?
             // TODO: What if you don't specify the sprite
 
             // Get the parent sprite which 'contains' the clones to check
-            var parentsprite = GameJS.internal.current.game.game.sprites[GameJS.internal.current.game.internal.IDIndex[spriteID]]
+            var parentsprite = BeginningJS.internal.current.game.game.sprites[BeginningJS.internal.current.game.internal.IDIndex[spriteID]]
             if (parentsprite.internal.cloneCount > 0) {
-                if (GameJS.config.flags.useQTrees) {
+                if (BeginningJS.config.flags.useQTrees) {
                     if (parentsprite.visible) {
-                        if (GameJS.internal.collision.methods.AABB(
-                                GameJS.internal.collision.methods.spriteRect(me),
-                                GameJS.internal.collision.methods.spriteRect(parentsprite))) {
+                        if (BeginningJS.internal.collision.methods.AABB(
+                                BeginningJS.internal.collision.methods.spriteRect(me),
+                                BeginningJS.internal.collision.methods.spriteRect(parentsprite))) {
                                     return true
                         }
                     }
@@ -2054,9 +2054,9 @@ GameJS = {
                             }
                             //console.log("banana")
 
-                            if (GameJS.internal.collision.methods.AABB(
-                                    GameJS.internal.collision.methods.spriteRect(me),
-                                    GameJS.internal.collision.methods.spriteRect(clone))) {
+                            if (BeginningJS.internal.collision.methods.AABB(
+                                    BeginningJS.internal.collision.methods.spriteRect(me),
+                                    BeginningJS.internal.collision.methods.spriteRect(clone))) {
                                         return true
                             }
                             c++
@@ -2073,9 +2073,9 @@ GameJS = {
                 else {
                     // We're not using QTrees
                     if (parentsprite.visible) {
-                        if (GameJS.internal.collision.methods.AABB(
-                                GameJS.internal.collision.methods.spriteRect(me),
-                                GameJS.internal.collision.methods.spriteRect(parentsprite))) {
+                        if (BeginningJS.internal.collision.methods.AABB(
+                                BeginningJS.internal.collision.methods.spriteRect(me),
+                                BeginningJS.internal.collision.methods.spriteRect(parentsprite))) {
                                     return true
                         }
                     }
@@ -2084,7 +2084,7 @@ GameJS = {
                         if (parentsprite.internal.cloneIDs[i] == null) {
                             continue
                         }
-                        var clone = GameJS.internal.current.game.game.sprites[parentsprite.internal.cloneIDs[i]]
+                        var clone = BeginningJS.internal.current.game.game.sprites[parentsprite.internal.cloneIDs[i]]
                         if (me.id == spriteID + "#" + i && spriteID == me.cloneOf) {
                             continue
                         }
@@ -2092,9 +2092,9 @@ GameJS = {
                             continue
                         }
 
-                        if (GameJS.internal.collision.methods.AABB(
-                                GameJS.internal.collision.methods.spriteRect(me),
-                                GameJS.internal.collision.methods.spriteRect(clone))) {
+                        if (BeginningJS.internal.collision.methods.AABB(
+                                BeginningJS.internal.collision.methods.spriteRect(me),
+                                BeginningJS.internal.collision.methods.spriteRect(clone))) {
                                     return true
                         }
                     }
@@ -2102,17 +2102,17 @@ GameJS = {
             }
         },
         "touchingMouse": function() {
-            var mouseX = GameJS.internal.current.game.mouseX
-            var mouseY = GameJS.internal.current.game.mouseY
+            var mouseX = BeginningJS.internal.current.game.mouseX
+            var mouseY = BeginningJS.internal.current.game.mouseY
 
-            var me = GameJS.internal.current.sprite
+            var me = BeginningJS.internal.current.sprite
             var rect = {
                 "x": me.x - (me.width / 2),
                 "y": me.y - (me.height / 2),
                 "width": me.width,
                 "height": me.height
             }
-            var game = GameJS.internal.current.game
+            var game = BeginningJS.internal.current.game
             // TODO: What if the sprite doesn't exist?
             // TODO: What if there's no game?
             if (game.mouseX <= rect.x + rect.width) {
@@ -2137,7 +2137,7 @@ GameJS = {
                 "button": {
                     "modern": function(config) {
                         if (config.type == "cross") {
-                            GameJS.internal.checkOb(config, {
+                            BeginningJS.internal.checkOb(config, {
                                 "elementID": {
                                     "types": ["string"],
                                     "description": "Determines the GUI element that the button is attatched to."
@@ -2186,11 +2186,11 @@ GameJS = {
         }
     }
 }
-GameJS.internal.requestAnimationFrame.call(window, GameJS.internal.tick)
+BeginningJS.internal.requestAnimationFrame.call(window, BeginningJS.internal.tick)
 setInterval(function() {
     var i = 0
-    for (i in GameJS.internal.games) {
-        GameJS.internal.games[i].currentFPS = Math.min(GameJS.internal.games[i].internal.FPSFrames, 60)
-        GameJS.internal.games[i].internal.FPSFrames = 0
+    for (i in BeginningJS.internal.games) {
+        BeginningJS.internal.games[i].currentFPS = Math.min(BeginningJS.internal.games[i].internal.FPSFrames, 60)
+        BeginningJS.internal.games[i].internal.FPSFrames = 0
     }
 }, 1000)

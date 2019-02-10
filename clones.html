@@ -7,10 +7,10 @@
 <p id="canvas"></p>
 <p id="FPS" style="color: white"></p>
 
-<script src="gamejs.js"></script>
+<script src="beginningJS.js"></script>
 <script>
 
-Game = GameJS.init({
+Game = BeginningJS.init({
     "game": {
         "assets": {
             "imgs": [
@@ -67,7 +67,7 @@ Game = GameJS.init({
                             "code": function(gameRef, me) {
                                 var i = 0
                                 while (i < 1) {
-                                    GameJS.methods.cloneSprite()
+                                    BeginningJS.methods.cloneSprite()
                                     clones++
                                     i++
                                 }

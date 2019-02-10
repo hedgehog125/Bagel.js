@@ -10,16 +10,16 @@
 <p id="canvas"></p>
 <p id="FPS" style="color: white"></p>
 
-<script src="gamejs.js"></script>
+<script src="beginningJS.js"></script>
 <script>
 
 // TODO: Made the parent invisible
 
-//GameJS.config.flags.useQTrees = false
+//BeginningJS.config.flags.useQTrees = false
 
 click = false
 
-Game = GameJS.init({
+Game = BeginningJS.init({
     "game": {
         "assets": {
             "imgs": [
@@ -62,7 +62,7 @@ Game = GameJS.init({
                                         // Left or right?
                                         var direction = (x < (Game.width / 2)) ? 1 : -1
                                         for (var c=0; c < 5; c++) {
-                                            GameJS.methods.cloneSprite(me.id, {
+                                            BeginningJS.methods.cloneSprite(me.id, {
                                                 "x": x,
                                                 "y": y,
                                                 "visible": true,
@@ -76,7 +76,7 @@ Game = GameJS.init({
                                     i++
                                 }
                                 // Put one in the middle of the screen
-                                GameJS.methods.cloneSprite(me.id, {
+                                BeginningJS.methods.cloneSprite(me.id, {
                                     "x": Game.width / 2,
                                     "y": 200,
                                     "visible": true,
@@ -107,9 +107,9 @@ Game = GameJS.init({
                         "main": [
                             function(gameRef, me) {
                                 var speed = 1
-                                if (GameJS.methods.AABBTouching("orange")) {
+                                if (BeginningJS.methods.AABBTouching("orange")) {
                                     //me.x = me.x - (speed * me.vars.direction)
-                                    //if (! GameJS.methods.AABBTouching("orange")) {
+                                    //if (! BeginningJS.methods.AABBTouching("orange")) {
                                     //    me.x = me.x + (speed * me.vars.direction)
                                     //}
                                 }
@@ -118,7 +118,7 @@ Game = GameJS.init({
                                 }
                                 if (Game.mouseDown) {
                                     if (! click) {
-                                        if (GameJS.methods.touchingMouse()) {
+                                        if (BeginningJS.methods.touchingMouse()) {
                                             click = true
                                             console.log(me)
                                         }
