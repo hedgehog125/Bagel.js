@@ -187,23 +187,6 @@ BeginningJS = {
             game.vars = {}
         }
 
-        var qTreeCanvas = document.createElement("canvas")
-        qTreeCanvas.width = game.width
-        qTreeCanvas.height = game.height
-        var qTreeCtx = qTreeCanvas.getContext("2d")
-
-        /*
-        qTreeCtx.fillStyle = "rgb(0, 0, 0)"
-        qTreeCtx.fillRect(0, 0, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
-        qTreeCtx.fillStyle = "rgb(0, 0, 1)"
-        qTreeCtx.fillRect(qTreeCanvas.width / 2, 0, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
-        qTreeCtx.fillStyle = "rgb(0, 0, 2)"
-        qTreeCtx.fillRect(0, qTreeCanvas.height / 2, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
-        qTreeCtx.fillStyle = "rgb(0, 0, 3)"
-        qTreeCtx.fillRect(qTreeCanvas.width / 2, qTreeCanvas.height / 2, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
-        */
-
-
         game.internal = {
             "renderer": {
                 "type": "canvas",
@@ -218,330 +201,9 @@ BeginningJS = {
         }
         game.internal.collision = {
             "tick": function(game) {
-                /*
-                var i = 0
-                for (i in game.internal.collision.qtree.rectsToRemove) {
-                    var c = game.internal.collision.qtree.rectsToRemove[i]
-                    if (c != null) {
-                        game.internal.collision.qtree.index.rectangles[c] = null
-                    }
-                }
-                */
-                //game.internal.collision.qtree.rectsToRemove = []
 
-                var i = 0
-                for (i in game.internal.collision.qtree.rectsToSplit) {
-                    //console.log("split")
-                    var c = game.internal.collision.qtree.rectsToSplit[i]
-
-                    var rectangle = game.internal.collision.qtree.index.rectangles[c]
-
-                    var xSubPixels = 0
-                    var ySubPixels = 0
-                    if (rectangle.x != Math.floor(rectangle.x))  {
-                        xSubPixels++
-                        rectangle.x = Math.floor(rectangle.x)
-                    }
-                    if (rectangle.y != Math.floor(rectangle.y))  {
-                        ySubPixels++
-                        rectangle.y = Math.floor(rectangle.y)
-                    }
-
-                    if (rectangle.width / 2 != Math.floor(rectangle.width / 2))  {
-                        xSubPixels++
-                        rectangle.width = Math.floor(rectangle.width / 2)
-                    }
-                    else {
-                        rectangle.width = rectangle.width / 2
-                    }
-                    if (rectangle.height / 2 != Math.floor(rectangle.height / 2))  {
-                        ySubPixels++
-                        rectangle.height = Math.floor(rectangle.height / 2)
-                    }
-                    else {
-                        rectangle.height = rectangle.height / 2
-                    }
-
-
-                    var objectCount = rectangle.objects
-                    //rectangle.objects = 0
-                    game.internal.collision.qtree.methods.addRect(game, rectangle.x + rectangle.width, rectangle.y, rectangle.width + xSubPixels, rectangle.height)
-                    game.internal.collision.qtree.methods.addRect(game, rectangle.x, rectangle.y + rectangle.height, rectangle.width, rectangle.height + ySubPixels)
-                    game.internal.collision.qtree.methods.addRect(game, rectangle.x + rectangle.width, rectangle.y + rectangle.height, rectangle.width + xSubPixels, rectangle.height + ySubPixels)
-
-                    game.internal.collision.qtree.index.rectangles[c] = rectangle
-
-                    var newObjectData = []
-
-
-                    var objects = 0
-                    var a = 0
-                    while (a < objectCount) {
-                        var object = rectangle.objectData[a]
-                        if (typeof object != "string") { // TODO, should be null
-                            game.internal.collision.qtree.methods.processSprite(object, game)
-                            newObjectData.push(object)
-                            objects++
-                        }
-                        a++
-                    }
-                    //rectangle.objectData = newObjectData TODO
-                }
-
-                game.internal.collision.qtree.rectsToSplit = []
-            },
-            "qtree": {
-                "index": {
-                    "canvas": qTreeCanvas,
-                    "ctx": qTreeCtx,
-                    "rectangles": [],
-                    "rgb": [0, 0, 0],
-                    "canvasDataCache": null
-                },
-                "rectsToSplit": [],
-                "rectsToRemove": [],
-                "methods": {
-                    "addRect": function(game, x, y, width, height) {
-                        var rgb = game.internal.collision.qtree.index.rgb
-                        rgb[2]++
-                        if (rgb[2] > 255) {
-                            rgb[2] = 0
-                            rgb[1]++
-                        }
-                        if (rgb[1] > 255) {
-                            rgb[1] = 0
-                            rgb[0]++
-                        }
-                        if (rgb[1] > 255) {
-                            rgb[1] = 0
-                            console.error("Out of qtree IDs. How did this happen?")
-                        }
-                        game.internal.collision.qtree.index.rgb = rgb
-
-                        var ctx = game.internal.collision.qtree.index.ctx
-                        ctx.fillStyle = "rgb(" + rgb.join(",") + ")"
-                        ctx.fillRect(x, y, width, height)
-                        game.internal.collision.qtree.index.rectangles[((rgb[0] * (256 * 256)) + (rgb[1] * 256)) + rgb[2]] = {
-                            "x": x,
-                            "y": y,
-                            "width": width,
-                            "height": height,
-                            "objects": 0,
-                            "objectData": []
-                        }
-                        var index = game.internal.collision.qtree.methods.canvasDataCache(game, true)
-                        var xy = game.internal.collision.qtree.methods.xy(x, y, game.width, game.height)
-                        /*
-                        console.log([
-                            index[xy * 4],
-                            index[(xy * 4) + 1],
-                            index[(xy * 4) + 2],
-                            index[(xy * 4) + 3]
-                        ])
-                        */
-                    },
-                    "findTheRects": function(object, game, centred) {
-                        var index = game.internal.collision.qtree.methods.canvasDataCache(game) // tmp TODO: Is it this?
-                        var rect = BeginningJS.internal.collision.methods.spriteRect(object, 4, centred)
-
-                        // TODO: Are the rectangles not being stored in the sprite internal stuff? <======================================================
-
-                        var x = rect.x
-                        var y = rect.y
-
-                        var xy = game.internal.collision.qtree.methods.xy(x, y, game.width, game.height)
-                        var pixel = {
-                            "R": index[xy * 4],
-                            "G": index[(xy * 4) + 1],
-                            "B": index[(xy * 4) + 2],
-                            "A": index[(xy * 4) + 3]
-                        }
-                        var total = ((pixel.R * (256 * 256)) + (pixel.G * 256)) + pixel.B
-                        var rectangle = game.internal.collision.qtree.index.rectangles[total]
-                        if (rectangle == null) {
-                            //console.log(total)
-                        }
-
-                        var items = [
-                            total
-                        ]
-
-                        var currentRectX = rectangle
-                        var currentRectY = rectangle
-
-                        var heightRemaining = rect.height
-                        var loops = 0
-                        while (heightRemaining > 0 && currentRectY.y + currentRectY.height < game.height || loops == 0) {
-                            var widthRemaining = rect.width
-                            while (widthRemaining > 0 && currentRectX.x + currentRectX.width < game.width) {
-                                var xy = game.internal.collision.qtree.methods.xy(currentRectX.x + currentRectX.width, currentRectY.y, game.width, game.height)
-                                var pixel = {
-                                    "R": index[xy * 4],
-                                    "G": index[(xy * 4) + 1],
-                                    "B": index[(xy * 4) + 2],
-                                    "A": index[(xy * 4) + 3]
-                                }
-                                var total = ((pixel.R * (256 * 256)) + (pixel.G * 256)) + pixel.B
-
-                                widthRemaining = widthRemaining - currentRectX.width
-                                var currentRectX = game.internal.collision.qtree.index.rectangles[total]
-                                items.push(total)
-                            }
-
-                            var xy = game.internal.collision.qtree.methods.xy(x, currentRectY.y + currentRectY.height, game.width, game.height)
-                            var pixel = {
-                                    "R": index[xy * 4],
-                                    "G": index[(xy * 4) + 1],
-                                    "B": index[(xy * 4) + 2],
-                                    "A": index[(xy * 4) + 3]
-                                }
-                            var tmp2 = total
-                            var total = ((pixel.R * (256 * 256)) + (pixel.G * 256)) + pixel.B
-
-                            heightRemaining = heightRemaining - currentRectY.height
-                            var tmp = currentRectY
-                            var currentRectY = game.internal.collision.qtree.index.rectangles[total]
-                            if (currentRectY == null) {
-                                //console.log(total, pixel, tmp, tmp2)
-                            }
-                            items[items.length] = total
-
-                            loops++
-                        }
-                        return items
-                    },
-                    "processSprite": function(sprite, game) {
-                        if (sprite.internal.collision.qtree.IDs != null) {
-                            var updatedIDs = game.internal.collision.qtree.methods.findTheRects(sprite, game, 1)
-
-
-                            if (updatedIDs.toString() == sprite.internal.collision.qtree.IDs.toString()) {
-                                return
-                            }
-
-
-                            var i = 0
-                            for (i in sprite.internal.collision.qtree.IDs) {
-                                //console.log(sprite.internal.collision.qtree.IDs[i])
-                                game.internal.collision.qtree.methods.removeObject(sprite.internal.collision.qtree.IDs[i], game, sprite.internal.collision.qtree.dataIDs[i])
-                            }
-                            //sprite.internal.collision.qtree.IDs = []
-                            //sprite.internal.collision.qtree.dataIDs = []
-                        }
-
-                        var IDs = game.internal.collision.qtree.methods.addObject(sprite, game, 1)
-                        sprite.internal.collision.qtree.IDs = IDs[0]
-                        sprite.internal.collision.qtree.dataIDs = IDs[1]
-                    },
-                    "removeObject": function(id, game, dataIndex) {
-                        game.internal.collision.qtree.index.rectangles[id].objects--
-                        //console.log(JSON.stringify(game.internal.collision.qtree.index.rectangles[id].objectData[dataIndex]))
-                        game.internal.collision.qtree.index.rectangles[id].objectData[dataIndex] = JSON.stringify(game.internal.collision.qtree.index.rectangles[id].objectData[dataIndex]) // TODO should be null
-                        // TODO: What if it's now under 10?
-                        /*
-                        if (game.internal.collision.qtree.index.rectangles[id].objects < 10) { // Just become less than 10
-                            if (! game.internal.collision.qtree.rectsToSplit.includes(id)) {
-                                game.internal.collision.qtree.rectsToSplit[game.internal.collision.qtree.rectsToSplit.length] = id
-                            }
-                            var index = game.internal.collision.qtree.rectsToSplit.indexOf(id)
-                            if (index != -1) {
-                                game.internal.collision.qtree.rectsToSplit[index] = null
-                            }
-                        }
-                        */
-                    },
-                    "splitRects": function() { // Debug
-                        var game = BeginningJS.internal.current.game
-
-                        var i = 0
-                        for (i in game.internal.collision.qtree.index.rectangles) {
-                            game.internal.collision.qtree.rectsToSplit.push(i)
-                        }
-                    },
-                    "addObject": function(object, game, centred) {
-                        var ids = game.internal.collision.qtree.methods.findTheRects(object, game, centred)
-                        var dataIDs = []
-                        /*
-                        if (object.id == "orange#18") {
-                            console.log("banana")
-                        }
-
-                        console.log(JSON.parse(JSON.stringify([
-                            Game.internal.collision.qtree.index.rectangles,
-                            object
-                        ])))
-                        */
-
-                        var i = 0
-                        for (i in ids) {
-                            var rectangle = game.internal.collision.qtree.index.rectangles[ids[i]]
-                            rectangle.objects++
-                            rectangle.objectData.push(object)
-                            if (rectangle.objects >= 50) {
-                                if (rectangle.width >= 2) {
-                                    if (rectangle.height >= 2) {
-                                        if (! game.internal.collision.qtree.rectsToSplit.includes(ids[i])) {
-                                            game.internal.collision.qtree.rectsToSplit.push(ids[i])
-                                            //game.internal.collision.qtree.methods.splitRects()
-                                        }
-                                    }
-                                }
-                                /*
-                                var index = game.internal.collision.qtree.rectsToRemove.indexOf(id)
-                                if (index != -1) {
-                                    game.internal.collision.qtree.rectsToRemove[index] = null
-                                }
-                                */
-                            }
-                            dataIDs[dataIDs.length] = Object.keys(rectangle.objectData).length - 1
-                        }
-                        return [ids, dataIDs]
-                    },
-                    "debugDisplay": function(canvas, ctx, game) {
-                        canvas.width = game.width
-                        canvas.height = game.height
-                        ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-                        canvas.style.removeProperty("width")
-                        canvas.style.setProperty("width", (canvas.width / 4) + "px", "important")
-                        canvas.style.removeProperty("height")
-                        canvas.style.setProperty("height", (canvas.height / 4) + "px", "important")
-
-                        ctx.strokeStyle = "green"
-                        ctx.lineWidth = 2
-                        var i = 0
-                        for (i in game.internal.collision.qtree.index.rectangles) {
-                            rectangle = game.internal.collision.qtree.index.rectangles[i]
-                            ctx.beginPath()
-                            ctx.moveTo(rectangle.x, rectangle.y)
-                            ctx.lineTo(rectangle.x + rectangle.width, rectangle.y)
-                            ctx.lineTo(rectangle.x + rectangle.width, rectangle.y + rectangle.height)
-                            ctx.lineTo(rectangle.x, rectangle.y + rectangle.height)
-                            ctx.lineTo(rectangle.x, rectangle.y)
-                            ctx.stroke()
-                        }
-
-
-                    },
-                    "canvasDataCache": function(game, update) {
-                        if (game.internal.collision.qtree.index.canvasDataCache == null || update) {
-                            var canvas = game.internal.collision.qtree.index.canvas
-                            game.internal.collision.qtree.index.canvasDataCache = game.internal.collision.qtree.index.ctx.getImageData(0, 0, canvas.width, canvas.height).data
-                        }
-                        return game.internal.collision.qtree.index.canvasDataCache
-                    },
-                    "xy": function(x, y, width, height) {
-                        return (Math.min(Math.max(Math.round(y), 0), height - 1) * width) + Math.min(Math.max(Math.round(x), 0), width - 1)
-                    }
-                }
             }
         }
-
-        game.internal.collision.qtree.methods.addRect(game, 0, 0, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
-        game.internal.collision.qtree.methods.addRect(game, qTreeCanvas.width / 2, 0, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
-        game.internal.collision.qtree.methods.addRect(game, 0, qTreeCanvas.height / 2, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
-        game.internal.collision.qtree.methods.addRect(game, qTreeCanvas.width / 2, qTreeCanvas.height / 2, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
-        //game.internal.collision.qtree.methods.splitRects()
 
         game.currentFPS = 60
         game.currentRenderFPS = 60
@@ -1201,12 +863,7 @@ BeginningJS = {
                 sprite.internal = {
                     "cloneCount": 0,
                     "cloneIDs": [],
-                    "collision": {
-                        "qtree": {
-                            "IDs": null,
-                            "dataIDs": null
-                        }
-                    }
+                    "collision": {}
                 }
 
                 if (sprite.type == "canvas") {
@@ -1427,12 +1084,7 @@ BeginningJS = {
                 sprite.internal = {
                     "cloneCount": 0,
                     "cloneIDs": [],
-                    "collision": {
-                        "qtree": {
-                            "IDs": null,
-                            "dataIDs": null
-                        }
-                    }
+                    "collision": {}
                 }
                 if (data.game.internal.ids.includes(sprite.id)) {
                     console.error("Oh no! You used an ID for a sprite that is already being used. Try and think of something else. \nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item' " + data.i  + ".")
@@ -1792,13 +1444,7 @@ BeginningJS = {
 
         },
         "processSprites": function(game) { // TODO: Only do sprites where collision is enabled
-            if (BeginningJS.config.flags.useQTrees) {
-                var i = 0
-                for (i in game.game.sprites) { // TODO: Which sprites can use collision detection?
-                    var sprite = game.game.sprites[i]
-                    game.internal.collision.qtree.methods.processSprite(sprite, game) // TODO: What if a sprite doesn't need it?
-                }
-            }
+
         },
         "render": {
             "vars": {
@@ -1916,7 +1562,6 @@ BeginningJS = {
         },
         "spriteTick": function(sprite, game) {
             // TMP
-            game.internal.collision.qtree.methods.processSprite(sprite, game)
         }
     },
     "methods": {
@@ -1989,135 +1634,30 @@ BeginningJS = {
             // Get the parent sprite which 'contains' the clones to check
             var parentsprite = BeginningJS.internal.current.game.game.sprites[BeginningJS.internal.current.game.internal.IDIndex[spriteID]]
             if (parentsprite.internal.cloneCount > 0) {
-                if (BeginningJS.config.flags.useQTrees) {
-                    if (parentsprite.visible) {
-                        if (BeginningJS.internal.collision.methods.AABB(
-                                BeginningJS.internal.collision.methods.spriteRect(me, 2, 1),
-                                BeginningJS.internal.collision.methods.spriteRect(parentsprite, 2, 1))) {
-                                    return true
-                        }
+                if (parentsprite.visible) {
+                    if (BeginningJS.internal.collision.methods.AABB(
+                            BeginningJS.internal.collision.methods.spriteRect(me, 2, 1),
+                            BeginningJS.internal.collision.methods.spriteRect(parentsprite, 2, 1))) {
+                                return true
                     }
-
-                    if (me.cloneOf == null) {
-                        var id = me.id
-                    }
-                    else {
-                        var id = me.cloneOf
-                    }
-
-                    var sprites = []
-                    var i = 0
-                    for (i in me.internal.collision.qtree.IDs) {
-
-                        var rectangle = Game.internal.collision.qtree.index.rectangles[me.internal.collision.qtree.IDs[i]]
-
-                        var objects = 0
-                        var newObjectData = []
-
-                        var c = 0
-                        //console.log(rectangle.objects, rectangle.objectData)
-                        while (objects < rectangle.objects && c < Object.keys(rectangle.objectData).length) {
-                            if (typeof rectangle.objectData[c] == "string") { // TODO should be == null
-                                c++
-                                //console.log("A")
-                                continue
-                            }
-                            /*
-                            if (rectangle.objectData[c].id == "orange#18") {
-                                console.log("hmm")
-                            }
-                            */
-                            newObjectData.push(rectangle.objectData[c])
-                            objects++
-
-                            var clone = rectangle.objectData[c]
-                            sprites[sprites.length] = clone
-                            if (id == spriteID) {
-                                if (clone.cloneOf != spriteID) {
-
-                                    c++
-                                    //console.log("B")
-                                    /*
-                                    if (me.id == "orange#18") {
-                                        if (clone.id == "orange#19") {
-                                            console.log("A")
-                                        }
-                                    }
-                                    */
-                                    continue
-                                }
-                            }
-                            if (clone.cloneOf == id) {
-                                if (me.cloneID == clone.cloneID) {
-                                    c++
-                                    //console.log("C")
-                                    /*
-                                    if (me.id == "orange#18") {
-                                        if (clone.id == "orange#19") {
-                                            console.log("B")
-                                        }
-                                    }
-                                    */
-                                    continue
-                                }
-                            }
-                            if (! clone.visible) {
-                                c++
-                                //console.log("D")
-                                /*
-                                if (me.id == "orange#18") {
-                                    if (clone.id == "orange#19") {
-                                        console.log("C")
-                                    }
-                                }
-                                */
-                                continue
-                            }
-                            //console.log("banana")
-
-                            if (BeginningJS.internal.collision.methods.AABB(
-                                    BeginningJS.internal.collision.methods.spriteRect(me, 2, 1),
-                                    BeginningJS.internal.collision.methods.spriteRect(clone, 2, 1))) {
-                                        return true
-                            }
-                            c++
-                        }
-                        if (c >= Object.keys(rectangle.objectData).length) {
-                            //console.log(objects)
-                            //rectangle.objects = objects // In case it's somehow wrong TODO
-                        }
-
-                        //rectangle.objectData = newObjectData // If it's false we might as well collect the rubbish... TODO
-                    }
-                    return false
                 }
-                else {
-                    // We're not using QTrees
-                    if (parentsprite.visible) {
-                        if (BeginningJS.internal.collision.methods.AABB(
-                                BeginningJS.internal.collision.methods.spriteRect(me, 2, 1),
-                                BeginningJS.internal.collision.methods.spriteRect(parentsprite, 2, 1))) {
-                                    return true
-                        }
+                var i = 0
+                for (i in parentsprite.internal.cloneIDs) {
+                    if (parentsprite.internal.cloneIDs[i] == null) {
+                        continue
                     }
-                    var i = 0
-                    for (i in parentsprite.internal.cloneIDs) {
-                        if (parentsprite.internal.cloneIDs[i] == null) {
-                            continue
-                        }
-                        var clone = BeginningJS.internal.current.game.game.sprites[parentsprite.internal.cloneIDs[i]]
-                        if (me.id == spriteID + "#" + i && spriteID == me.cloneOf) {
-                            continue
-                        }
-                        if (! clone.visible) {
-                            continue
-                        }
+                    var clone = BeginningJS.internal.current.game.game.sprites[parentsprite.internal.cloneIDs[i]]
+                    if (me.id == spriteID + "#" + i && spriteID == me.cloneOf) {
+                        continue
+                    }
+                    if (! clone.visible) {
+                        continue
+                    }
 
-                        if (BeginningJS.internal.collision.methods.AABB(
-                                BeginningJS.internal.collision.methods.spriteRect(me, 2, 1),
-                                BeginningJS.internal.collision.methods.spriteRect(clone, 2, 1))) {
-                                    return true
-                        }
+                    if (BeginningJS.internal.collision.methods.AABB(
+                            BeginningJS.internal.collision.methods.spriteRect(me, 2, 1),
+                            BeginningJS.internal.collision.methods.spriteRect(clone, 2, 1))) {
+                                return true
                     }
                 }
             }
@@ -2197,8 +1737,7 @@ BeginningJS = {
     },
     "config": {
         "flags": {
-            "warnOfUselessParameters": true,
-            "useQTrees": true
+            "warnOfUselessParameters": true
         }
     }
 }
