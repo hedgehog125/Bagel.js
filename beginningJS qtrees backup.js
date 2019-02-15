@@ -1,6 +1,7 @@
 // TODO:
 // == Important ==
-// Changing sprite scale
+// Widths and heights are innaccurate?
+// Or is it something to do with changing the width and height and/or scale?
 // High res canvases on the canvas?
 // What if collision is tested before the sprite has a qtree id?
 // Something to do with when it's split?
