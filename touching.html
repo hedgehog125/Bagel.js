@@ -15,6 +15,8 @@
 
 // TODO: Made the parent invisible
 
+//BeginningJS.config.flags.useQTrees = false
+
 click = false
 
 Game = BeginningJS.init({
@@ -89,7 +91,7 @@ Game = BeginningJS.init({
                         {
                             "stateToRun": "Game",
                             "code": function(gameRef, me) {
-                                
+
                             }
                         }
                     ]
@@ -148,6 +150,7 @@ Game = BeginningJS.init({
                         {
                             "stateToRun": "Game",
                             "code": function(gameRef, me) {
+                                Game.internal.collision.qtree.methods.debugDisplay(canvas, ctx, Game)
                                 me.ctx.clearRect(0, 0, me.canvas.width, me.canvas.height)
                                 me.ctx.drawImage(canvas, 0, 0, me.canvas.width, me.canvas.height)
                             }
