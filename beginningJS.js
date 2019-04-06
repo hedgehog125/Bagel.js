@@ -1,5 +1,7 @@
 // TODO:
 // == Important ==
+// Change the joystick to use the load methods
+// How should it work if height > width
 // How do IDs work if they're multiple games, for assets.
 // Widths and heights are innaccurate?
 // Or is it something to do with changing the width and height and/or scale?
@@ -36,13 +38,14 @@
 // Add function to change the selected game. Scripts will automatically use the selected game but you can target another by using the function. This changes when another script is run.
 // Check the errors
 // Smart canvas rendering
-// New name
-
 
 // == Credits ==
 // Images:
 // Back icon -> https://www.flaticon.com/authors/itim2101
 // Cross icon -> https://www.flaticon.com/authors/srip
+// Sounds:
+// Button click and hover sounds:
+// Woosh: https://freesound.org/people/qubodup/sounds/60013/
 
 BeginningJS = {
     "init": function(gameJSON) {
@@ -454,7 +457,7 @@ BeginningJS = {
                     "removeObject": function(id, game, dataIndex) {
                         game.internal.collision.qtree.index.rectangles[id].objects--
                         //console.log(JSON.stringify(game.internal.collision.qtree.index.rectangles[id].objectData[dataIndex]))
-                        game.internal.collision.qtree.index.rectangles[id].objectData[dataIndex] = JSON.stringify(game.internal.collision.qtree.index.rectangles[id].objectData[dataIndex]) // TODO should be null
+                        game.internal.collision.qtree.index.rectangles[id].objectData[dataIndex] = game.internal.collision.qtree.index.rectangles[id].objectData[dataIndex] // TODO should be null
                         // TODO: What if it's now under 10?
                         /*
                         if (game.internal.collision.qtree.index.rectangles[id].objects < 10) { // Just become less than 10
@@ -581,7 +584,7 @@ BeginningJS = {
                 "space": 32,
                 "w": 87,
                 "a": 65,
-                "s": 91,
+                "s": 83,
                 "d": 68
             },
             "joysticks": {}
@@ -593,51 +596,1597 @@ BeginningJS = {
         game.internal.collision.qtree.methods.addRect(game, qTreeCanvas.width / 2, qTreeCanvas.height / 2, qTreeCanvas.width / 2, qTreeCanvas.height / 2)
         //game.internal.collision.qtree.methods.splitRects()
 
-        game.currentFPS = 60
-        game.currentRenderFPS = 60
+        game.currentFPS = BeginningJS.config.fps
+        game.currentRenderFPS = BeginningJS.config.fps
         game.methods = {
             "gui": {
                 "create": {
-                    "button": {
-                        "modern": function(config) {
-                            if (config.type == "cross") {
-                                BeginningJS.internal.checkOb(config, {
-                                    "elementID": {
-                                        "types": ["string"],
-                                        "description": "Determines the GUI element that the button is attatched to."
-                                    },
-                                    "ID": {
-                                        "types": ["string"],
-                                        "description": "Determines the ID for the GUI element."
-                                    }
-                                })
-                            }
-                            if (type == "custom") {
-                                /*
-                                var required = {
-                                    "img": {
-                                        "types": ["string"]
-                                    }
-                                }
-                                var missing = []
-                                var wrongTypes = []
+                    "background": {
+                        "modern": function(configInput) {
+                            var config = configInput
 
-                                var i = 0
-                                for (i in required) {
-                                    if (config[i] == null) {
-                                        missing[missing.length] = i
+                            var game = this.internal.game
+
+                            if (config == null) {
+                                console.error("Oops, looks like you've forgotten the input for this function. It should be type 'object'.")
+                                console.error("Beginning.js hit a critical error, have a look at the error above.")
+                                debugger
+                            }
+                            if (BeginningJS.internal.getTypeOf(config) != "object") {
+                                console.error("Oops, looks like you've put the wrong input type in for this function. It should be 'object'. You used " + JSON.stringify(BeginningJS.internal.getTypeOf(config)) + ".")
+                                console.error("Beginning.js hit a critical error, have a look at the error above.")
+                                debugger
+                            }
+
+                            config = BeginningJS.internal.checkOb(config, {
+                                "type": {
+                                    "types": ["string"],
+                                    "description": "The type of background to be created. ('rounded')"
+                                }
+                            }, {
+                                "fill": {
+                                    "types": ["string"],
+                                    "description": "The fill colour of the background. (HTML colour e.g hex, rgb(), etc)"
+                                },
+                                "submenu": {
+                                    "types": ["string"],
+                                    "description": "The submenu name that the background will show in."
+                                },
+                                "animation": {
+                                    "types": ["object"],
+                                    "description": "A bunch of options for animating the background."
+                                }
+                            }, "Game.methods.gui.create.background.modern")
+
+                            game.methods.gui.internal.createIndex(config)
+
+
+                            BeginningJS.internal.load.snd({
+                                "id": "Internal.GUI.background.modern.woosh",
+                                "src": "../assets/snds/woosh.mp3" // TODO data url
+                            }, game)
+
+                            if (config.type == "rounded") {
+                                config = BeginningJS.internal.checkOb(config, {
+                                    "type": {
+                                        "types": ["string"],
+                                        "description": "The type of button to be created. ('cross', 'custom')"
+                                    },
+                                    "fill": {
+                                        "types": ["string"],
+                                        "description": "The fill colour of the background. (HTML colour e.g hex, rgb(), etc)"
+                                    },
+                                    "submenu": {
+                                        "types": ["string"],
+                                        "description": "The submenu name that the background will show in."
                                     }
-                                    else {
-                                        if (! required[i].types.includes(typeof config[i])) {
-                                            wrongTypes[wrongTypes.length] = [i, typeof config[i]]
+                                }, {
+                                    "animation": {
+                                        "types": ["object"],
+                                        "description": "A bunch of options for animating the background.",
+                                        "default": {
+                                            "animate": false,
+                                            "type": "slowing glide"
                                         }
                                     }
+                                }, "Game.methods.gui.create.background.modern")
+                                config.animation = BeginningJS.internal.checkOb(config.animation, {
+                                    "animate": {
+                                        "types": ["boolean"],
+                                        "description": "Whether or not animation of the background should be enabled."
+                                    },
+                                    "type": {
+                                        "types": ["string"],
+                                        "description": "The type of animation to be used ('slowing glide')."
+                                    }
+                                }, {
+                                    "speed": {
+                                        "types": ["number"],
+                                        "description": "The speed of the animation.",
+                                        "default": 2
+                                    }
+                                }, "Game.methods.gui.create.background.modern")
+
+                                var i = 0
+                                while (game.internal.IDIndex["Internal.GUI.modern.background#" + i] != null) {
+                                    i++
                                 }
-                                if (missing.length > 0) {
+                                var backgroundID = "Internal.GUI.modern.background#" + i
+
+                                var sprite = {
+                                    "type": "canvas",
+                                    "res": window.devicePixelRatio,
+                                    "customRes": true,
+                                    "x": game.width / 2,
+                                    "y": game.height / 2,
+                                    "visible": false,
+                                    "vars": {
+                                        "config": config,
+                                        "leaveAnimation": false
+                                    },
+                                    "scripts": {
+                                        "init": [
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    me.vars.render = function() {
+                                                        if (me.vars.config.animation.animate) {
+                                                            if (me.vars.leaveAnimation) {
+                                                                if (me.vars.config.animation.type.toLowerCase() == "slowing glide") {
+                                                                    me.y += ((gameRef.height + me.height) - me.y) / (10 / me.vars.config.animation.speed)
+                                                                    if (me.y - (me.height / 2) > gameRef.height) {
+                                                                        me.vars.leaveAnimation = false
+                                                                        me.visible = false
+                                                                    }
+                                                                }
+                                                            }
+                                                            else {
+                                                                me.y += ((gameRef.height / 2) - me.y) / (10 / me.vars.config.animation.speed)
+                                                            }
+                                                        }
+
+                                                        var ctx = me.ctx
+                                                        var canvas = me.canvas
+                                                        canvas.width = me.scaled.width
+                                                        canvas.height = me.scaled.height
+                                                        ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+                                                        var radius = me.scale.x(50)
+
+                                                        ctx.lineWidth = radius
+                                                        ctx.lineCap = "round"
+                                                        ctx.fillStyle = me.vars.config.fill
+                                                        ctx.strokeStyle = me.vars.config.fill
+
+
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(radius / 2, radius / 2)
+                                                        ctx.lineTo(canvas.width - (radius / 2), radius / 2)
+                                                        ctx.stroke()
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(canvas.width - (radius / 2), radius / 2)
+                                                        ctx.lineTo(canvas.width - (radius / 2), canvas.height - (radius / 2))
+                                                        ctx.stroke()
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(canvas.width - (radius / 2), canvas.height - (radius / 2))
+                                                        ctx.lineTo(radius / 2, canvas.height - (radius / 2))
+                                                        ctx.stroke()
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(radius / 2, canvas.height - (radius / 2))
+                                                        ctx.lineTo(radius / 2, radius / 2)
+                                                        ctx.stroke()
+                                                        ctx.fillRect(radius - 1, radius - 1, (canvas.width - (radius * 2)) + 2, (canvas.height - (radius * 2)) + 2)
+
+                                                        me.bringToFront()
+                                                    }
+                                                    me.vars.render()
+                                                },
+                                                "stateToRun": game.state
+                                            }
+                                        ],
+                                        "main": [
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    var indexSprite = BeginningJS.methods.get.sprite("Internal.GUI.menu.index")
+                                                    if (me.vars.config.submenu == indexSprite.vars.submenu) {
+                                                        if (! me.visible) {
+                                                            me.visible = true
+
+                                                            me.y = gameRef.height + (me.height / 2)
+                                                            BeginningJS.methods.playSound("Internal.GUI.background.modern.woosh")
+                                                        }
+                                                    }
+                                                    else {
+                                                        if (me.visible && (! me.vars.leaveAnimation)) {
+                                                            if (me.vars.config.animation.animate) {
+                                                                me.vars.leaveAnimation = true
+                                                            }
+                                                            else {
+                                                                me.visible = false
+                                                            }
+                                                        }
+                                                    }
+                                                    if (me.visible) {
+                                                        me.vars.render()
+                                                    }
+                                                },
+                                                "stateToRun": game.state
+                                            }
+                                        ]
+                                    },
+                                    "clones": {},
+                                    "width": game.width * 0.9,
+                                    "height": game.height * 0.9,
+                                    "id": backgroundID
+                                }
+                                game.game.sprites.push(sprite)
+                                BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.elements.push(sprite)
+
+                                BeginningJS.internal.createSprite({
+                                    "isClone": false,
+                                    "i": game.game.sprites.length - 1,
+                                    "runScripts": true,
+                                    "isInternal": true
+                                }, sprite, game, game.game.sprites.length - 1)
+                            }
+                        },
+                        "internal": {
+                            "game": game
+                        }
+                    },
+                    "text": {
+                        "modern":  function(configInput) {
+                            var config = configInput
+
+                            var game = this.internal.game
+
+                            if (config == null) {
+                                console.error("Oops, looks like you've forgotten the input for this function. It should be type 'object'.")
+                                console.error("Beginning.js hit a critical error, have a look at the error above.")
+                                debugger
+                            }
+                            if (BeginningJS.internal.getTypeOf(config) != "object") {
+                                console.error("Oops, looks like you've put the wrong input type in for this function. It should be 'object'. You used " + JSON.stringify(BeginningJS.internal.getTypeOf(config)) + ".")
+                                console.error("Beginning.js hit a critical error, have a look at the error above.")
+                                debugger
+                            }
+
+                            config = BeginningJS.internal.checkOb(config, {
+                                "centred": {
+                                    "types": ["boolean"],
+                                    "description": "Specifies whether or not the text should be centred."
+                                },
+                                "fill": {
+                                    "types": ["string"],
+                                    "description": "The fill colour of the text. (HTML colour e.g hex, rgb(), etc)"
+                                },
+                                "submenu": {
+                                    "types": ["string"],
+                                    "description": "The submenu name that the text will show in."
+                                },
+                                "x": {
+                                    "types": ["number"],
+                                    "description": "The (sometimes relative) x position of the text."
+                                },
+                                "y": {
+                                    "types": ["number"],
+                                    "description": "The (sometimes relative) y position of the text."
+                                },
+                                "text": {
+                                    "types": ["string"],
+                                    "description": "The text of the text element."
+                                }
+                            }, {
+                                "font": {
+                                    "types": ["string"],
+                                    "description": "The font of the text (e.g 'Helevetica').",
+                                    "default": "Helevetica"
+                                },
+                                "size": {
+                                    "types": ["number"],
+                                    "description": "The size of the characters (e.g '20' pixels).",
+                                    "default": 20
+                                },
+                                "animation": {
+                                    "types": ["object"],
+                                    "description": "A bunch of options for animating the text.",
+                                    "default": {
+                                        "animate": false,
+                                        "type": "slowing glide"
+                                    }
+                                }
+                            }, "Game.methods.gui.create.text.modern")
+                            config.animation = BeginningJS.internal.checkOb(config.animation, {
+                                "animate": {
+                                    "types": ["boolean"],
+                                    "description": "Whether or not animation of the button should be enabled."
+                                },
+                                "type": {
+                                    "types": ["string"],
+                                    "description": "The type of animation to be used ('slowing glide')."
+                                }
+                            }, {
+                                "speed": {
+                                    "types": ["number"],
+                                    "description": "The speed of the animation.",
+                                    "default": 1
+                                }
+                            }, "Game.methods.gui.create.text.modern")
+
+                            game.methods.gui.internal.createIndex(config)
+
+                            var i = 0
+                            while (game.internal.IDIndex["Internal.GUI.modern.text#" + i] != null) {
+                                i++
+                            }
+                            var textID = "Internal.GUI.modern.text#" + i
+
+                            var sprite = {
+                                "type": "canvas",
+                                "res": window.devicePixelRatio,
+                                "customRes": true,
+                                "x": config.x,
+                                "y": config.y,
+                                "visible": false,
+                                "vars": {
+                                    "config": config,
+                                    "leaveAnimation": false
+                                },
+                                "scripts": {
+                                    "init": [
+                                        {
+                                            "code": function(gameRef, me) {
+                                                var canvas = me.canvas
+                                                var ctx = me.ctx
+
+                                                ctx.font = (me.vars.config.size + 1) + "px " + me.vars.config.font
+                                                if (me.vars.config.centred) {
+                                                    ctx.textAlign = "center"
+                                                }
+                                                ctx.textBaseline = "middle"
+
+                                                me.width = ctx.measureText(me.vars.config.text).width
+                                                me.height = ctx.measureText("M").width
+                                            },
+                                            "stateToRun": game.state
+                                        },
+                                        {
+                                            "code": function(gameRef, me) {
+                                                me.vars.render = function() {
+                                                    if (me.vars.config.animation.animate) {
+                                                        if (me.vars.leaveAnimation) {
+                                                            if (me.vars.config.animation.type.toLowerCase() == "slowing glide") {
+                                                                me.y += ((gameRef.height + me.height) - me.y) / (10 / me.vars.config.animation.speed)
+                                                                if (me.y - (me.height / 2) > gameRef.height) {
+                                                                    me.vars.leaveAnimation = false
+                                                                    me.visible = false
+                                                                }
+                                                            }
+                                                        }
+                                                        else {
+                                                            me.y += (me.vars.config.y - me.y) / (10 / me.vars.config.animation.speed)
+                                                        }
+                                                    }
+
+                                                    var canvas = me.canvas
+                                                    var ctx = me.ctx
+
+                                                    canvas.width = me.scaled.width
+                                                    canvas.height = me.scaled.height
+
+                                                    ctx.font = me.scale.x(me.vars.config.size + 1) + "px " + me.vars.config.font
+                                                    if (me.vars.config.centred) {
+                                                        ctx.textAlign = "center"
+                                                    }
+                                                    ctx.textBaseline = "middle"
+
+                                                    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+                                                    ctx.fillText(me.vars.config.text, canvas.width / 2, canvas.height / 2)
+                                                }
+                                            },
+                                            "stateToRun": game.state
+                                        }
+                                    ],
+                                    "main": [
+                                        {
+                                            "code": function(gameRef, me) {
+                                                var indexSprite = BeginningJS.methods.get.sprite("Internal.GUI.menu.index")
+                                                if (me.vars.config.submenu == indexSprite.vars.submenu) {
+                                                    if (! me.visible) {
+                                                        me.visible = true
+
+                                                        if (me.vars.config.animation.animate) {
+                                                            me.y = gameRef.height + (me.height / 2)
+                                                        }
+                                                    }
+                                                }
+                                                else {
+                                                    if (me.visible && (! me.vars.leaveAnimation)) {
+                                                        if (me.vars.config.animation.animate) {
+                                                            me.vars.leaveAnimation = true
+                                                        }
+                                                        else {
+                                                            me.visible = false
+                                                        }
+                                                    }
+                                                }
+                                                if (me.visible) {
+                                                    me.vars.render()
+
+                                                    me.bringToFront()
+                                                }
+                                            },
+                                            "stateToRun": game.state
+                                        }
+                                    ]
+                                },
+                                "clones": {},
+                                "width": 1,
+                                "height": 1,
+                                "id": textID
+                            }
+                            game.game.sprites.push(sprite)
+                            BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.elements.push(sprite)
+
+                            BeginningJS.internal.createSprite({
+                                "isClone": false,
+                                "i": game.game.sprites.length - 1,
+                                "runScripts": true,
+                                "isInternal": true
+                            }, sprite, game, game.game.sprites.length - 1)
+                        },
+                        "internal": {
+                            "game": game
+                        }
+                    },
+                    "button": {
+                        "modern": function(configInput) {
+                            var config = configInput
+
+                            var game = this.internal.game
+
+                            if (config == null) {
+                                console.error("Oops, looks like you've forgotten the input for this function. It should be type 'object'.")
+                                console.error("Beginning.js hit a critical error, have a look at the error above.")
+                                debugger
+                            }
+                            if (BeginningJS.internal.getTypeOf(config) != "object") {
+                                console.error("Oops, looks like you've put the wrong input type in for this function. It should be 'object'. You used " + JSON.stringify(BeginningJS.internal.getTypeOf(config)) + ".")
+                                console.error("Beginning.js hit a critical error, have a look at the error above.")
+                                debugger
+                            }
+
+                            config = BeginningJS.internal.checkOb(config, {
+                                "type": {
+                                    "types": ["string"],
+                                    "description": "The type of button to be created. ('cross', 'img', 'text')"
+                                }
+                            }, {
+                                "text": {
+                                    "types": ["string"],
+                                    "description": "The text for the button."
+                                },
+                                "img": {
+                                    "types": ["string"],
+                                    "description": "The text for the button."
+                                },
+                                "x": {
+                                    "types": ["number"],
+                                    "description": "The x position for the button."
+                                },
+                                "y": {
+                                    "types": ["number"],
+                                    "description": "The y position for the button."
+                                },
+                                "diameter": {
+                                    "types": ["number"],
+                                    "description": "The diameter of the button."
+                                },
+                                "fill": {
+                                    "types": ["string"],
+                                    "description": "The fill colour of the button. (HTML colour e.g hex, rgb(), etc)"
+                                },
+                                "outline": {
+                                    "types": ["string"],
+                                    "description": "The outline colour of the button. (HTML colour e.g hex, rgb(), etc)"
+                                },
+                                "onclick": {
+                                    "types": [
+                                        "string",
+                                        "function"
+                                    ],
+                                    "description": "The submenu name to switch to or a function to run when the button is clicked."
+                                },
+                                "submenu": {
+                                    "types": ["string"],
+                                    "description": "The submenu name that the button will show in."
+                                },
+                                "animation": {
+                                    "types": ["object"],
+                                    "description": "A bunch of options for animating the button."
+                                }
+                            }, "Game.methods.gui.create.button.modern")
+
+                            game.methods.gui.internal.createIndex(config)
+
+                            if (config.type == "cross") {
+                                config = BeginningJS.internal.checkOb(config, {
+                                    "type": {
+                                        "types": ["string"],
+                                        "description": "The type of button to be created. ('cross', 'img', 'text')"
+                                    },
+                                    "x": {
+                                        "types": ["number"],
+                                        "description": "The x position for the button."
+                                    },
+                                    "y": {
+                                        "types": ["number"],
+                                        "description": "The y position for the button."
+                                    },
+                                    "diameter": {
+                                        "types": ["number"],
+                                        "description": "The diameter of the button."
+                                    },
+                                    "fill": {
+                                        "types": ["string"],
+                                        "description": "The fill colour of the button. (HTML colour e.g hex, rgb(), etc)"
+                                    },
+                                    "onclick": {
+                                        "types": [
+                                            "string",
+                                            "function"
+                                        ],
+                                        "description": "The submenu name to switch to or a function to run when the button is clicked."
+                                    },
+                                    "submenu": {
+                                        "types": ["string"],
+                                        "description": "The submenu name that the button will show in."
+                                    }
+                                }, {
+                                    "animation": {
+                                        "types": ["object"],
+                                        "description": "A bunch of options for animating the button.",
+                                        "default": {
+                                            "animate": false,
+                                            "type": "slowing glide"
+                                        }
+                                    }
+                                }, "Game.methods.gui.create.button.modern")
+                                config.animation = BeginningJS.internal.checkOb(config.animation, {
+                                    "animate": {
+                                        "types": ["boolean"],
+                                        "description": "Whether or not animation of the button should be enabled."
+                                    },
+                                    "type": {
+                                        "types": ["string"],
+                                        "description": "The type of animation to be used ('slowing glide')."
+                                    }
+                                }, {
+                                    "speed": {
+                                        "types": ["number"],
+                                        "description": "The speed of the animation.",
+                                        "default": 1
+                                    }
+                                }, "Game.methods.gui.create.button.modern")
+                                /*
+                                if (config.animation.animate) {
 
                                 }
                                 */
+
+                                var i = 0
+                                while (game.internal.IDIndex["Internal.GUI.modern.button#" + i] != null) {
+                                    i++
+                                }
+                                var buttonID = "Internal.GUI.modern.button#" + i
+
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.clickDown",
+                                    "src": "../assets/snds/clickDown.mp3" // TODO data url
+                                }, game)
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.clickUp",
+                                    "src": "../assets/snds/clickUp.mp3" // TODO data url
+                                }, game)
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.mouseTouch",
+                                    "src": "../assets/snds/mouseTouch.mp3" // TODO data url
+                                }, game)
+
+                                var sprite = {
+                                    "type": "canvas",
+                                    "res": window.devicePixelRatio,
+                                    "customRes": true,
+                                    "x": config.x,
+                                    "y": config.y,
+                                    "visible": false,
+                                    "vars": {
+                                        "config": config,
+                                        "mouseTime": 0,
+                                        "default": {
+                                            "diameter": config.diameter
+                                        },
+                                        "click": false,
+                                        "clicked": false,
+                                        "clickTime": 0,
+                                        "clickedQueued": false,
+                                        "leaveAnimation": false
+                                    },
+                                    "scripts": {
+                                        "init": [
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    me.vars.canvas = document.createElement("canvas") // Make a separate canvas
+                                                    me.vars.ctx = me.vars.canvas.getContext("2d")
+                                                    me.ctx.imageSmoothingEnabled = false
+
+                                                    me.vars.render = function() {
+                                                        if (me.vars.config.animation.animate) {
+                                                            if (me.vars.leaveAnimation) {
+                                                                if (me.vars.config.animation.type.toLowerCase() == "slowing glide") {
+                                                                    me.y += ((gameRef.height + me.height) - me.y) / (10 / me.vars.config.animation.speed)
+                                                                    if (me.y - (me.height / 2) > gameRef.height) {
+                                                                        me.vars.leaveAnimation = false
+                                                                        me.visible = false
+                                                                    }
+                                                                }
+                                                            }
+                                                            else {
+                                                                me.y += (me.vars.config.y - me.y) / (10 / me.vars.config.animation.speed)
+                                                            }
+                                                        }
+
+                                                        me.canvas.width = me.scaled.width
+                                                        me.canvas.height = me.scaled.height
+
+                                                        var ctx = me.vars.ctx
+                                                        var canvas = me.vars.canvas
+                                                        canvas.width = me.canvas.width
+                                                        canvas.height = me.canvas.height
+
+                                                        ctx.strokeStyle = me.vars.config.outline
+                                                        ctx.fillStyle = me.vars.config.fill
+                                                        ctx.lineWidth = me.scale.x(me.width / 5)
+
+                                                        ctx.beginPath()
+                                                        ctx.arc(canvas.width / 2, canvas.height / 2, (canvas.width / 2) - (ctx.lineWidth / 2), 0, 2 * Math.PI)
+                                                        ctx.stroke()
+                                                        ctx.fill()
+
+                                                        ctx.lineWidth = me.scale.x(me.width / 10)
+                                                        ctx.lineCap = "round"
+
+                                                        var size = 3
+
+                                                        ctx.beginPath()
+                                                        var x = me.scale.x(me.width / size)
+                                                        var y = x
+                                                        ctx.moveTo(x, y)
+                                                        var x = me.scale.x(me.width - (me.width / size))
+                                                        var y = x
+                                                        ctx.lineTo(x, y)
+                                                        ctx.stroke()
+
+                                                        ctx.beginPath()
+                                                        var x = me.scale.x(me.width - (me.width / size))
+                                                        var y = me.scale.x(me.width / size)
+                                                        ctx.moveTo(x, y)
+                                                        var x = me.scale.x(me.width / size)
+                                                        var y = me.scale.x(me.width - (me.width / size))
+                                                        ctx.lineTo(x, y)
+                                                        ctx.stroke()
+
+                                                        me.bringToFront()
+                                                        me.ctx.drawImage(canvas, 0, 0) // Draw the other canvas to my canvas
+                                                    }
+                                                    me.vars.inputs = function() {
+                                                        if (me.touching.mouse.AABB()) {
+                                                            if (Math.abs(me.vars.mouseTime) < 0.02) {
+                                                                if (me.vars.mouseTime == 0) {
+                                                                    BeginningJS.methods.playSound("Internal.GUI.button.modern.mouseTouch")
+                                                                }
+                                                                me.vars.mouseTime = 0.1
+                                                            }
+                                                            if (me.vars.mouseTime < 0) {
+                                                                me.vars.mouseTime *= 0.9
+                                                            }
+                                                            else {
+                                                                me.vars.mouseTime *= 1.1
+                                                            }
+                                                            if (me.vars.mouseTime > 0.2) {
+                                                                me.vars.mouseTime = 0.2
+                                                            }
+                                                        }
+                                                        else {
+                                                            me.vars.mouseTime *= 0.8
+                                                            if (me.vars.mouseTime < 0.01) {
+                                                                me.vars.mouseTime = 0
+                                                            }
+                                                        }
+                                                        if (me.touching.mouse.AABB()) {
+                                                            if (gameRef.input.mouse.down) {
+                                                                if (! me.vars.click) {
+                                                                    me.vars.clicked = true
+                                                                    me.vars.clickTime = 0
+                                                                }
+                                                            }
+                                                        }
+                                                        if (me.vars.clicked) {
+                                                            if (me.vars.clickTime == 0) {
+                                                                me.vars.clickTime = 0.025
+                                                                BeginningJS.methods.playSound("Internal.GUI.button.modern.clickDown")
+                                                            }
+                                                            if (! me.vars.clickedQueued) {
+                                                                if ((! gameRef.input.mouse.down) || (! me.touching.mouse.AABB())) {
+                                                                    BeginningJS.methods.playSound("Internal.GUI.button.modern.clickUp")
+                                                                    me.vars.clickedQueued = true
+
+                                                                    BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.switching = true
+                                                                    BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.submenu = me.vars.config.onclick
+                                                                }
+                                                            }
+
+                                                            me.vars.clickTime *= 1.1
+                                                            if (me.vars.clickTime > 0.1) {
+                                                                me.vars.clickTime = 0.1
+                                                                if (me.vars.clickedQueued) {
+                                                                    me.vars.clicked = false
+                                                                    me.vars.clickTime = 0
+                                                                    me.vars.clickedQueued = false
+                                                                    me.vars.mouseTime = -0.2
+                                                                }
+                                                            }
+                                                        }
+                                                        me.vars.click = gameRef.input.mouse.down
+                                                    }
+                                                    me.vars.effects = function() {
+                                                        if (me.vars.clicked) {
+                                                            var ctx = me.ctx
+                                                            var canvas = me.canvas
+
+                                                            ctx.fillStyle = "rgba(" + [50, 50, 50, 0.2] + ")"
+
+                                                            ctx.beginPath()
+                                                            var radius = (me.vars.clickTime * (me.width / 2)) * (1 / 0.1)
+                                                            var max = ((me.width / 2) - (me.width / 5)) * (1 / 0.1)
+
+                                                            if (radius > max) {
+                                                                radius = me.scale.x(max)
+                                                            }
+                                                            else {
+                                                                radius = me.scale.x(radius)
+                                                            }
+                                                            ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, 2 * Math.PI)
+                                                            ctx.fill()
+                                                        }
+                                                        else {
+                                                            if (me.vars.mouseTime != 0) {
+                                                                var ctx = me.ctx
+                                                                var canvas = me.canvas
+
+                                                                ctx.fillStyle = "rgba(" + [50, 50, 50, 0.05] + ")"
+
+                                                                ctx.beginPath()
+                                                                var radius = (Math.abs(me.vars.mouseTime) * (me.width / 2)) * (1 / 0.2)
+                                                                var max = ((me.width / 2) - (me.width / 5)) * (1 / 0.2)
+
+                                                                if (radius > max) {
+                                                                    radius = me.scale.x(max)
+                                                                }
+                                                                else {
+                                                                    radius = me.scale.x(radius)
+                                                                }
+                                                                ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, 2 * Math.PI)
+                                                                ctx.fill()
+                                                            }
+                                                        }
+                                                    }
+                                                    me.vars.render()
+                                                },
+                                                "stateToRun": game.state
+                                            }
+                                        ],
+                                        "main": [
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    if (me.visible) {
+                                                        if (me.vars.clicked) {
+                                                            me.width = me.vars.default.diameter / (((me.vars.clickTime + me.vars.mouseTime) / 2) + 1)
+                                                            me.height = me.vars.default.diameter / (((me.vars.clickTime + me.vars.mouseTime) / 2) + 1)
+                                                        }
+                                                        else {
+                                                            me.width = me.vars.default.diameter * ((me.vars.mouseTime / 2) + 1)
+                                                            me.height = me.vars.default.diameter * ((me.vars.mouseTime / 2) + 1)
+                                                        }
+                                                    }
+                                                },
+                                                "stateToRun": game.state
+                                            },
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    if (me.visible) {
+                                                        me.vars.render()
+                                                        me.vars.inputs()
+                                                        me.vars.effects()
+                                                    }
+                                                },
+                                                "stateToRun": game.state
+                                            },
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    var indexSprite = BeginningJS.methods.get.sprite("Internal.GUI.menu.index")
+                                                    if (me.vars.config.submenu == indexSprite.vars.submenu) {
+                                                        if (! me.visible) {
+                                                            me.visible = true
+
+                                                            if (me.vars.config.animation.animate) {
+                                                                me.y = gameRef.height + (me.height / 2)
+                                                            }
+                                                            BeginningJS.methods.playSound("Internal.GUI.background.modern.woosh")
+                                                        }
+                                                    }
+                                                    else {
+                                                        if (me.visible && (! me.vars.leaveAnimation)) {
+                                                            if (me.vars.config.animation.animate) {
+                                                                me.vars.leaveAnimation = true
+                                                            }
+                                                            else {
+                                                                me.visible = false
+                                                            }
+                                                        }
+                                                    }
+
+                                                },
+                                                "stateToRun": game.state
+                                            }
+                                        ]
+                                    },
+                                    "width": config.diameter,
+                                    "height": config.diameter,
+                                    "id": buttonID
+                                }
+                                game.game.sprites.push(sprite)
+                                BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.elements.push(sprite)
+
+                                BeginningJS.internal.createSprite({
+                                    "isClone": false,
+                                    "i": game.game.sprites.length - 1,
+                                    "runScripts": true,
+                                    "isInternal": true
+                                }, sprite, game, game.game.sprites.length - 1)
                             }
+                            if (config.type == "img") {
+                                config = BeginningJS.internal.checkOb(config, {
+                                    "type": {
+                                        "types": ["string"],
+                                        "description": "The type of button to be created. ('img', 'text')"
+                                    },
+                                    "img": {
+                                        "types": ["string"],
+                                        "description": "The image for the button."
+                                    },
+                                    "x": {
+                                        "types": ["number"],
+                                        "description": "The x position for the button."
+                                    },
+                                    "y": {
+                                        "types": ["number"],
+                                        "description": "The y position for the button."
+                                    },
+                                    "diameter": {
+                                        "types": ["number"],
+                                        "description": "The diameter of the button."
+                                    },
+                                    "fill": {
+                                        "types": ["string"],
+                                        "description": "The fill colour of the button. (HTML colour e.g hex, rgb(), etc)"
+                                    },
+                                    "onclick": {
+                                        "types": [
+                                            "string",
+                                            "function"
+                                        ],
+                                        "description": "The submenu name to switch to or a function to run when the button is clicked."
+                                    },
+                                    "submenu": {
+                                        "types": ["string"],
+                                        "description": "The submenu name that the button will show in."
+                                    },
+                                }, {
+                                    "outline": {
+                                        "types": ["string"],
+                                        "default": config.fill,
+                                        "description": "The outline colour of the button. (HTML colour e.g hex, rgb(), etc)"
+                                    }
+                                }, "Game.methods.gui.create.button.modern")
+
+                                var i = 0
+                                while (game.internal.IDIndex["Internal.GUI.modern.button#" + i] != null) {
+                                    i++
+                                }
+                                var buttonID = "Internal.GUI.modern.button#" + i
+
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.clickDown",
+                                    "src": "../assets/snds/clickDown.mp3" // TODO data url
+                                }, game)
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.clickUp",
+                                    "src": "../assets/snds/clickUp.mp3" // TODO data url
+                                }, game)
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.mouseTouch",
+                                    "src": "../assets/snds/mouseTouch.mp3" // TODO data url
+                                }, game)
+
+                                var sprite = {
+                                    "type": "canvas",
+                                    "res": window.devicePixelRatio,
+                                    "customRes": true,
+                                    "x": config.x,
+                                    "y": config.y,
+                                    "vars": {
+                                        "config": config,
+                                        "mouseTime": 0,
+                                        "default": {
+                                            "diameter": config.diameter
+                                        },
+                                        "click": false,
+                                        "clicked": false,
+                                        "clickTime": 0,
+                                        "clickedQueued": false,
+                                        "renderNext": false
+                                    },
+                                    "scripts": {
+                                        "init": [
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    me.vars.canvas = document.createElement("canvas") // Make a separate canvas
+                                                    me.vars.ctx = me.vars.canvas.getContext("2d")
+                                                    me.ctx.imageSmoothingEnabled = false
+
+                                                    me.vars.render = function() {
+                                                        me.canvas.width = me.scaled.width
+                                                        me.canvas.height = me.scaled.height
+
+                                                        var ctx = me.vars.ctx
+                                                        var canvas = me.vars.canvas
+                                                        canvas.width = me.canvas.width
+                                                        canvas.height = me.canvas.height
+
+                                                        ctx.strokeStyle = me.vars.config.outline
+                                                        ctx.fillStyle = me.vars.config.fill
+                                                        ctx.lineWidth = me.scale.x(me.width / 5)
+
+                                                        ctx.beginPath()
+                                                        ctx.arc(canvas.width / 2, canvas.height / 2, (canvas.width / 2) - (ctx.lineWidth / 2), 0, 2 * Math.PI)
+                                                        ctx.stroke()
+                                                        ctx.fill()
+
+                                                        var img = BeginningJS.methods.get.image(config.img, gameRef) // TODO: What if the ID is invalid?
+                                                        var width = canvas.width / 2
+                                                        var height = canvas.height / 2
+
+                                                        ctx.imageSmoothingEnabled = false
+                                                        ctx.drawImage(img, width / 2, height / 2, width, height)
+                                                        ctx.imageSmoothingEnabled = true
+
+                                                        me.ctx.drawImage(canvas, 0, 0) // Draw the other canvas to my canvas
+                                                    }
+                                                    me.vars.inputs = function() {
+                                                        if (me.touching.mouse.AABB()) {
+                                                            if (Math.abs(me.vars.mouseTime) < 0.02) {
+                                                                if (me.vars.mouseTime == 0) {
+                                                                    BeginningJS.methods.playSound("Internal.GUI.button.modern.mouseTouch")
+                                                                }
+                                                                me.vars.mouseTime = 0.1
+                                                            }
+                                                            if (me.vars.mouseTime < 0) {
+                                                                me.vars.mouseTime *= 0.9
+                                                            }
+                                                            else {
+                                                                me.vars.mouseTime *= 1.1
+                                                            }
+                                                            if (me.vars.mouseTime > 0.2) {
+                                                                me.vars.mouseTime = 0.2
+                                                            }
+                                                        }
+                                                        else {
+                                                            me.vars.mouseTime *= 0.8
+                                                            if (me.vars.mouseTime < 0.01) {
+                                                                me.vars.mouseTime = 0
+                                                            }
+                                                        }
+                                                        if (me.touching.mouse.AABB()) {
+                                                            if (gameRef.input.mouse.down) {
+                                                                if (! me.vars.click) {
+                                                                    me.vars.clicked = true
+                                                                    me.vars.clickTime = 0
+                                                                }
+                                                            }
+                                                        }
+                                                        if (me.vars.clicked) {
+                                                            if (me.vars.clickTime == 0) {
+                                                                me.vars.clickTime = 0.025
+                                                                BeginningJS.methods.playSound("Internal.GUI.button.modern.clickDown")
+                                                            }
+                                                            if (! me.vars.clickedQueued) {
+                                                                if ((! gameRef.input.mouse.down) || (! me.touching.mouse.AABB())) {
+                                                                    BeginningJS.methods.playSound("Internal.GUI.button.modern.clickUp")
+                                                                    me.vars.clickedQueued = true
+
+                                                                    if (typeof me.vars.config.onclick == "function") {
+                                                                        me.vars.config.onclick(game, me)
+                                                                    }
+                                                                    else {
+                                                                        BeginningJS.methods.get.sprite("Internal.GUI.menu.index", game)
+                                                                        me.clone({
+                                                                            "vars": {
+                                                                                "button": me
+                                                                            }
+                                                                        })
+
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            me.vars.clickTime *= 1.1
+                                                            if (me.vars.clickTime > 0.1) {
+                                                                me.vars.clickTime = 0.1
+                                                                if (me.vars.clickedQueued) {
+                                                                    me.vars.clicked = false
+                                                                    me.vars.clickTime = 0
+                                                                    me.vars.clickedQueued = false
+                                                                    me.vars.mouseTime = -0.2
+                                                                }
+                                                            }
+                                                        }
+                                                        me.vars.click = gameRef.input.mouse.down
+                                                    }
+                                                    me.vars.effects = function() {
+                                                        if (me.vars.clicked) {
+                                                            var ctx = me.ctx
+                                                            var canvas = me.canvas
+
+                                                            ctx.fillStyle = "rgba(" + [50, 50, 50, 0.2] + ")"
+
+                                                            ctx.beginPath()
+                                                            var radius = (me.vars.clickTime * (me.width / 2)) * (1 / 0.1)
+                                                            var max = ((me.width / 2) - (me.width / 5)) * (1 / 0.1)
+
+                                                            if (radius > max) {
+                                                                radius = me.scale.x(max)
+                                                            }
+                                                            else {
+                                                                radius = me.scale.x(radius)
+                                                            }
+                                                            ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, 2 * Math.PI)
+                                                            ctx.fill()
+                                                        }
+                                                        else {
+                                                            if (me.vars.mouseTime != 0) {
+                                                                var ctx = me.ctx
+                                                                var canvas = me.canvas
+
+                                                                ctx.fillStyle = "rgba(" + [50, 50, 50, 0.05] + ")"
+
+                                                                ctx.beginPath()
+                                                                var radius = (Math.abs(me.vars.mouseTime) * (me.width / 2)) * (1 / 0.2)
+                                                                var max = ((me.width / 2) - (me.width / 5)) * (1 / 0.2)
+
+                                                                if (radius > max) {
+                                                                    radius = me.scale.x(max)
+                                                                }
+                                                                else {
+                                                                    radius = me.scale.x(radius)
+                                                                }
+                                                                ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, 2 * Math.PI)
+                                                                ctx.fill()
+                                                            }
+                                                        }
+                                                    }
+                                                    me.vars.render()
+                                                },
+                                                "stateToRun": game.state
+                                            }
+                                        ],
+                                        "main": [
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    if (me.visible) {
+                                                        if (me.vars.clicked) {
+                                                            me.width = me.vars.default.diameter / (((me.vars.clickTime + me.vars.mouseTime) / 2) + 1)
+                                                            me.height = me.vars.default.diameter / (((me.vars.clickTime + me.vars.mouseTime) / 2) + 1)
+                                                        }
+                                                        else {
+                                                            me.width = me.vars.default.diameter * ((me.vars.mouseTime / 2) + 1)
+                                                            me.height = me.vars.default.diameter * ((me.vars.mouseTime / 2) + 1)
+                                                        }
+                                                    }
+                                                },
+                                                "stateToRun": game.state
+                                            },
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    if (me.visible) {
+                                                        if (! BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.switching) {
+                                                            me.vars.render()
+                                                            me.vars.inputs()
+                                                            me.vars.effects()
+                                                        }
+                                                    }
+                                                },
+                                                "stateToRun": game.state
+                                            },
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    var indexSprite = BeginningJS.methods.get.sprite("Internal.GUI.menu.index")
+                                                    if (me.vars.config.submenu == indexSprite.vars.submenu) {
+                                                        if (! me.visible) {
+                                                            me.visible = true
+                                                        }
+                                                    }
+                                                    else {
+                                                        if (me.visible) {
+                                                            me.visible = false
+                                                        }
+                                                    }
+
+                                                },
+                                                "stateToRun": game.state
+                                            }
+                                        ]
+                                    },
+                                    "clones": {
+                                        "vars": {
+                                            "finished": false,
+                                            "closingAnimation": false,
+                                            "velWas": 0
+                                        },
+                                        "scripts": {
+                                            "init": [
+                                                function(gameRef, me) {
+                                                    me.width = me.vars.button.vars.config.diameter
+                                                    me.height = me.vars.button.vars.config.diameter
+                                                },
+                                                function(gameRef, me) {
+                                                    me.vars.vel = 5
+
+                                                    me.vars.render = function() {
+                                                        me.canvas.width = me.scaled.width
+                                                        me.canvas.height = me.scaled.height
+
+                                                        var ctx = me.ctx
+                                                        var canvas = me.canvas
+
+                                                        ctx.clearRect(0, 0, canvas.width, canvas.height)
+                                                        ctx.fillStyle = me.vars.button.vars.config.fill
+
+                                                        ctx.beginPath()
+                                                        ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, 2 * Math.PI)
+                                                        ctx.fill()
+                                                    }
+                                                    me.vars.render()
+                                                }
+                                            ],
+                                            "main": [
+                                                function(gameRef, me) {
+                                                    if (me.vars.closingAnimation) {
+                                                        me.vars.vel *= 1.1
+                                                    }
+                                                    else {
+                                                        me.vars.vel *= 1.5
+                                                    }
+
+                                                    // TODO: Animation slightly broken (look at in slow-mo by disabling line above ^)
+
+                                                    me.width += Math.round(me.vars.vel)
+                                                    me.height += Math.round(me.vars.vel)
+                                                    me.width = Math.max(me.width, 1)
+                                                    me.height = Math.max(me.height, 1)
+                                                    if (me.width < me.vars.button.vars.config.diameter) {
+                                                        BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.switching = false
+                                                        me.delete()
+                                                    }
+
+                                                    me.vars.widthWas = me.width
+                                                    me.vars.heightWas = me.height
+                                                    //me.width = Math.min(me.width, gameRef.width * 2)
+                                                    //me.height = Math.min(me.height, gameRef.height * 2)
+                                                },
+                                                function(gameRef, me) {
+                                                    if (me.vars.finished) {
+                                                        if (me.vars.button.vars.config.onclick != BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.submenu) {
+                                                            // Wait for the other elements to finish their animations
+                                                            var elements = BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.elements
+                                                            var cancel = false
+                                                            var i = 0
+                                                            for (i in elements) {
+                                                                var element = elements[i]
+                                                                if (element.vars.config.submenu == me.vars.button.vars.config.onclick) {
+                                                                    if (element.visible) {
+                                                                        var cancel = true
+                                                                    }
+                                                                }
+                                                            }
+                                                            if (! cancel) { // If they're done we start ours
+                                                                BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.switching = true
+                                                                me.vars.finished = false
+                                                                me.vars.vel = -10
+                                                                me.vars.closingAnimation = true
+
+                                                                me.x = me.vars.button.vars.config.x
+                                                                me.y = me.vars.button.vars.config.y
+                                                                me.width = Math.max((Math.abs(me.x - (gameRef.width / 2)) * 2) + gameRef.width, (Math.abs(me.y - (gameRef.height / 2)) * 2) + gameRef.height)
+                                                                me.height = me.width
+
+                                                                me.vars.renderNext = true
+                                                            }
+                                                        }
+                                                    }
+                                                    else {
+                                                        if (! me.vars.closingAnimation) {
+                                                            var finished = true
+                                                            if (Math.abs(me.x - (gameRef.width / 2)) + (me.width / 2) < gameRef.width) {
+                                                                finished = false
+                                                            }
+                                                            if (Math.abs(me.y - (gameRef.height / 2)) + (me.height / 2) < gameRef.height) {
+                                                                finished = false
+                                                            }
+
+                                                            if (finished) {
+                                                                me.vars.finished = true
+
+                                                                me.vars.velWas = me.vars.vel
+                                                                me.vars.vel = 0
+
+                                                                me.vars.xWas = me.x
+                                                                me.vars.yWas = me.y
+                                                                me.x = gameRef.width / 2
+                                                                me.y = gameRef.height / 2
+                                                                me.width = gameRef.width
+                                                                me.height = gameRef.height
+                                                                me.customRes = false
+                                                                me.res = 1
+
+                                                                BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.submenu = me.vars.button.vars.config.onclick
+                                                            }
+                                                        }
+
+                                                        me.vars.render()
+                                                    }
+                                                },
+                                                function(gameRef, me) {
+                                                    if (me.vars.finished) {
+                                                        var ctx = me.ctx
+                                                        var canvas = me.canvas
+
+                                                        ctx.fillStyle = me.vars.button.vars.config.fill
+                                                        ctx.fillRect(0, 0, canvas.width, canvas.height)
+                                                    }
+                                                    if (me.vars.renderNext) {
+                                                        me.vars.renderNext = false
+                                                        me.vars.render()
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "width": config.diameter,
+                                    "height": config.diameter,
+                                    "id": buttonID
+                                }
+                                game.game.sprites.push(sprite)
+                                BeginningJS.methods.get.sprite("Internal.GUI.menu.index").vars.elements.push(sprite)
+
+                                BeginningJS.internal.createSprite({
+                                    "isClone": false,
+                                    "i": game.game.sprites.length - 1,
+                                    "runScripts": true,
+                                    "isInternal": true
+                                }, sprite, game, game.game.sprites.length - 1)
+                            }
+                            if (config.type == "text") {
+                                config = BeginningJS.internal.checkOb(config, {
+                                    "type": {
+                                        "types": ["string"],
+                                        "description": "The type of button to be created. ('cross', 'custom')"
+                                    },
+                                    "text": {
+                                        "types": ["string"],
+                                        "description": "The text for the button."
+                                    },
+                                    "x": {
+                                        "types": ["number"],
+                                        "description": "The x position for the button."
+                                    },
+                                    "y": {
+                                        "types": ["number"],
+                                        "description": "The y position for the button."
+                                    },
+                                    "diameter": {
+                                        "types": ["number"],
+                                        "description": "The diameter of the button."
+                                    },
+                                    "fill": {
+                                        "types": ["string"],
+                                        "description": "The fill colour of the button. (HTML colour e.g hex, rgb(), etc)"
+                                    },
+                                    "onclick": {
+                                        "types": [
+                                            "string",
+                                            "function"
+                                        ],
+                                        "description": "The submenu name to switch to or a function to run when the button is clicked."
+                                    },
+                                    "submenu": {
+                                        "types": ["string"],
+                                        "description": "The submenu name that the button will show in."
+                                    },
+                                }, {
+                                    "outline": {
+                                        "types": ["string"],
+                                        "default": null,
+                                        "description": "The outline colour of the button. (HTML colour e.g hex, rgb(), etc)"
+                                    }
+                                }, "Game.methods.gui.create.button.modern")
+                                if (config.outline == null) {
+                                    config.outline = config.fill
+                                }
+
+                                var i = 0
+                                while (game.internal.IDIndex["Internal.GUI.modern.button#" + i] != null) {
+                                    i++
+                                }
+                                var buttonID = "Internal.GUI.modern.button#" + i
+
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.clickDown",
+                                    "src": "../assets/snds/clickDown.mp3" // TODO data url
+                                }, game)
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.clickUp",
+                                    "src": "../assets/snds/clickUp.mp3" // TODO data url
+                                }, game)
+                                BeginningJS.internal.load.snd({
+                                    "id": "Internal.GUI.button.modern.mouseTouch",
+                                    "src": "../assets/snds/mouseTouch.mp3" // TODO data url
+                                }, game)
+
+                                var sprite = {
+                                    "type": "canvas",
+                                    "res": window.devicePixelRatio,
+                                    "customRes": true,
+                                    "x": config.x,
+                                    "y": config.y,
+                                    "vars": {
+                                        "config": config,
+                                        "mouseTime": 0,
+                                        "default": {
+                                            "diameter": config.diameter
+                                        },
+                                        "click": false,
+                                        "clicked": false,
+                                        "clickTime": 0,
+                                        "clickedQueued": false
+                                    },
+                                    "scripts": {
+                                        "init": [
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    me.vars.canvas = document.createElement("canvas") // Make a separate canvas
+                                                    me.vars.ctx = me.vars.canvas.getContext("2d")
+
+                                                    me.vars.render = function() {
+                                                        me.canvas.width = me.scaled.width
+                                                        me.canvas.height = me.scaled.height
+
+                                                        var ctx = me.vars.ctx
+                                                        var canvas = me.vars.canvas
+                                                        canvas.width = me.canvas.width
+                                                        canvas.height = me.canvas.height
+
+                                                        ctx.strokeStyle = me.vars.config.outline
+                                                        ctx.fillStyle = me.vars.config.fill
+                                                        ctx.lineWidth = me.scale.x(me.width / 5)
+
+                                                        ctx.beginPath()
+                                                        ctx.arc(canvas.width / 2, canvas.height / 2, (canvas.width / 2) - (ctx.lineWidth / 2), 0, 2 * Math.PI)
+                                                        ctx.stroke()
+                                                        ctx.fill()
+
+                                                        me.ctx.drawImage(canvas, 0, 0) // Draw the other canvas to my canvas
+                                                    }
+                                                    me.vars.inputs = function() {
+                                                        if (me.touching.mouse.AABB()) {
+                                                            if (Math.abs(me.vars.mouseTime) < 0.02) {
+                                                                if (me.vars.mouseTime == 0) {
+                                                                    BeginningJS.methods.playSound("Internal.GUI.button.modern.mouseTouch")
+                                                                }
+                                                                me.vars.mouseTime = 0.1
+                                                            }
+                                                            if (me.vars.mouseTime < 0) {
+                                                                me.vars.mouseTime *= 0.9
+                                                            }
+                                                            else {
+                                                                me.vars.mouseTime *= 1.1
+                                                            }
+                                                            if (me.vars.mouseTime > 0.2) {
+                                                                me.vars.mouseTime = 0.2
+                                                            }
+                                                        }
+                                                        else {
+                                                            me.vars.mouseTime *= 0.8
+                                                            if (me.vars.mouseTime < 0.01) {
+                                                                me.vars.mouseTime = 0
+                                                            }
+                                                        }
+                                                        if (me.touching.mouse.AABB()) {
+                                                            if (gameRef.input.mouse.down) {
+                                                                if (! me.vars.click) {
+                                                                    me.vars.clicked = true
+                                                                    me.vars.clickTime = 0
+                                                                }
+                                                            }
+                                                        }
+                                                        if (me.vars.clicked) {
+                                                            if (me.vars.clickTime == 0) {
+                                                                me.vars.clickTime = 0.025
+                                                                BeginningJS.methods.playSound("Internal.GUI.button.modern.clickDown")
+                                                            }
+                                                            if (! me.vars.clickedQueued) {
+                                                                if ((! gameRef.input.mouse.down) || (! me.touching.mouse.AABB())) {
+                                                                    BeginningJS.methods.playSound("Internal.GUI.button.modern.clickUp")
+                                                                    me.vars.clickedQueued = true
+
+                                                                    me.clone({
+                                                                        "vars": {
+                                                                            "button": me
+                                                                        }
+                                                                    })
+                                                                }
+                                                            }
+
+                                                            me.vars.clickTime *= 1.1
+                                                            if (me.vars.clickTime > 0.1) {
+                                                                me.vars.clickTime = 0.1
+                                                                if (me.vars.clickedQueued) {
+                                                                    me.vars.clicked = false
+                                                                    me.vars.clickTime = 0
+                                                                    me.vars.clickedQueued = false
+                                                                    me.vars.mouseTime = -0.2
+                                                                }
+                                                            }
+                                                        }
+                                                        me.vars.click = gameRef.input.mouse.down
+                                                    }
+                                                    me.vars.effects = function() {
+                                                        if (me.vars.clicked) {
+                                                            var ctx = me.ctx
+                                                            var canvas = me.canvas
+
+                                                            ctx.fillStyle = "rgba(" + [50, 50, 50, 0.2] + ")"
+
+                                                            ctx.beginPath()
+                                                            var radius = (me.vars.clickTime * (me.width / 2)) * (1 / 0.1)
+                                                            var max = ((me.width / 2) - (me.width / 5)) * (1 / 0.1)
+
+                                                            if (radius > max) {
+                                                                radius = me.scale.x(max)
+                                                            }
+                                                            else {
+                                                                radius = me.scale.x(radius)
+                                                            }
+                                                            ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, 2 * Math.PI)
+                                                            ctx.fill()
+                                                        }
+                                                        else {
+                                                            if (me.vars.mouseTime != 0) {
+                                                                var ctx = me.ctx
+                                                                var canvas = me.canvas
+
+                                                                ctx.fillStyle = "rgba(" + [50, 50, 50, 0.05] + ")"
+
+                                                                ctx.beginPath()
+                                                                var radius = (Math.abs(me.vars.mouseTime) * (me.width / 2)) * (1 / 0.2)
+                                                                var max = ((me.width / 2) - (me.width / 5)) * (1 / 0.2)
+
+                                                                if (radius > max) {
+                                                                    radius = me.scale.x(max)
+                                                                }
+                                                                else {
+                                                                    radius = me.scale.x(radius)
+                                                                }
+                                                                ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, 2 * Math.PI)
+                                                                ctx.fill()
+                                                            }
+                                                        }
+                                                    }
+                                                    me.vars.render()
+                                                },
+                                                "stateToRun": game.state
+                                            }
+                                        ],
+                                        "main": [
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    if (me.vars.clicked) {
+                                                        me.width = me.vars.default.diameter / (((me.vars.clickTime + me.vars.mouseTime) / 2) + 1)
+                                                        me.height = me.vars.default.diameter / (((me.vars.clickTime + me.vars.mouseTime) / 2) + 1)
+                                                    }
+                                                    else {
+                                                        me.width = me.vars.default.diameter * ((me.vars.mouseTime / 2) + 1)
+                                                        me.height = me.vars.default.diameter * ((me.vars.mouseTime / 2) + 1)
+                                                    }
+                                                },
+                                                "stateToRun": game.state
+                                            },
+                                            {
+                                                "code": function(gameRef, me) {
+                                                    me.vars.render()
+                                                    me.vars.inputs()
+                                                    me.vars.effects()
+                                                },
+                                                "stateToRun": game.state
+                                            }
+                                        ]
+                                    },
+                                    "clones": {
+                                        "scripts": {
+                                            "init": [
+                                                function(gameRef, me) {
+                                                    me.width = me.vars.button.vars.config.diameter
+                                                    me.height = me.vars.button.vars.config.diameter
+                                                },
+                                                function(gameRef, me) {
+                                                    me.vars.vel = 5
+
+                                                    me.vars.render = function() {
+                                                        me.canvas.width = me.scaled.width
+                                                        me.canvas.height = me.scaled.height
+
+                                                        var ctx = me.ctx
+                                                        var canvas = me.canvas
+
+                                                        ctx.clearRect(0, 0, canvas.width, canvas.height)
+                                                        ctx.fillStyle = me.vars.button.vars.config.fill
+
+                                                        ctx.beginPath()
+                                                        ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, 2 * Math.PI)
+                                                        ctx.fill()
+                                                    }
+                                                    me.vars.render()
+                                                }
+                                            ],
+                                            "main": [
+                                                function(gameRef, me) {
+                                                    me.vars.vel *= 2
+
+                                                    me.width += me.vars.vel
+                                                    me.height += me.vars.vel
+
+                                                    var finished = true
+                                                    if (! (me.x - (me.width / 2) < 0)) {
+                                                        finished = false
+                                                    }
+                                                    if (! (me.y + (me.width / 2) > gameRef.internal.renderer.canvas.width)) {
+                                                        finished = false
+                                                    }
+                                                    if (! (me.y - (me.height / 2) < 0)) {
+                                                        finished = false
+                                                    }
+                                                    if (! (me.y + (me.height / 2) > gameRef.internal.renderer.canvas.height)) {
+                                                        finished = false
+                                                    }
+
+                                                    if (finished) {
+                                                        me.vars.vel = 0
+                                                    }
+                                                },
+                                                function(gameRef, me) {
+                                                    me.vars.render()
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "width": config.diameter,
+                                    "height": config.diameter,
+                                    "id": buttonID
+                                }
+                                game.game.sprites.push(sprite)
+
+                                BeginningJS.internal.createSprite({
+                                    "isClone": false,
+                                    "i": game.game.sprites.length - 1,
+                                    "runScripts": true,
+                                    "isInternal": true
+                                }, sprite, game, game.game.sprites.length - 1)
+                            }
+
+                            // TODO: What if it's an invalid type?
+                        },
+                        "internal": {
+                            "game": game
                         }
                     },
                     "controls": {
@@ -666,22 +2215,22 @@ BeginningJS = {
                                     "description": "The src for the joystick."
                                 },
                                 "x": {
-                                    "default": game.width - 100,
+                                    "default": game.width - 150,
                                     "types": ["number"],
                                     "description": "The x position of the circle."
                                 },
                                 "y": {
-                                    "default": game.height - 100,
+                                    "default": game.height - 150,
                                     "types": ["number"],
                                     "description": "The y position of the circle."
                                 },
                                 "width": {
-                                    "default": 100,
+                                    "default": 150,
                                     "types": ["number"],
                                     "description": "The width of the circle."
                                 },
                                 "height": {
-                                    "default": 100,
+                                    "default": 150,
                                     "types": ["number"],
                                     "description": "The height of the circle."
                                 }
@@ -851,6 +2400,8 @@ BeginningJS = {
                                                         //me.x = Math.max(Math.min(me.x, me.vars.circle.x + (me.vars.circle.width / 2)), me.vars.circle.x - (me.vars.circle.width / 2))
                                                         //me.y = Math.max(Math.min(me.y, me.vars.circle.y + (me.vars.circle.height / 2)), me.vars.circle.y - (me.vars.circle.height / 2))
 
+                                                        var prefix = ""
+
                                                         var distance = Math.abs(me.x - me.vars.circle.x) + Math.abs(me.y - me.vars.circle.y)
                                                         if (distance > me.vars.circle.width / 2) {
                                                             var direction = BeginningJS.methods.maths.getDirection(me.vars.circle.x, me.vars.circle.y, me.x, me.y) // TODO
@@ -860,22 +2411,25 @@ BeginningJS = {
 
                                                             me.move(me.vars.circle.width / 2, direction)
                                                         }
+                                                        else {
+                                                            prefix += "~"
+                                                        }
 
                                                         var offsetX = me.x - me.vars.circle.x
                                                         var offsetY = me.y - me.vars.circle.y
 
                                                         var inputs = []
                                                         if (offsetX < -(me.width / 2)) {
-                                                            inputs.push("left")
+                                                            inputs.push(prefix + "left")
                                                         }
                                                         if (offsetX > me.width / 2) {
-                                                            inputs.push("right")
+                                                            inputs.push(prefix + "right")
                                                         }
                                                         if (offsetY < -(me.height / 2)) {
-                                                            inputs.push("up")
+                                                            inputs.push(prefix + "up")
                                                         }
                                                         if (offsetY > me.height / 2) {
-                                                            inputs.push("down")
+                                                            inputs.push(prefix + "down")
                                                         }
                                                         gameRef.input.joysticks[me.vars.id] = inputs
                                                     }
@@ -918,6 +2472,56 @@ BeginningJS = {
                         },
                         "internal": {
                             "game": game
+                        }
+                    }
+                },
+                "internal": {
+                    "game": game,
+                    "createIndex": function(config) {
+                        var game = this.game
+
+                        if (game.internal.IDIndex["Internal.GUI.menu.index"] == null) {
+                            var sprite = {
+                                "type": "canvas",
+                                "res": window.devicePixelRatio,
+                                "customRes": true,
+                                "x": game.width / 2,
+                                "y": game.height / 2,
+                                "vars": {
+                                    "submenu": config.submenu,
+                                    "elements": [],
+                                    "switching": false
+                                },
+                                "scripts": {
+                                    "init": [
+                                        {
+                                            "code": function() {
+
+                                            },
+                                            "stateToRun": game.state
+                                        }
+                                    ],
+                                    "main": [
+                                        {
+                                            "code": function() {
+
+                                            },
+                                            "stateToRun": game.state
+                                        }
+                                    ]
+                                },
+                                "id": "Internal.GUI.menu.index",
+                                "width": game.width,
+                                "height": game.height
+                            }
+                            game.game.sprites.push(sprite)
+
+                            BeginningJS.internal.createSprite({
+                                "isClone": false,
+                                "i": game.game.sprites.length - 1,
+                                "runScripts": true,
+                                "isInternal": true
+                            }, sprite, game, game.game.sprites.length - 1)
                         }
                     }
                 }
@@ -1143,32 +2747,21 @@ BeginningJS = {
                 }
             }, {}, "GameJSON.game.assets.imgs item " + i + ".")
             if (game.internal.assets.imgs.hasOwnProperty(game.game.assets.imgs[i].id)) {
-                console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i  + "'.")
+                console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i + "'.")
                 console.error("Beginning.js hit a critical error, have a look at the error above for more info.")
                 error = true
             }
-            var img = new Image()
-            img.onload = function() {
-                game.internal.assets.loading--
-                game.internal.assets.loaded++
+            if (game.game.assets.imgs[i].id.includes("Internal.")) {
+                console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Beginning.js to load some of its own assets for things like GUI sprites. \nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i + "'.")
+                console.error("Beginning.js hit a critical error, have a look at the error above for more info.")
+                error = true
             }
-            img.onerror = function() {
-                console.warn("Unable to load asset(s) using " + JSON.stringify(this.src) + " as the src. This may be due to it being a online asset and your computer being offline or because the asset doesn't exist. \nBeginning.js will continue to retry.")
-                this.onerror = function() {
-                    setTimeout(function(img) {
-                        var tmp = img.src
-                        img.src = ""
-                        img.src = tmp
-                    }, 10000, this)
-                }
-                this.onerror()
 
-            }
-            img.src = game.game.assets.imgs[i].src
-            game.internal.assets.loading++
-            game.internal.assets.imgs[game.game.assets.imgs[i].id] = {
-                "img": img
-            }
+            BeginningJS.internal.load.img(game.game.assets.imgs[i], game)
+        }
+
+        if (document.readyState == "complete") {
+            BeginningJS.internal.loadImages()
         }
 
         var i = 0
@@ -1193,31 +2786,17 @@ BeginningJS = {
                 }
             }, {}, "GameJSON.game.assets.snds item " + i + ".")
             if (game.internal.assets.snds.hasOwnProperty(game.game.assets.snds[i].id)) {
-                console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.snds[i].id) + " in 'GameJSON.game.assets.snds item " + i  + "'.")
+                console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.snds[i].id) + " in 'GameJSON.game.assets.snds item " + i + "'.")
                 console.error("Beginning.js hit a critical error, have a look at the error above for more info.")
                 error = true
             }
-            var snd = new Audio()
-            snd.oncanplay = function() {
-                //game.internal.assets.loading--
-                //game.internal.assets.loaded++
+            if (game.game.assets.snds[i].id.includes("Internal.")) {
+                console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Beginning.js to load some of its own assets for things like GUI sprites. \nYou used " + JSON.stringify(game.game.assets.snds[i].id) + " in 'GameJSON.game.assets.snds item " + i + "'.")
+                console.error("Beginning.js hit a critical error, have a look at the error above for more info.")
+                error = true
             }
-            snd.onerror = function() {
-                console.warn("Unable to load asset(s) using " + JSON.stringify(this.src) + " as the src. This may be due to it being a online asset and your computer being offline or because the asset doesn't exist. \nBeginning.js will continue to retry.")
-                this.onerror = function() {
-                    setTimeout(function(snd) {
-                        var tmp = snd.src
-                        snd.src = ""
-                        snd.src = tmp
-                    }, 10000, this)
-                }
-                this.onerror()
-            }
-            snd.src = game.game.assets.snds[i].src
-            //game.internal.assets.loading++
-            game.internal.assets.snds[game.game.assets.snds[i].id] = {
-                "snd": snd
-            }
+
+            BeginningJS.internal.load.snd(game.game.assets.snds[i])
         }
         BeginningJS.internal.testAutoPlay = function() {
             try {
@@ -1303,14 +2882,14 @@ BeginningJS = {
             var sprite = BeginningJS.internal.createSprite({
                 "isClone": false,
                 "i": i
-            }, game.game.sprites[i], game, i) // TODO, should be game <=================
+            }, game.game.sprites[i], game, i)
         }
 
         if (error) {
             debugger
         }
         else {
-            if (game.game.scripts.preload == "function") {
+            if (typeof game.game.scripts.preload == "function") {
                 game.game.scripts.preload(game)
             }
         }
@@ -1506,21 +3085,21 @@ BeginningJS = {
                             ],
                             "description": "The type of the sprite (sprite, canvas)."
                         },
-                        "ctx": {
-                            "default": null,
-                            "types": null,
-                            "description": "A read-only atribute."
+                        "res": {
+                            "default": 1,
+                            "types": ["number"],
+                            "description": "The resolution of the canvas."
                         },
-                        "canvas": {
-                            "default": null,
-                            "types": null,
-                            "description": "A read-only atribute."
+                        "customRes": {
+                            "default": false,
+                            "types": ["boolean"],
+                            "description": "Determines whether Beginning.js should allow the canvas resolution to be changed."
                         }
                     }, "GameJSON.game.sprites item " + data.i + ".")
                 }
                 else {
                     console.log(startSprite)
-                    console.error("Oh no! You used an invalid type for a clone. \nYou used " + JSON.stringify(type) + " in 'GameJSON.game.sprites item' " + data.i  + ". While cloning sprite " + JSON.stringify(startSprite.id) + ".")
+                    console.error("Oh no! You used an invalid type for a clone. \nYou used " + JSON.stringify(type) + " in 'GameJSON.game.sprites item' " + data.i + ". While cloning sprite " + JSON.stringify(startSprite.id) + ".")
                     console.error("Beginning.js hit a critical error, look at the error above for more information.")
                     debugger
                 }
@@ -1566,27 +3145,40 @@ BeginningJS = {
                 BeginningJS.internal.checkClones(spriteData, data)
                 var sprite = spriteData
 
+                var scriptIDs = {
+                    "init": [],
+                    "main": []
+                }
+
                 var c = 0
                 for (c in sprite.scripts.init) {
                     if (game.internal.scripts.index.spritesInit[game.state] == null) {
                         game.internal.scripts.index.spritesInit[game.state] = []
                     }
-                    game.internal.scripts.index.spritesInit[game.state][game.internal.scripts.index.spritesInit[game.state].length] = {
+
+                    var scriptID = game.internal.scripts.index.spritesInit[game.state].length
+                    game.internal.scripts.index.spritesInit[game.state].push({
                         "script": c,
                         "sprite": sprite,
                         "isClone": true
-                    }
+                    })
+
+                    scriptIDs.init.push(scriptID)
                 }
+
                 var c = 0
                 for (c in sprite.scripts.main) {
                     if (game.internal.scripts.index.spritesMain[game.state] == null) {
                         game.internal.scripts.index.spritesMain[game.state] = []
                     }
-                    game.internal.scripts.index.spritesMain[game.state][game.internal.scripts.index.spritesMain[game.state].length] = {
+
+                    var scriptID = game.internal.scripts.index.spritesMain[game.state].length
+                    game.internal.scripts.index.spritesMain[game.state].push({
                         "script": c,
                         "sprite": sprite,
                         "isClone": true
-                    }
+                    })
+                    scriptIDs.main.push(scriptID)
                 }
 
                 sprite.cloneOf = data.cloneOf
@@ -1598,7 +3190,8 @@ BeginningJS = {
                             "IDs": null,
                             "dataIDs": null
                         }
-                    }
+                    },
+                    "scriptIDs": scriptIDs
                 }
                 sprite.game = game
                 sprite.idIndex = data.cloneSpriteID
@@ -1608,6 +3201,22 @@ BeginningJS = {
                     sprite.canvas.width = sprite.width
                     sprite.canvas.height = sprite.height
                     sprite.ctx = sprite.canvas.getContext("2d")
+
+                    sprite.scaled = {}
+                    sprite.scaled.width = BeginningJS.internal.render.scale.x(sprite.width, game.internal.renderer, game.internal.renderer.canvas) * sprite.res
+                    sprite.scaled.height = BeginningJS.internal.render.scale.y(sprite.height, game.internal.renderer, game.internal.renderer.canvas) * sprite.res
+
+                    sprite.scale = {}
+                    sprite.scale.internal = {
+                        "game": game,
+                        "sprite": sprite
+                    }
+                    sprite.scale.x = function(x) {
+                        return BeginningJS.internal.render.scale.x(x, this.internal.game.internal.renderer, this.internal.game.internal.renderer.canvas) * this.internal.sprite.res
+                    }
+                    sprite.scale.y = function(y) {
+                        return BeginningJS.internal.render.scale.y(y, this.internal.game.internal.renderer, this.internal.game.internal.renderer.canvas) * this.internal.sprite.res
+                    }
                 }
 
                 BeginningJS.internal.spriteTick(sprite, game) // TODO: Change current sprite
@@ -1782,6 +3391,16 @@ BeginningJS = {
                                     "string"
                                 ],
                                 "description": "The type of the sprite (sprite, canvas)."
+                            },
+                            "res": {
+                                "default": 1,
+                                "types": ["number"],
+                                "description": "The resolution of the canvas."
+                            },
+                            "customRes": {
+                                "default": false,
+                                "types": ["boolean"],
+                                "description": "Determines whether Beginning.js should allow the canvas resolution to be changed."
                             }
                         }, "GameJSON.game.sprites item " + data.i + ".")
 
@@ -1790,10 +3409,26 @@ BeginningJS = {
                             sprite.canvas.width = sprite.width
                             sprite.canvas.height = sprite.height
                             sprite.ctx = sprite.canvas.getContext("2d")
+
+                            sprite.scaled = {}
+                            sprite.scaled.width = BeginningJS.internal.render.scale.x(sprite.width, game.internal.renderer, game.internal.renderer.canvas) * sprite.res
+                            sprite.scaled.height = BeginningJS.internal.render.scale.y(sprite.height, game.internal.renderer, game.internal.renderer.canvas) * sprite.res
+
+                            sprite.scale  = {}
+                            sprite.scale.internal = {
+                                "game": game,
+                                "sprite": sprite
+                            }
+                            sprite.scale.x = function(x) {
+                                return BeginningJS.internal.render.scale.x(x, this.internal.game.internal.renderer, this.internal.game.internal.renderer.canvas) * this.internal.sprite.res
+                            }
+                            sprite.scale.y = function(y) {
+                                return BeginningJS.internal.render.scale.y(y, this.internal.game.internal.renderer, this.internal.game.internal.renderer.canvas) * this.internal.sprite.res
+                            }
                         }
                     }
                     else {
-                        console.error("Oh no! You used an invalid type for a sprite. \nYou used " + JSON.stringify(sprite.type) + " in 'GameJSON.game.sprites item' " + data.i  + ".")
+                        console.error("Oh no! You used an invalid type for a sprite. \nYou used " + JSON.stringify(sprite.type) + " in 'GameJSON.game.sprites item' " + data.i + ".")
                         console.error("Beginning.js hit a critical error, look at the error above for more information.")
                         debugger
                     }
@@ -1832,90 +3467,18 @@ BeginningJS = {
                 sprite.idIndex = parseInt(data.i)
 
                 if (game.internal.IDIndex[sprite.id] != null) {
-                    console.error("Oh no! You used an ID for a sprite that is already being used. Try and think of something else. \nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item' " + data.i  + ".")
+                    console.error("Oh no! You used an ID for a sprite that is already being used. Try and think of something else. \nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item' " + data.i + ".")
                     console.error("Beginning.js hit a critical error, look at the error above for more information.")
                     debugger
                 }
+                if (! data.isInternal) {
+                    if (sprite.id.includes("Internal.")) {
+                        console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Beginning.js to load some of its own assets for things like GUI sprites. \nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item " + data.i + "'.")
+                        console.error("Beginning.js hit a critical error, have a look at the error above for more info.")
+                        debugger
+                    }
+                }
                 game.internal.IDIndex[sprite.id] = Object.keys(game.internal.IDIndex).length
-
-
-                var c = 0
-                for (c in game.game.sprites[data.i].scripts.init) {
-                    if (BeginningJS.internal.getTypeOf(game.game.sprites[data.i].scripts.init[c]) != "object") {
-                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.sprites[data.i].scripts.init[c])) + " in ''GameJSON.game.game.sprites' item " + c + " -> scripts.init.")
-                        console.error("data.Beginning.js hit a critical error, look at the error above for more information.")
-                        debugger
-                    }
-                    game.game.sprites[data.i].scripts.init[c] = BeginningJS.internal.checkOb(game.game.sprites[data.i].scripts.init[c], {
-                        "stateToRun": {
-                            "types": [
-                                "string",
-                                "object"
-                            ],
-                            "description": "The state(s) when this script will be run."
-                        },
-                        "code": {
-                            "types": [
-                                "function"
-                            ],
-                            "description": "The code to be run when the 'stateToRun' property matches the game state."
-                        }
-                    }, {}, "GameJSON.game.scripts.init item " + c + ".")
-                    if (game.internal.scripts.index.spritesInit[game.game.sprites[data.i].scripts.init[c].stateToRun] == null) {
-                        game.internal.scripts.index.spritesInit[game.game.sprites[data.i].scripts.init[c].stateToRun] = []
-                    }
-                    game.internal.scripts.index.spritesInit[game.game.sprites[data.i].scripts.init[c].stateToRun][game.internal.scripts.index.spritesInit[game.game.sprites[data.i].scripts.init[c].stateToRun].length] = {
-                        "script": c,
-                        "sprite": game.game.sprites[data.i]
-                    }
-                }
-                var c = 0
-                for (c in game.game.sprites[data.i].scripts.main) {
-                    if (BeginningJS.internal.getTypeOf(game.game.sprites[data.i].scripts.main[c]) != "object") {
-                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.sprites[data.i].scripts.main[c])) + " in ''GameJSON.game.game.sprites' item " + c + " -> scripts.main.")
-                        console.error("data.Beginning.js hit a critical error, look at the error above for more information.")
-                        debugger
-                    }
-                    game.game.sprites[data.i].scripts.main[c] = BeginningJS.internal.checkOb(game.game.sprites[data.i].scripts.main[c], {
-                        "stateToRun": {
-                            "types": [
-                                "string",
-                                "object"
-                            ],
-                            "description": "The state(s) when this script will be run."
-                        },
-                        "code": {
-                            "types": [
-                                "function"
-                            ],
-                            "description": "The code to be run while the 'stateToRun' property matches the game state."
-                        }
-                    }, {}, "GameJSON.game.game.sprites item " + c + " -> scripts.main.")
-                    if (game.internal.scripts.index.spritesMain[game.game.sprites[data.i].scripts.main[c].stateToRun] == null) {
-                        game.internal.scripts.index.spritesMain[game.game.sprites[data.i].scripts.main[c].stateToRun] = []
-                    }
-                    game.internal.scripts.index.spritesMain[game.game.sprites[data.i].scripts.main[c].stateToRun][game.internal.scripts.index.spritesMain[game.game.sprites[data.i].scripts.main[c].stateToRun].length] = {
-                        "script": c,
-                        "sprite": game.game.sprites[data.i]
-                    }
-                }
-
-                if (data.runScripts) {
-                    var spriteWas = BeginningJS.internal.current.sprite
-                    var gameWas = BeginningJS.internal.current.game
-
-                    BeginningJS.internal.current.sprite = sprite
-                    BeginningJS.internal.current.game = game
-
-                    var i = 0
-                    for (i in sprite.scripts.init) {
-                        var script = sprite.scripts.init[i]
-                        script.code(BeginningJS.internal.current.game, BeginningJS.internal.current.sprite)
-                    }
-
-                    BeginningJS.internal.current.sprite = spriteWas
-                    BeginningJS.internal.current.game = gameWas
-                }
             }
             sprite.layer = game.internal.renderer.layers.length
             game.internal.renderer.layers.push(parseInt(id))
@@ -2180,7 +3743,7 @@ BeginningJS = {
                         var rect = BeginningJS.internal.collision.methods.spriteRect(me, 2, 1)
                         // TODO: What if the sprite doesn't exist?
                         // TODO: What if there's no game?
-                        if (BeginningJS.device.is.touchscreen) {
+                        if (BeginningJS.device.is.touchscreen && game.input.touches.length > 0) {
                             var i = 0
                             for (i in game.input.touches) {
                                 var input = game.input.touches[i]
@@ -2230,8 +3793,8 @@ BeginningJS = {
 
                 var rad = BeginningJS.methods.maths.degToRad(angle)
 
-                me.x += Math.sin(rad) * distance
-                me.y += Math.cos(rad) * distance
+                me.x += Math.cos(rad) * distance
+                me.y += Math.sin(rad) * distance
             }
             sprite.clone = function(inputCloneData) {
                 var spriteWas = BeginningJS.internal.current.sprite
@@ -2287,6 +3850,196 @@ BeginningJS = {
 
                 return newSprite
             }
+            sprite.switch = function(imgID) {
+                var me = this
+                var game = me.game
+                // What if it's not run as a sprite? TODO
+
+                if (game.internal.assets.imgs[imgID] == null) {
+                    console.error("Oops. You tried to switch the image of the sprite with the ID " + me.id + " to an image with the ID of " + imgID + ".")
+                    console.error("Beginning.js hit a critical error, have a look at the error abovr for more info.")
+                    debugger
+                }
+
+                me.img = imgID
+                var asset = game.internal.assets.imgs[imgID]
+                me.width = asset.img.width
+                me.height = asset.img.height
+            }
+            sprite.setScale = function(x, y) {
+                var me = this
+
+                if (y == null) {
+                    me.width *= x
+                    me.height *= x
+                }
+                else {
+                    me.width *= x
+                    me.height *= y
+                }
+
+            }
+            sprite.delete = function() {
+                // TODO: Make it work for sprites not just clones <=====
+                var me = this
+                var game = me.game
+
+                game.internal.renderer.layers[game.internal.renderer.layers.indexOf(me.idIndex)] = null
+                var i = 0
+                var newLayers = []
+                for (i in game.internal.renderer.layers) {
+                    if (game.internal.renderer.layers[i] != null) {
+                        newLayers.push(game.internal.renderer.layers[i])
+                    }
+                }
+                game.internal.renderer.layers = newLayers
+
+
+                // == Delete the sprite scripts ==
+                var i = 0
+                var allScripts = game.internal.scripts.index.spritesInit
+                var scripts = me.internal.scriptIDs.init
+                for (i in scripts) {
+                    allScripts[game.state][scripts[i]] = null
+                }
+                // Remove the nulls
+                var i = 0
+                var newInitScripts = []
+                for (i in allScripts[game.state]) {
+                    if (allScripts[game.state][i] != null) {
+                        newInitScripts.push(allScripts[game.state][i])
+                    }
+                }
+                allScripts[game.state] = newInitScripts
+
+                var i = 0
+                var allScripts = game.internal.scripts.index.spritesMain
+                var scripts = me.internal.scriptIDs.main
+                for (i in scripts) {
+                    allScripts[game.state][scripts[i]] = null
+                }
+                // Remove the nulls
+                var i = 0
+                var newMainScripts = []
+                for (i in allScripts[game.state]) {
+                    if (allScripts[game.state][i] != null) {
+                        newMainScripts.push(allScripts[game.state][i])
+                    }
+                }
+                allScripts[game.state] = newMainScripts
+
+                // == Delete the sprite scripts ==
+
+                game.game.sprites[me.idIndex] = null
+                game.internal.IDIndex[me.id] = null
+
+                var newIdIndex = {}
+                var newSprites = []
+                var i = 0
+                for (i in game.game.sprites) {
+                    if (game.game.sprites[i] != null) {
+                        newSprites.push(game.game.sprites[i])
+                        var spriteID = game.game.sprites[i].id
+                        newIdIndex[spriteID] = game.internal.IDIndex[spriteID]
+                    }
+                }
+                game.internal.IDIndex = newIdIndex
+                game.game.sprites = newSprites
+            }
+
+            if (! data.isClone) {
+                var scriptIDs = {
+                    "init": [],
+                    "main": []
+                }
+
+                var c = 0
+                for (c in game.game.sprites[data.i].scripts.init) {
+                    if (BeginningJS.internal.getTypeOf(game.game.sprites[data.i].scripts.init[c]) != "object") {
+                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.sprites[data.i].scripts.init[c])) + " in ''GameJSON.game.game.sprites' item " + c + " -> scripts.init.")
+                        console.error("Beginning.js hit a critical error, look at the error above for more information.")
+                        debugger
+                    }
+                    game.game.sprites[data.i].scripts.init[c] = BeginningJS.internal.checkOb(game.game.sprites[data.i].scripts.init[c], {
+                        "stateToRun": {
+                            "types": [
+                                "string",
+                                "object"
+                            ],
+                            "description": "The state(s) when this script will be run."
+                        },
+                        "code": {
+                            "types": [
+                                "function"
+                            ],
+                            "description": "The code to be run when the 'stateToRun' property matches the game state."
+                        }
+                    }, {}, "GameJSON.game.scripts.init item " + c + ".")
+                    if (game.internal.scripts.index.spritesInit[game.game.sprites[data.i].scripts.init[c].stateToRun] == null) {
+                        game.internal.scripts.index.spritesInit[game.game.sprites[data.i].scripts.init[c].stateToRun] = []
+                    }
+
+                    var scriptID = game.internal.scripts.index.spritesInit[game.game.sprites[data.i].scripts.init[c].stateToRun].length
+                    game.internal.scripts.index.spritesInit[game.game.sprites[data.i].scripts.init[c].stateToRun].push({
+                        "script": c,
+                        "sprite": game.game.sprites[data.i]
+                    })
+
+                    scriptIDs.init.push(scriptID)
+                }
+                var c = 0
+                for (c in game.game.sprites[data.i].scripts.main) {
+                    if (BeginningJS.internal.getTypeOf(game.game.sprites[data.i].scripts.main[c]) != "object") {
+                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(BeginningJS.internal.getTypeOf(game.game.sprites[data.i].scripts.main[c])) + " in ''GameJSON.game.game.sprites' item " + c + " -> scripts.main.")
+                        console.error("data.Beginning.js hit a critical error, look at the error above for more information.")
+                        debugger
+                    }
+                    game.game.sprites[data.i].scripts.main[c] = BeginningJS.internal.checkOb(game.game.sprites[data.i].scripts.main[c], {
+                        "stateToRun": {
+                            "types": [
+                                "string",
+                                "object"
+                            ],
+                            "description": "The state(s) when this script will be run."
+                        },
+                        "code": {
+                            "types": [
+                                "function"
+                            ],
+                            "description": "The code to be run while the 'stateToRun' property matches the game state."
+                        }
+                    }, {}, "GameJSON.game.game.sprites item " + c + " -> scripts.main.")
+                    if (game.internal.scripts.index.spritesMain[game.game.sprites[data.i].scripts.main[c].stateToRun] == null) {
+                        game.internal.scripts.index.spritesMain[game.game.sprites[data.i].scripts.main[c].stateToRun] = []
+                    }
+
+                    var scriptID = game.internal.scripts.index.spritesMain[game.game.sprites[data.i].scripts.main[c].stateToRun].length
+                    game.internal.scripts.index.spritesMain[game.game.sprites[data.i].scripts.main[c].stateToRun].push({
+                        "script": c,
+                        "sprite": game.game.sprites[data.i]
+                    })
+
+                    scriptIDs.init.push(scriptID)
+                }
+                sprite.internal.scriptIDs = scriptIDs
+
+                if (data.runScripts) {
+                    var spriteWas = BeginningJS.internal.current.sprite
+                    var gameWas = BeginningJS.internal.current.game
+
+                    BeginningJS.internal.current.sprite = sprite
+                    BeginningJS.internal.current.game = game
+
+                    var i = 0
+                    for (i in sprite.scripts.init) {
+                        var script = sprite.scripts.init[i]
+                        script.code(BeginningJS.internal.current.game, BeginningJS.internal.current.sprite)
+                    }
+
+                    BeginningJS.internal.current.sprite = spriteWas
+                    BeginningJS.internal.current.game = gameWas
+                }
+            }
 
             return sprite
         },
@@ -2333,7 +4086,7 @@ BeginningJS = {
 
             var i = 0
             for (i in optional) {
-                if (ob[i] == null) {
+                if (ob[i] == null && optional[i].default != null) {
                     newOb[i] = optional[i].default
                 }
             }
@@ -2505,7 +4258,7 @@ BeginningJS = {
 
                     if (BeginningJS.internal.games[i].internal.assets.loading == 0) {
                         BeginningJS.internal.games[i].internal.loadedDelay++
-                        if (BeginningJS.internal.games[i].internal.loadedDelay > 100) {
+                        if (BeginningJS.internal.games[i].internal.loadedDelay > BeginningJS.config.fps / 2) {
                             BeginningJS.internal.games[i].loaded = true
                             var c = 0
                             for (c in BeginningJS.internal.games[i].game.sprites) {
@@ -2535,7 +4288,10 @@ BeginningJS = {
                 BeginningJS.internal.games[i].currentRenderFPS = 1000 / (new Date() - start)
                 BeginningJS.internal.games[i].internal.renderer.lastRender = new Date()
             }
-            BeginningJS.internal.requestAnimationFrame.call(window, BeginningJS.internal.tick)
+
+            setTimeout(function() {
+                BeginningJS.internal.requestAnimationFrame.call(window, BeginningJS.internal.tick)
+            }, 1000 / BeginningJS.config.fps)
         },
         "scripts": function(game) {
             if (game.internal.lastState != game.state) {
@@ -2550,6 +4306,12 @@ BeginningJS = {
                     var sprite = game.internal.scripts.index.spritesInit[game.state][i].sprite
                     BeginningJS.internal.current.sprite = game.game.sprites[game.internal.IDIndex[sprite.id]] // What if it's null?
                     var script = sprite.scripts.init[game.internal.scripts.index.spritesInit[game.state][i].script]
+
+                    if (sprite.type == "canvas") {
+                        sprite.scaled.width = BeginningJS.internal.render.scale.x(sprite.width, game.internal.renderer, game.internal.renderer.canvas) * sprite.res
+                        sprite.scaled.height = BeginningJS.internal.render.scale.y(sprite.height, game.internal.renderer, game.internal.renderer.canvas) * sprite.res
+                    }
+
                     script.code(game, sprite)
                 }
                 game.internal.lastState = game.state
@@ -2562,9 +4324,30 @@ BeginningJS = {
                 script.code(game)
             }
             var i = 0
-            for (i in game.internal.scripts.index.spritesMain[game.state]) {
+            while (i < game.internal.scripts.index.spritesMain[game.state].length) {
+                if (game.internal.scripts.index.spritesMain[game.state][i] == null) {
+                    console.log(i, game.state, game.internal.scripts.index.spritesMain[game.state])
+                    debugger
+                }
                 var sprite = game.internal.scripts.index.spritesMain[game.state][i].sprite
                 BeginningJS.internal.current.sprite = game.game.sprites[game.internal.IDIndex[sprite.id]] // What if it's null?
+
+                if (sprite.type == "canvas") {
+                    if (sprite.customRes) {
+                        sprite.scaled.width = BeginningJS.internal.render.scale.x(sprite.width, game.internal.renderer, game.internal.renderer.canvas) * sprite.res
+                        sprite.scaled.height = BeginningJS.internal.render.scale.y(sprite.height, game.internal.renderer, game.internal.renderer.canvas) * sprite.res
+                    }
+                    else {
+                        if (sprite.canvas.width != sprite.width || sprite.canvas.height != sprite.height) {
+                            sprite.canvas.width = sprite.width
+                            sprite.canvas.height = sprite.height
+                        }
+                        sprite.scaled.width = sprite.width
+                        sprite.scaled.height = sprite.height
+                    }
+                }
+
+                var idWas = sprite.id
                 if (game.internal.scripts.index.spritesMain[game.state][i].isClone) {
                     BeginningJS.internal.current.sprite = sprite
                     sprite.scripts.main[game.internal.scripts.index.spritesMain[game.state][i].script](game, sprite)
@@ -2572,6 +4355,10 @@ BeginningJS = {
                 else {
                     var script = sprite.scripts.main[game.internal.scripts.index.spritesMain[game.state][i].script]
                     script.code(game, sprite)
+                }
+
+                if (sprite.id == idWas) { // Detect if it's been deleted
+                    i++
                 }
             }
             BeginningJS.internal.current.sprite = null
@@ -2640,14 +4427,35 @@ BeginningJS = {
                     var i = 0
                     for (i in game.internal.renderer.layers) {
                         var sprite = game.game.sprites[game.internal.renderer.layers[i]]
-                        var x = sprite.x - (sprite.width / 2)
-                        var y = sprite.y - (sprite.height / 2)
 
-                        var scaled = {
-                            "x": BeginningJS.internal.render.scale.x(x, renderer, canvas),
-                            "y": BeginningJS.internal.render.scale.y(y, renderer, canvas),
-                            "width": BeginningJS.internal.render.scale.width(sprite.width, renderer, canvas),
-                            "height": BeginningJS.internal.render.scale.height(sprite.height, renderer, canvas)
+                        if (sprite.type == "canvas" && sprite.customRes) {
+                            var x = sprite.x - (sprite.width / 2)
+                            var y = sprite.y - (sprite.height / 2)
+
+                            var scaled = {
+                                "x": BeginningJS.internal.render.scale.x(x, renderer, canvas),
+                                "y": BeginningJS.internal.render.scale.y(y, renderer, canvas),
+                                "width": sprite.canvas.width,
+                                "height": sprite.canvas.height
+                            }
+                        }
+                        else {
+                            if (sprite.type == "canvas") {
+                                var x = sprite.x - ((sprite.width / sprite.res) / 2)
+                                var y = sprite.y - ((sprite.height / sprite.res) / 2)
+                            }
+                            else {
+                                var x = sprite.x - (sprite.width / 2)
+                                var y = sprite.y - (sprite.height / 2)
+                            }
+
+
+                            var scaled = {
+                                "x": BeginningJS.internal.render.scale.x(x, renderer, canvas),
+                                "y": BeginningJS.internal.render.scale.y(y, renderer, canvas),
+                                "width": BeginningJS.internal.render.scale.width(sprite.width, renderer, canvas),
+                                "height": BeginningJS.internal.render.scale.height(sprite.height, renderer, canvas)
+                            }
                         }
                         if (sprite.visible) {
                             var flip = []
@@ -2680,11 +4488,7 @@ BeginningJS = {
                             }
                             else {
                                 if (sprite.type == "canvas") {
-                                    if (sprite.canvas.width != sprite.width || sprite.canvas.height != sprite.height) {
-                                        sprite.canvas.width = sprite.width
-                                        sprite.canvas.height = sprite.height
-                                    }
-                                    ctx.drawImage(sprite.canvas, scaled.x * flip[0], scaled.y * flip[1], scaled.width, scaled.height)
+                                    ctx.drawImage(sprite.canvas, scaled.x * flip[0], scaled.y * flip[1], (scaled.width) / sprite.res, (scaled.height) / sprite.res)
                                 }
                             }
                             ctx.restore()
@@ -2745,6 +4549,79 @@ BeginningJS = {
                 }
                 setTimeout(BeginningJS.internal.testAutoPlay, 0)
             }
+        },
+        "loadImages": function() {
+            var i = 0
+            for (i in BeginningJS.internal.games) {
+                var game = BeginningJS.internal.games[i]
+
+                var keys = Object.keys(game.internal.assets.imgs)
+                var c = 0
+                while (c < keys.length) {
+                    var img = game.internal.assets.imgs[keys[c]].img
+
+                    img.src = game.game.assets.imgs[c].src
+                    c++
+                }
+            }
+        },
+        "onPageReady": function() {
+            BeginningJS.internal.loadImages()
+        },
+        "onDocReadyStateChange": document.addEventListener("readystatechange", function() {
+            if (document.readyState == "complete") {
+                BeginningJS.internal.onPageReady()
+            }
+        }),
+        "load": {
+            "snd": function(sndJSON, game) {
+                if (game.internal.assets.snds[sndJSON.id] != null) {
+                    return
+                }
+                var snd = new Audio()
+                snd.onerror = function() {
+                    console.warn("Unable to load asset(s) using " + JSON.stringify(this.src) + " as the src. This may be due to it being a online asset and your computer being offline or because the asset doesn't exist. \nBeginning.js will continue to retry.")
+                    this.onerror = function() {
+                        setTimeout(function(snd) {
+                            var tmp = snd.src
+                            snd.src = ""
+                            snd.src = tmp
+                        }, 10000, this)
+                    }
+                    this.onerror()
+                }
+                snd.src = sndJSON.src
+                //game.internal.assets.loading++
+                game.internal.assets.snds[sndJSON.id] = {
+                    "snd": snd
+                }
+            },
+            "img": function(imgJSON, game) {
+                if (game.internal.assets.imgs[imgJSON.id] != null) {
+                    return
+                }
+                var img = new Image()
+                img.onload = function() {
+                    game.internal.assets.loading--
+                    game.internal.assets.loaded++
+                }
+                img.onerror = function() {
+                    console.warn("Unable to load asset(s) using " + JSON.stringify(this.src) + " as the src. This may be due to it being a online asset and your computer being offline or because the asset doesn't exist. \nBeginning.js will continue to retry.")
+                    this.onerror = function() {
+                        setTimeout(function(img) {
+                            var tmp = img.src
+                            img.src = ""
+                            img.src = tmp
+                        }, 10000, this)
+                    }
+                    this.onerror()
+
+                }
+                game.internal.assets.loading++
+                game.internal.assets.imgs[imgJSON.id] = {
+                    "img": img
+                }
+            }
         }
     },
     "methods": {
@@ -2798,6 +4675,7 @@ BeginningJS = {
         "playSound": function(id) {
             // TODO: Test for game
             // TODO: Test for ID
+            // TODO: game.methods.playSound
 
             var game = BeginningJS.internal.current.game
 
@@ -2826,8 +4704,9 @@ BeginningJS = {
     "config": {
         "flags": {
             "warnOfUselessParameters": true,
-            "useQTrees": true
-        }
+            "useQTrees": false // Until I fix it :/
+        },
+        "fps": 60
     },
     "device": {
         "is": {
