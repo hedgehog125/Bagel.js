@@ -2970,6 +2970,8 @@ BeginningJS = {
                     }
                 }
             }
+
+            sprite.type = type;
             sprite.scripts = BeginningJS.internal.checkOb(sprite.scripts, {}, {
                 init: {
                     default: [],
@@ -3126,7 +3128,7 @@ BeginningJS = {
             }
             else {
                 if (spriteData.type == null) {
-                    spriteData.type = "sprite"
+                    spriteData.type = "sprite";
                 }
                 if (spriteData.type == "sprite") {
                     var sprite = BeginningJS.internal.checkOb(spriteData, {
@@ -4598,7 +4600,6 @@ BeginningJS = {
 
                             ctx.globalAlpha = 1;
                             if (sprite.type == "sprite") {
-                                console.log("Hmm")
                                 sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
                                 if (sprite.angle == 90) { // Don't rotate if we don't need to
                                     ctx.globalAlpha = sprite.alpha;
