@@ -4489,7 +4489,7 @@ BeginningJS = {
                             canvas.style.removeProperty("height");
                             canvas.style.setProperty("height", newHeight + "px", "important");
 
-                            game.internal.renderer.ctx.imageSmoothingEnabled = false
+                            game.internal.renderer.ctx.imageSmoothingEnabled = false;
                         }
                     }
                     ctx.fillStyle = "white";
