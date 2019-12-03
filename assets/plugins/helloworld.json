@@ -1,0 +1,25 @@
+{
+    info: {
+        ID: "HelloWorld",
+        description: "An easy to use plugin that makes it easy to console.log \"Hello world!\".",
+    },
+    plugin: {
+        assets: {
+            imgs: [],
+            snds: []
+        },
+        sprites: [],
+        scripts: {
+            init: [
+                {
+                    
+                }
+            ],
+            main: [
+                {
+
+                }
+            ]
+        }
+    }
+}

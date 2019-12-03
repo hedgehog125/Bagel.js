@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        Modern GUI
+    </title>
+</head>
+<body bgColor="blue">
+    <p id="fps"></p>
+</body>
+
+<script src="../beginningJS.js"></script>
+<script>
+
+Game = BeginningJS.init({
+    "game": {
+        "assets": {
+            "imgs": [
+                {
+                    "src": "../assets/imgs/play.png", // https://www.flaticon.com/free-icon/play-button_149657#term=play&page=1&position=2
+                    "id": "Play"
+                }
+            ],
+            "snds": []
+        },
+        "sprites": [],
+        "scripts": {
+            "init": [
+                {
+                    "code": (gameRef, me) => {
+                        Game.methods.gui.create.button.modern({
+                            "type": "img",
+                            "onclick": "LevelSelect",
+                            "submenu": "MainMenu",
+                            "img": "Play",
+                            "x": Game.width / 2,
+                            "y": Game.height / 2,
+                            "diameter": 100,
+                            "fill": "#50FF50"
+                        });
+                    },
+                    "stateToRun": "game"
+                }
+            ],
+            "main": [
+                {
+                    "code": () => {
+                        document.getElementById("fps").innerHTML = "FPS: " + Game.currentFPS
+                    },
+                    "stateToRun": "game"
+                }
+            ]
+        }
+    },
+    "width": 800,
+    "height": 450,
+    "ID": "Game",
+    "config": {
+        "display": {
+            "fillScreen": true
+        }
+    }
+})
+
+</script>

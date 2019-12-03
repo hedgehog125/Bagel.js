@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        Bagels
+    </title>
+</head>
+<body bgColor="blue">
+    <p id="debug"></p>
+</body>
+
+<script src="../beginningJS.js"></script>
+<script>
+
+Bagels = BeginningJS.init({
+    ID: "Bagel",
+    game: {
+        assets: {
+            imgs: [
+                {
+                    id: "THE_Bagel",
+                    src: "../assets/imgs/bagel.png"
+                }
+            ],
+            snds: []
+        },
+        sprites: [
+            {
+                id: "THEWorldsSourceOfBagels",
+                vars: {
+                    debugDisplay: document.getElementById("debug"),
+                    generations: 3
+                },
+                scripts: {
+                    init: [
+                        {
+                            code: (gameRef, me) => {
+                                me.x = Bagels.width / 2;
+                                me.y = Bagels.height / 2;
+
+                                me.angle = 0;
+
+                                var count = Math.round(Math.random() * 10);
+                                var i = 0;
+                                while (i < count) {
+                                    me.clone({
+                                        vars: {
+                                            parent: me,
+                                            generation: 1
+                                        }
+                                    });
+
+                                    me.angle += (360 / count);
+                                    i++;
+                                }
+                                me.angle = 0;
+                            },
+                            stateToRun: "Hail the bagel overlords"
+                        }
+                    ],
+                    main: [
+                        {
+                            code: (gameRef, me) => {
+                                me.angle++;
+                                me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + (Bagels.game.sprites.length - 1);
+                            },
+                            stateToRun: "Hail the bagel overlords"
+                        }
+                    ]
+                },
+                img: "THE_Bagel",
+                scale: 0.1,
+                x: 0,
+                y: 0,
+                clones: {
+                    vars: {},
+                    visible: true,
+                    scripts: {
+                        init: [
+                            (gameRef, me) => {
+                                me.width = me.vars.parent.width / 2;
+                                me.height = me.vars.parent.height / 2;
+
+                                me.vars.direction = Math.random() > 0.5 ? 1 : -1;
+
+
+                                me.vars.distance = me.vars.parent.width * ((me.vars.parent.vars.generations + 1) - me.vars.generation);
+
+                                me.x = me.vars.parent.x;
+                                me.y = me.vars.parent.y;
+                                me.move(me.vars.distance);
+
+
+                                if (me.vars.generation < me.vars.parent.vars.generations) { // Not too many
+                                    var angleWas = me.angle;
+                                    me.angle = 0;
+
+                                    var count = Math.round(Math.random() * 10);
+                                    var i = 0;
+                                    while (i < count) {
+                                        me.clone({
+                                            vars: {
+                                                parent: me,
+                                                generation: me.vars.generation + 1
+                                            }
+                                        });
+
+                                        me.angle += (360 / count);
+                                        i++;
+                                    }
+
+                                    me.angle = angleWas;
+                                }
+                            }
+                        ],
+                        main: [
+                            (gameRef, me) => {
+                                me.angle += me.vars.generation * 1 * me.vars.direction;
+
+                                me.x = me.vars.parent.x;
+                                me.y = me.vars.parent.y;
+                                me.move(me.vars.distance);
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    config: {
+        display: {
+            fillScreen: true
+        },
+        state: "Hail the bagel overlords"
+    }
+});
+
+</script>

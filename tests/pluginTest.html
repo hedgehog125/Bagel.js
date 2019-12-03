@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        Plugin test
+    </title>
+</head>
+<script src="../beginningJS.js"></script>
+<script>
+
+Bagels = BeginningJS.init({
+    ID: "Bagel",
+    game: {
+        assets: {
+            imgs: [],
+            snds: [],
+            plugins: [
+                {
+                    src: "../assets/plugins/helloworld.json"
+                }
+            ]
+        },
+        sprites: []
+    },
+    width: 800,
+    height: 450,
+    config: {
+        display: {
+            fillScreen: true
+        }
+    }
+});
+
+</script>

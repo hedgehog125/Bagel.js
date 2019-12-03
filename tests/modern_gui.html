@@ -22,10 +22,11 @@ Game = BeginningJS.init({
             ],
             "snds": []
         },
+        "sprites": [],
         "scripts": {
             "init": [
                 {
-                    "code": function(gameRef, me) {
+                    "code": (gameRef, me) => {
                         Game.methods.gui.create.button.modern({
                             "type": "img",
                             "onclick": "LevelSelect",
@@ -35,7 +36,7 @@ Game = BeginningJS.init({
                             "y": Game.height / 2,
                             "diameter": 100,
                             "fill": "#50FF50"
-                        })
+                        });
                         Game.methods.gui.create.background.modern({
                             "type": "rounded",
                             "submenu": "LevelSelect",
@@ -44,7 +45,7 @@ Game = BeginningJS.init({
                                 "type": "slowing glide",
                                 "animate": true
                             }
-                        })
+                        });
                         Game.methods.gui.create.text.modern({
                             "submenu": "LevelSelect",
                             "fill": "black",
@@ -56,7 +57,7 @@ Game = BeginningJS.init({
                                 "type": "slowing glide",
                                 "animate": true
                             }
-                        })
+                        });
                         Game.methods.gui.create.button.modern({
                             "type": "cross",
                             "submenu": "LevelSelect",
@@ -69,14 +70,14 @@ Game = BeginningJS.init({
                                 "type": "slowing glide",
                                 "animate": true
                             }
-                        })
+                        });
                     },
                     "stateToRun": "game"
                 }
             ],
             "main": [
                 {
-                    "code": function() {
+                    "code": () => {
                         document.getElementById("fps").innerHTML = "FPS: " + Game.currentFPS
                     },
                     "stateToRun": "game"
@@ -93,6 +94,5 @@ Game = BeginningJS.init({
         }
     }
 })
-BeginningJS.config.fps = 60
 
 </script>
