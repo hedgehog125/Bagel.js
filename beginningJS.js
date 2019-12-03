@@ -3808,7 +3808,7 @@ BeginningJS = {
                 var cloneSpriteID = BeginningJS.internal.findSpriteID(game);
                 sprite.internal.cloneIDs[id] = sprite.id;
                 sprite.internal.cloneCount++;
-                
+
                 var newSpriteData = {};
                 newSpriteData = {...BeginningJS.internal.deepClone(sprite.clones), ...cloneData}; // Merge the .clones atrribute argument with the input to the function
 
@@ -4465,34 +4465,33 @@ BeginningJS = {
             },
             renderFrame: {
                 canvas: function(game, canvas, ctx, renderer) {
-                    var newWidth = window.innerWidth
-                    var newHeight = window.innerHeight
-                    var ratio = game.width / game.height
+                    var newWidth = window.innerWidth;
+                    var newHeight = window.innerHeight;
+                    var ratio = game.width / game.height;
                     if (newWidth > newHeight * ratio) {
-                        var newWidth = newHeight * ratio
+                        var newWidth = newHeight * ratio;
                     }
                     else {
-                        var newHeight = newWidth / ratio
+                        var newHeight = newWidth / ratio;
                     }
 
                     if (game.config.display.fillScreen) {
                         if (game.internal.lastWidth != newWidth || game.internal.lastHeight != newHeight) {
-                            game.internal.lastWidth = newWidth
-                            game.internal.lastHeight = newHeight
-                            game.internal.renderer.canvas.width = newWidth * window.devicePixelRatio
-                            game.internal.renderer.canvas.height = newHeight * window.devicePixelRatio
+                            game.internal.lastWidth = newWidth;
+                            game.internal.lastHeight = newHeight;
+                            game.internal.renderer.canvas.width = newWidth * window.devicePixelRatio;
+                            game.internal.renderer.canvas.height = newHeight * window.devicePixelRatio;
 
-                            canvas.style.removeProperty("width")
-                            canvas.style.setProperty("width", newWidth + "px", "important")
-                            canvas.style.removeProperty("height")
-                            canvas.style.setProperty("height", newHeight + "px", "important")
+                            canvas.style.removeProperty("width");
+                            canvas.style.setProperty("width", newWidth + "px", "important");
+                            canvas.style.removeProperty("height");
+                            canvas.style.setProperty("height", newHeight + "px", "important");
 
                             game.internal.renderer.ctx.imageSmoothingEnabled = false
                         }
                     }
-                    //ctx.clearRect(0, 0, canvas.width, canvas.height)
-                    ctx.fillStyle = "white"
-                    ctx.fillRect(0, 0, canvas.width, canvas.height)
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                     var renderRenderers = (order) => {
                         BeginningJS.internal.current.game = game;
@@ -4549,10 +4548,10 @@ BeginningJS = {
 
 
                             var scaled = {
-                                "x": BeginningJS.internal.render.scale.x(x, renderer, canvas),
-                                "y": BeginningJS.internal.render.scale.y(y, renderer, canvas),
-                                "width": BeginningJS.internal.render.scale.width(sprite.width, renderer, canvas),
-                                "height": BeginningJS.internal.render.scale.height(sprite.height, renderer, canvas)
+                                x: BeginningJS.internal.render.scale.x(x, renderer, canvas),
+                                y: BeginningJS.internal.render.scale.y(y, renderer, canvas),
+                                width: BeginningJS.internal.render.scale.width(sprite.width, renderer, canvas),
+                                height: BeginningJS.internal.render.scale.height(sprite.height, renderer, canvas)
                             };
                         }
                         if (sprite.visible) {
@@ -4599,6 +4598,7 @@ BeginningJS = {
 
                             ctx.globalAlpha = 1;
                             if (sprite.type == "sprite") {
+                                console.log("Hmm")
                                 sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
                                 if (sprite.angle == 90) { // Don't rotate if we don't need to
                                     ctx.globalAlpha = sprite.alpha;
@@ -4782,34 +4782,38 @@ BeginningJS = {
     methods: {
         get: {
             image: function(id, gameInput) {
-                var game = BeginningJS.internal.current.game
+                var game = BeginningJS.internal.current.game;
                 if (gameInput != null) {
-                    game = gameInput
+                    game = gameInput;
                 }
                 if (game == null) {
-                    console.error("Oops. You seem to be running this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.")
-                    console.error("Beginning.js hit a critical error, have a look at the error above for more info.")
-                    debugger
+                    // TODO: Review error
+                    console.error("Oops. You seem to be running this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
+                    console.error("Beginning.js hit a critical error, have a look at the error above for more info.");
+                    debugger;
                 }
                 if (game.internal.assets.imgs[id] == null) {
-                    console.error("Oops, a problem occured while getting a image. There's no image with the ID " + JSON.stringify(id) + ".")
+                    console.error("Oops, a problem occured while getting a image. There's no image with the ID " + JSON.stringify(id) + ".");
+                    BeginningJS.internal.oops(game);
                 }
-                return game.internal.assets.imgs[id].img
+                return game.internal.assets.imgs[id].img;
             },
             audio: function(id, gameInput) {
-                var game = BeginningJS.internal.current.game
+                var game = BeginningJS.internal.current.game;
                 if (gameInput != null) {
-                    game = gameInput
+                    game = gameInput;
                 }
                 if (game == null) {
-                    console.error("Oops. You seem to be running this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.")
-                    console.error("Beginning.js hit a critical error, have a look at the error above for more info.")
-                    debugger
+                    // TODO: Review error
+                    console.error("Oops. You seem to be running this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
+                    console.error("Beginning.js hit a critical error, have a look at the error above for more info.");
+                    debugger;
                 }
                 if (game.internal.assets.snds[id] == null) {
-                    console.error("Ah, a problem occured while getting a sprite. There's no sprite with the ID " + JSON.stringify(id) + ".")
+                    console.error("Ah, a problem occured while getting a sprite. There's no sprite with the ID " + JSON.stringify(id) + ".");
+                    BeginningJS.internal.oops(game);
                 }
-                return game.internal.assets.snds[id].snd
+                return game.internal.assets.snds[id].snd;
             },
             sprite: function(id, gameInput) {
                 var game = BeginningJS.internal.current.game;
@@ -4817,10 +4821,12 @@ BeginningJS = {
                     game = gameInput;
                 }
                 if (game == null) {
+                    // TODO: Review error
                     console.error("Oops. You seem to be running this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
                     BeginningJS.internal.oops(game);
                 }
                 if (game.internal.IDIndex[id] == null) {
+                    // TODO: Review error
                     console.error("Ah, a problem occured while getting a sprite. There's no sprite with the ID " + JSON.stringify(id) + ".");
                     BeginningJS.internal.oops(game);
                 }
