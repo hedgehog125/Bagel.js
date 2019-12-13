@@ -39,13 +39,13 @@ Bagels = BeginningJS.init({
 
                                 me.angle = 0;
 
-                                var count = Math.round(Math.random() * 10);
+                                var count = Math.round(Math.random() * 100);
                                 var i = 0;
                                 while (i < count) {
                                     me.clone({
                                         vars: {
                                             generation: 1,
-                                            maxGenerations: 3
+                                            maxGenerations: 2
                                         }
                                     });
 
@@ -93,7 +93,7 @@ Bagels = BeginningJS.init({
                                     var angleWas = me.angle;
                                     me.angle = 0;
 
-                                    var count = Math.round(Math.random() * 10);
+                                    var count = Math.round(Math.random() * 100);
                                     var i = 0;
                                     while (i < count) {
                                         me.clone({
@@ -112,7 +112,7 @@ Bagels = BeginningJS.init({
                         ],
                         main: [
                             (gameRef, me) => {
-                                me.angle += me.vars.direction;
+                                me.angle += ((me.vars.direction * ((me.angle + 90) / 10)) + me.vars.direction) / 10;
 
                                 me.x = me.parent.x;
                                 me.y = me.parent.y;
