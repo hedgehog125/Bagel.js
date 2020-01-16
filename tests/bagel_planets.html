@@ -8,11 +8,11 @@
     <p id="debug"></p>
 </body>
 
-<script src="../beginningJS.js"></script>
+<script src="../bagel.js"></script>
 <script>
 
-Bagels = BeginningJS.init({
-    ID: "Bagel",
+Bagels = Bagel.init({
+    id: "Bagel",
     game: {
         assets: {
             imgs: [
@@ -45,7 +45,7 @@ Bagels = BeginningJS.init({
                                     me.clone({
                                         vars: {
                                             generation: 1,
-                                            maxGenerations: 3
+                                            maxGenerations: 5
                                         }
                                     });
 
@@ -93,7 +93,7 @@ Bagels = BeginningJS.init({
                                     var angleWas = me.angle;
                                     me.angle = 0;
 
-                                    var count = Math.round(Math.random() * 10);
+                                    var count = Math.round(Math.random() * 15);
                                     var i = 0;
                                     while (i < count) {
                                         me.clone({

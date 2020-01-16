@@ -1,8 +1,8 @@
 // TODO:
 // == Important ==
-// Missing bagels. Clones not working?
-// Optimise rendering circles. Maybe render at a high resolution once and then scale down?
+// Init each type so assets.assets[type] is [] instead of null
 
+// What happens to Bagel.methods when there's no game? Does the built-in plugin load?
 // .debug.avg.renderTime and scriptTime
 
 // Fix layering issue (remove tmplayers)
@@ -58,29 +58,24 @@
 // Woosh: https://freesound.org/people/qubodup/sounds/60013/
 
 debug = console.log; // TODO. Only for development. Use instead of console.log
-
 Bagel = {
     init: function(gameJSON) {
         var internal = Bagel.internal; // A shortcut
         var subFunctions = Bagel.internal.subFunctions.init;
 
-
         var game = subFunctions.check(gameJSON);
         internal.current.game = game;
 
-        BeginningJS.internal.loadPlugin(BeginningJS.internal.plugin, {}, game); // Load the built in plugin
+        Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
+        // TODO: Is this needed? Don't errors stop all of this
         subFunctions.misc(game);
         subFunctions.inputs(game, game.internal.renderer.canvas.addEventListener);
         subFunctions.scripts(game);
+        subFunctions.plugins(game);
         subFunctions.assets(game);
 
-        game.internal.assets = {
-            loading: 0,
-            loaded: 0,
-            imgs: {},
-            snds: {}
-        };
+        /*
         var i = 0;
         for (i in game.game.assets.imgs) {
             if (Bagel.internal.getTypeOf(game.game.assets.imgs[i]) != "object") {
@@ -102,7 +97,7 @@ Bagel = {
                     description: "The id to target this asset by."
                 }
             }, {}, "GameJSON.game.assets.imgs item " + i + ".", "AssetJSON", game);
-            if (game.internal.assets.imgs.hasOwnProperty(game.game.assets.imgs[i].id)) {
+            if (game.internal.assets.assets.imgs.hasOwnProperty(game.game.assets.imgs[i].id)) {
                 console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i + "'.");
                 console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
                 error = true;
@@ -141,7 +136,7 @@ Bagel = {
                     description: "The id to target this asset by."
                 }
             }, {}, "GameJSON.game.assets.snds item " + i + ".", "AssetJSON", game);
-            if (game.internal.assets.snds.hasOwnProperty(game.game.assets.snds[i].id)) {
+            if (game.internal.assets.assets.snds.hasOwnProperty(game.game.assets.snds[i].id)) {
                 console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.snds[i].id) + " in 'GameJSON.game.assets.snds item " + i + "'.");
                 console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
                 error = true;
@@ -175,6 +170,8 @@ Bagel = {
         Bagel.internal.autoPlaySound.oncanplay = Bagel.internal.testAutoPlay;
         Bagel.internal.autoPlaySound.src = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAABQTEFNRTMuOTlyBLkAAAAAAAAAADUgJAa/QQAB4AAAAnE5mRCNAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQxAADwAAB/gAAACAAAD/AAAAETEFNRTMuOTkuNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEKYPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==";
 
+        */
+
         // Sprites
         var i = 0;
         for (i in game.game.sprites) {
@@ -188,24 +185,331 @@ Bagel = {
             game.game.scripts.preload(game);
         }
 
-        Bagel.internal.games[game.ID] = game;
+        Bagel.internal.games[game.id] = game;
 
         Bagel.internal.current.game = null;
 
         return game;
     },
     internal: {
-        plugin: {
+        loadPlugin: (plugin, game, args) => {
+            var subFunctions = Bagel.internal.subFunctions.loadPlugin;
+
+            // Check the new types
+            var error = subFunctions.types.assets(game, plugin);
+
+            subFunctions.merge(game, plugin); // Combine it in with all the other plugins
+        },
+        plugin: { // The built in plugin
             info: {
-                ID: "Internal",
+                id: "Internal",
                 description: "An easy to use plugin that makes it easy to console.log \"Hello world!\".",
             },
             plugin: {
-                assets: {
-                    imgs: [],
-                    snds: []
+                types: {
+                    assets: {
+                        imgs: {
+                            args: {
+                                id: {
+                                    required: true,
+                                    types: ["string"],
+                                    description: "The id to target the image by."
+                                },
+                                src: {
+                                    required: true,
+                                    types: ["string"],
+                                    description: "The src of the image."
+                                },
+                                isInternal: {
+                                    required: false,
+                                    default: false,
+                                    types: ["boolean"],
+                                    description: "If the asset is internal or not. Internal assets are allowed to use dot prefixes."
+                                }
+                            },
+                            description: "Images give a sprite its appearance. Just set its \"img\" argument to the id of the image you want to use.",
+                            check: (asset, game, check, standardChecks, plugin, index) => {
+                                var error = standardChecks.id();
+                                if (error) return error;
+                                var error = standardChecks.isInternal();
+                                if (error) return error;
+                            },
+                            init: (asset, ready, game, plugin, index) => {
+                                var img = new Image();
+                                img.onload = () => {
+                                    ready({
+                                        img: img,
+                                        JSON: asset
+                                    });
+                                }
+                                img.src = asset.src;
+                            },
+                            get: {
+                                name: "img",
+                                handler: (id, defaultFind, game, plugin, type) => {
+                                    return defaultFind(id);
+                                }
+                            }
+                        },
+                        snds: {
+                            args: {
+                                id: {
+                                    required: true,
+                                    types: ["string"],
+                                    description: "The id to target the sound by."
+                                },
+                                src: {
+                                    required: true,
+                                    types: ["string"],
+                                    description: "The src of the sound."
+                                }
+                            },
+                            description: "",
+                            check: (asset, game, check, standardChecks, plugin, index) => {
+                                var error = standardChecks.id();
+                                if (error) return error;
+                                var error = standardChecks.isInternal();
+                                if (error) return error;
+                            },
+                            init: (asset, ready, game, plugin, index) => {
+                                var snd = new Audio();
+                                ready({
+                                    snd: snd,
+                                    JSON: asset
+                                }); // Sounds are ready instantly
+                                snd.src = asset.src;
+                            },
+                            get: {
+                                name: "snd",
+                                handler: (id, defaultFind) => defaultFind(id)
+                            }
+                        }
+                    },
+                    sprites: {
+                        sprite: {
+                            args: {
+                                id: {
+                                    required: true,
+                                    types: [
+                                        "string"
+                                    ],
+                                    description: "The ID for the sprite to be targeted by."
+                                },
+                                x: {
+                                    required: false,
+                                    default: "centred",
+                                    types: [
+                                        "number",
+                                        "string",
+                                        "function"
+                                    ],
+                                    description: "The X position for the sprite to start at. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n(game, me) => game.width - 50"
+                                },
+                                y: {
+                                    required: false,
+                                    default: "centred",
+                                    types: [
+                                        "number",
+                                        "string",
+                                        "function"
+                                    ],
+                                    description: "The Y position for the sprite to start at. Can also be set to \"centred\" to centre it along the Y axis, or set to a function that returns a position when the game loads. e.g:\n(game, me) => game.height - 50"
+                                },
+                                img: {
+                                    required: false,
+                                    default: null,
+                                    types: [
+                                        "string",
+                                        "undefined"
+                                    ],
+                                    description: "The image for the sprite to use to start with. If set to null or not specified, the sprite will be invisible."
+                                },
+                                width: {
+                                    required: false,
+                                    default: "1x",
+                                    types: [
+                                        "number",
+                                        "string"
+                                    ],
+                                    description: "The width for the sprite. Defaults to the width of the image. You can also set it to a multiple of the image width by setting it to \"1x\", \"2x\", etc."
+                                },
+                                height: {
+                                    required: false,
+                                    default: "1x",
+                                    types: [
+                                        "number",
+                                        "string"
+                                    ],
+                                    description: "The height for the sprite. Defaults to the height of the image. You can also set it to a multiple of the image height by setting it to \"1x\", \"2x\", etc."
+                                },
+                                scripts: {
+                                    required: false,
+                                    default: {
+                                        init: [],
+                                        main: [],
+                                        steps: {}
+                                    },
+                                    types: [
+                                        "object"
+                                    ],
+                                    description: "The sprite's scripts."
+                                },
+                                clones: {
+                                    default: {},
+                                    types: [
+                                        "object"
+                                    ],
+                                    description: "The default data for a clone of this sprite. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                                },
+                                visible: {
+                                    required: false,
+                                    default: true,
+                                    types: [
+                                        "boolean"
+                                    ],
+                                    description: "Determines if the sprite is visible or not."
+                                },
+                                vars: {
+                                    required: false,
+                                    default: {},
+                                    types: [
+                                        "object"
+                                    ],
+                                    description: "An object you can use to store data for the sprite."
+                                },
+                                /*
+                                type: {
+                                    default: "sprite",
+                                    types: [
+                                        "string"
+                                    ],
+                                    description: "The type of the sprite (sprite, canvas, renderer)."
+                                },
+                                */
+                                alpha: {
+                                    required: false,
+                                    default: 1,
+                                    types: [
+                                        "number"
+                                    ],
+                                    description: "The alpha of the sprite. 1 = Fully visible. 0 = Invisible."
+                                },
+                                angle: {
+                                    required: false,
+                                    default: 90,
+                                    types: [
+                                        "number"
+                                    ],
+                                    description: "The angle of the sprite. In degrees. 0º = up. 180º = down. -90º = left. 90º = right."
+                                }
+                            },
+                            listeners: {
+                                property: {
+                                    steps: {
+                                        xy: (sprite, property, game, plugin, args) => {
+                                            let mode = args.mode;
+
+
+                                        }
+                                    },
+                                    x: {
+                                        //set: (sprite, value, property, game, plugin) => {}, Set syntax
+                                        get: (sprite, property, game, plugin) => {
+                                            let value = sprite[property];
+
+                                            if (typeof value == "string") {
+                                                if (value == "centred") {
+                                                    sprite[property] = game.width / 2;
+                                                }
+                                            }
+                                            if (typeof value == "function") {
+                                                sprite.internal.JSON[property] = value(me, game); // Avoid the setter
+                                            }
+                                        }
+                                    },
+                                    y: {
+                                        get: (sprite, property, game, plugin) => {
+                                            let value = sprite[property];
+
+                                            if (typeof value == "string") {
+                                                if (value == "centred") {
+                                                    sprite[property] = game.height / 2;
+                                                }
+                                            }
+                                            if (typeof value == "function") {
+                                                sprite.internal.JSON[property] = value(me, game); // Avoid the setter
+                                            }
+                                        }
+                                    },
+                                    width: {
+                                        get: (sprite, property, game, plugin) => {
+                                            let value = sprite[property];
+
+                                            if (typeof value == "string") {
+                                                if (value.includes("x")) {
+                                                    let number = value.split("x")[0];
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            cloneArgs: {
+
+                            },
+                            description: "",
+                            check: (asset, game, check, standardChecks, plugin, index) => {
+
+                            },
+                            init: (args, game, plugin, index) => {
+
+                            },
+                            internal: (args, game, plugin, index) => { // Set all the internal attributes
+
+                            },
+                            methods: { // What methods will these types of sprite have?
+
+                            },
+                            render: { // How do I render this type?
+                                ctx: (sprite, ctx, canvas, game, plugin) => {
+
+                                },
+                                // webgl: (sprite, ctx, canvas, game, plugin)...
+                            }
+                        }
+                    }
                 },
+                assets: {},
                 sprites: [],
+
+                methods: {
+
+                }, // For game objects
+                spriteMethods: {
+                    move: {
+                        appliesTo: [
+                            "sprite",
+                            "canvas"
+                        ],
+                        obArg: false,
+                        args: {
+                            amount: {
+                                required: true,
+                                types: [
+                                    "number"
+                                ],
+                                description: "The number of in game pixels (independent of the rendered canvas width and height) to move the sprite (in the direction specified in degrees from the sprite's angle argument. 0° -> Straight up. -180/180° -> Straight down. 90° -> Right (default)).",
+                            }
+                        },
+                        fn: (me, game) => {
+                            var rad = Bagel.maths.degToRad(me.angle - 90);
+                            me.x += Math.cos(rad) * distance;
+                            me.y += Math.sin(rad) * distance;
+                            console.log("It worked")
+                        }
+                     }
+                }, // For sprites
+
                 scripts: {
                     init: [
                         {
@@ -216,10 +520,14 @@ Bagel = {
                         {
 
                         }
-                    ]
+                    ],
+                    steps: {
+
+                    }
                 }
             }
         },
+
         subFunctions: {
             init: {
                 check: (gameJSON) => {
@@ -227,8 +535,8 @@ Bagel = {
                         console.error("Oh no! Your game JSON appears to be the wrong type. It must be the type \"object\", you used " + JSON.stringify(gameJSON) + ".");
                         Bagel.internal.oops(gameJSON, true, true);
                     }
-                    if (gameJSON.ID == null) {
-                        console.error("Oh no! You forgot to specifiy an ID for the game.");
+                    if (gameJSON.id == null) {
+                        console.error("Oh no! You forgot to specifiy an id for the game.");
                         Bagel.internal.oops(gameJSON, true, true);
                     }
                     if (document.getElementById(gameJSON.htmlElementID) == null && gameJSON.htmlElementID != null) { // Make sure the element exists
@@ -238,7 +546,7 @@ Bagel = {
 
 
                     var game = Bagel.internal.checkOb(gameJSON, {
-                        ID: {
+                        id: {
                             types: ["string"],
                             description: "An ID for the game canvas so it can be referenced later in the program."
                         },
@@ -302,12 +610,9 @@ Bagel = {
                     }, "GameJSON.config", "GameJSON.config.display", game, false, true);
                     game.game = Bagel.internal.checkOb(game.game, {}, {
                         assets: {
-                            default: {
-                                imgs: [],
-                                snds: []
-                            },
+                            default: {},
                             types: ["object"],
-                            description: "The object that contains all the assets to be loaded for the game."
+                            description: "The assets you want to load for your game, organised by type. e.g imgs: [<asset1>,<asset2>]"
                         },
                         sprites: {
                             default: [],
@@ -323,22 +628,6 @@ Bagel = {
                             description: "The object that contains all the game scripts that aren't for a particular sprite."
                         },
                     }, "GameJSON.game", "GameJSON.game", game, false, true);
-                    game.game.assets = Bagel.internal.checkOb(game.game.assets, {
-                        imgs: {
-                            types: ["array"],
-                            description: "The array that contains all the images to be loaded for the game."
-                        },
-                        snds: {
-                            types: ["array"],
-                            description: "The array that contains all the images to be loaded for the game."
-                        }
-                    }, {
-                        defaults: {
-                            default: [],
-                            types: ["array"],
-                            description: "Structured in the same way as GameJSON.assets.imgs/snds but you have to use specific names. To get these names, add an asset how you would normally."
-                        }
-                    }, "GameJSON.game.assets", "GameJSON.game.assets", game, false, true);
                     game.game.scripts = Bagel.internal.checkOb(game.game.scripts, {}, {
                         preload: {
                             default: [],
@@ -359,8 +648,8 @@ Bagel = {
                         }
                     }, "GameJSON.game.scripts", "GameJSON.game.scripts", game, false, true);
 
-                    if (Bagel.internal.games.hasOwnProperty(game.ID)) {
-                        console.error("Oh no! You used an ID for your game that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.ID) + " in \"GameJSON.htmlElementID\".");
+                    if (Bagel.internal.games[game.id] != null) {
+                        console.error("Oh no! You used an ID for your game that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.id) + " in \"GameJSON.htmlElementID\".");
                         Bagel.internal.oops(game, false, true);
                     }
 
@@ -383,6 +672,16 @@ Bagel = {
                         lastFPSUpdate: new Date(),
                         loadedDelay: 0,
                         soundsToPlay: [],
+                        assets: {
+                            loading: 0,
+                            loaded: 0,
+                            assets: {}
+                        },
+                        combinedPlugins: { // Not all parts of the plugin are combined, only the ones where there mustn't be conflicts
+                            types: {},
+                            methods: {},
+                            spriteMethods: {},
+                        } // The plugins are combined as they're loaded
                     };
                     return game;
                 },
@@ -447,8 +746,8 @@ Bagel = {
                             game.input.mouse.y = Math.round(((context.clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height);
                             game.input.touches = [
                                 {
-                                    "x": game.input.mouse.x,
-                                    "y": game.input.mouse.y
+                                    x: game.input.mouse.x,
+                                    y: game.input.mouse.y
                                 }
                             ];
                         }
@@ -460,8 +759,8 @@ Bagel = {
                             var i = 0;
                             for (i in context.touches) {
                                 game.input.touches.push({
-                                    "x": Math.round(((context.touches[i].clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width),
-                                    "y": Math.round(((context.touches[i].clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height)
+                                    x: Math.round(((context.touches[i].clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width),
+                                    y: Math.round(((context.touches[i].clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height)
                                 });
                             }
                         }
@@ -480,8 +779,8 @@ Bagel = {
                             game.input.mouse.y = Math.round(((context.clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height);
                             game.input.touches = [
                                 {
-                                    "x": game.input.mouse.x,
-                                    "y": game.input.mouse.y
+                                    x: game.input.mouse.x,
+                                    y: game.input.mouse.y
                                 }
                             ];
                         }
@@ -493,8 +792,8 @@ Bagel = {
                             var i = 0;
                             for (i in context.touches) {
                                 game.input.touches.push({
-                                    "x": Math.round(((context.touches[i].clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width),
-                                    "y": Math.round(((context.touches[i].clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height)
+                                    x: Math.round(((context.touches[i].clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width),
+                                    y: Math.round(((context.touches[i].clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height)
                                 });
                             }
                         }
@@ -608,11 +907,273 @@ Bagel = {
 
                     Bagel.internal.subFunctions.init.checkScripts(game, "init");
                     Bagel.internal.subFunctions.init.checkScripts(game, "main");
+                },
+                plugins: (game) => {
+                    var i = 0;
+                    for (i in game.game.plugins) {
+                        var plugin = game.game.plugins[i];
+                        Bagel.internal.loadPlugin(plugin, game);
+                    }
+                },
+                assets: (game) => {
+                    var allAssets = game.game.assets;
+                    var type = 0;
+                    for (type in allAssets) {
+                        var assets = allAssets[type];
+
+                        var i = 0;
+                        for (i in assets) {
+                            var asset = assets[i];
+                            var error = Bagel.internal.loadAsset(asset, game, type, i);
+                            if (error) return "error";
+                        }
+                    }
+                }
+            },
+            loadPlugin: {
+                types: {
+                    assets: (game, plugin) => {
+                        var type = 0;
+                        for (type in plugin.plugin.types.assets) {
+                            var typeJSON = plugin.plugin.types.assets[type];
+                            plugin.plugin.types.assets[type] = Bagel.internal.check({
+                                ob: typeJSON,
+                                where: "plugin " + plugin.info.id + ".plugin.types.assets." + type,
+                                syntax: {
+                                    args: {
+                                        required: true,
+                                        types: ["object"],
+                                        description: "The arguments for the asset."
+                                    },
+                                    description: {
+                                        required: true,
+                                        types: ["string"],
+                                        description: "The description of this asset type, make this short and clear to help people when they use the wrong syntax."
+                                    },
+                                    check: {
+                                        required: true,
+                                        types: ["function"],
+                                        description: [
+                                            "Your check function for this asset type. ",
+                                            "A good check function will avoid a standard JavaScript error when the user inputs something wrong (e.g a can't read property X of null error).",
+                                            "\nFortunately, Bagel.js helps you out in a few ways:\n",
+                                            "  You can use the check function provided (while the check function is being run) to easily check an object to make sure it has the desired properties as well as setting defaults. (works in the same way as the \"args\" argument.)\n",
+                                            "  You should also make use of the \"args\" argument as you can easily choose which data types you want to allow for each arguments as well as setting defaults and required arguments.\n",
+                                            "  \"standardChecks\" has, well... some standard checks. If you want to make sure an ID isn't used twice use \"standardChecks.id(<whichever argument is used for the id (defaults to \"id\")>)\". ",
+                                            "  You might also want to use the \"isInternal\" check with the arguments working the same as the previous but also having a second argument for the isInternal argument. This might be useful if you want to reserve some IDs for plugins as it'll block any IDs starting with a dot and without the asset having \"isInternal\" set to true.\n",
+                                            "  You probably want to use it like this:\n",
+                                            "    var error = standardChecks.id();\nif (error) return error;",
+                                            "  And if you find any problems with the user input, just use the return statement in the check function (e.g return \"Error\";) and Bagel.js will stop what it's doing, throw the error you specified and pause the game.\n",
+                                            "Some tips on making custom errors though:\n",
+                                            "  Always specifiy where the error is! Bagel.js will say which game it's in but, you know more than it about the error. You should specify which type they were making, the index of the problematic error and ideally how to fix it.\n",
+                                            "  Also, try to include information about the inputs the user provided. For example, if they used a duplicate ID, say what that ID was in the error itself.\n",
+                                            "  Lastly, be nice to the programmer. Treat them like a user. It's helpful to know that you can just put in something you know's wrong and get a helpful mini-tutorial.\n",
+                                            "\nOne more thing: the arguments for the function is structured like this:",
+                                            "(asset, game, check, standardChecks, plugin, index) => {\n};\n",
+                                            "Where standardChecks contains functions and check is a function that checks objects.",
+                                            "\n\nGood luck! :P"
+                                        ].join("")
+                                    },
+                                    init: {
+                                        required: true,
+                                        types: ["function"],
+                                        description: [
+                                            "Where you make the asset object. When it's ready, simply use the \"ready\" function to tell Bagel.js that the asset's loaded.",
+                                            "Here's an example:",
+                                            "(asset, ready, game, plugin, index) => {",
+                                            "    var img = new Image();",
+                                            "    img.onload = () => {",
+                                            "        ready({;",
+                                            "            img: img,",
+                                            "            JSON: asset",
+                                            "        });",
+                                            "    };",
+                                            "};"
+                                        ].join("\n")
+                                    }
+                                },
+                                game: game
+                            });
+                        }
+                    }
+                },
+                merge: (game, plugin) => {
+                    var subFunctions = Bagel.internal.subFunctions.loadPlugin.mergeSteps;
+
+                    subFunctions.types(game, plugin, "assets");
+                },
+                mergeSteps: {
+                    types: (game, plugin, type) => {
+                        var types = plugin.plugin.types[type];
+                        var combined = game.internal.combinedPlugins;
+
+                        var newType = 0;
+                        for (newType in types) {
+                            var typeJSON = types[newType];
+
+                            if (combined.types[type] == null) {
+                                combined.types[type] = {};
+                            }
+
+                            var merge = false;
+                            if (combined.types[type][newType] != null) {
+                                if (typeJSON.overwrite) {
+                                    merge = true;
+                                }
+                                else {
+                                    console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(newType) + " type without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older type definition, add this to the new type JSON: \"overwrite: true\".");
+                                }
+                            }
+                            else {
+                                merge = true;
+                            }
+                            if (merge) {
+                                combined.types[type][newType] = typeJSON;
+                                combined.types[type][newType].internal = {
+                                    plugin: plugin
+                                };
+                            }
+
+                            if (game.internal.assets[type][newType] == null) {
+                                game.internal.assets[type][newType] = {};
+                            }
+
+                            var defaultFind = Bagel.internal.defaultFind;
+
+                            ((game, newType, typeJSON) => {
+                                Bagel.get.asset[typeJSON.get.name] = (id) => {
+                                    Bagel.internal.current.game = game;
+                                    Bagel.internal.current.assetType = newType;
+                                    Bagel.internal.current.assetTypeName = typeJSON.get.name;
+
+                                    let output = typeJSON.get.handler(
+                                        id,
+                                        defaultFind,
+                                        game,
+                                        plugin,
+                                        type
+                                    );
+
+                                    Bagel.internal.current.game = null;
+                                    Bagel.internal.current.assetType = null;
+                                    Bagel.internal.current.assetTypeName = null;
+
+                                    return output;
+                                };
+                            })(game, newType, typeJSON);
+                        }
+                    }
+                }
+            },
+            createSprite: {
+                check: (sprite, game) => {
+                    let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+
+                    let sprite = Bagel.internal.check(handler.);
+                },
+                checkClone: (sprite, game) => {
+
                 }
             }
         },
 
+        standardChecks: {
+            asset: {
+                id: (id) => {
+                    var game = Bagel.internal.current.game;
+                    var asset = Bagel.internal.current.asset;
+                    var type = Bagel.internal.current.assetType;
+                    var id = id == null? "id" : id;
+
+                    if (game.internal.assets.assets[type][asset[id]] != null) {
+                        return "Oh no! You used an ID for an asset that's already being used. Maybe try something else. \nYou used "
+                        + JSON.stringify(game.game.assets[type][i][id])
+                        + " in GameJSON.game.assets." + type + " item " + index + ".";
+                    }
+                },
+                isInternal: (isInternal, id) => {
+                    var asset = Bagel.internal.current.asset;
+                    var type = Bagel.internal.current.assetType;
+                    var id = id == null? "id" : id;
+                    var isInternal = isInternal == null? "isInternal" : isInternal;
+
+
+                    if (! asset[isInternal]) {
+                        if (asset[id][0] == ".") {
+                            return "This is awkward... Assets starting with a dot are only for plugin assets. In GameJSON.game.assets." + type + " item "
+                            + index
+                            + ".\nAlternatively, add the \"isInternal\" argument to the " + type + " and set it to true.";
+                        }
+                    }
+                }
+            }
+        },
+        defaultFind: (id) => {
+            let current = Bagel.internal.current;
+
+            // TODO: Invalid asset
+
+            return current.game.internal.assets.assets[current.assetType][id][current.assetTypeName];
+        },
+
+        loadAsset: (asset, game, type, i) => {
+            var current = Bagel.internal.current;
+            current.asset = asset;
+            current.assetType = type;
+
+            var assetLoader = game.internal.combinedPlugins.types.assets[type];
+            var plugin = assetLoader.internal.plugin;
+
+            if (game.internal.assets.assets[type] == null) {
+                game.internal.assets.assets[type] = {};
+            }
+
+            Bagel.internal.check({
+                ob: asset,
+                where: "GameJSON.game.assets." + type + " item " + i,
+                syntax: assetLoader.args,
+                game: game
+            }); // TODO
+            var error = assetLoader.check(asset, game, Bagel.internal.check, Bagel.internal.standardChecks.asset, plugin, i);
+            if (error) {
+                current.asset = null;
+                current.assetType = null;
+
+                console.error(error);
+                console.log("In plugin " + JSON.stringify(plugin.info.id) + ".");
+                Bagel.internal.oops(game);
+            }
+
+            var loaded = (asset) => {
+                var assets = game.internal.assets;
+                assets.assets[type][game.game.assets[type][i].id] = asset;
+                assets.loaded++;
+                assets.loading--;
+            }
+            var assetOb = assetLoader.init(asset, loaded, game, assetLoader.internal.plugin, i);
+
+            current.asset = null;
+            current.assetType = null;
+
+            game.internal.assets.loading++;
+        },
+
         an: (str) => ["a", "e", "i", "o", "u"].includes(str[0].toLowerCase())? "an " + str : "a " + str,
+        list: (items, type, determiners) => {
+            var output = "";
+            var i = 0;
+            for (i in items) {
+                var item = items[i];
+                output += Bagel.internal.an(item);
+                if (i == items.length - 2) {
+                    output += " " + type + " ";
+                }
+                else if (i != items.length - 1) {
+                    output += ", ";
+                }
+            }
+            return output;
+        },
         oops: (game, noID, dontPause) => { // When something goes wrong
             if (noID) {
                 throw "Critical Bagel.js error, please look at the error above for more info.";
@@ -620,11 +1181,14 @@ Bagel = {
             if (! dontPause) {
                 game.paused = true;
             }
-            throw "Critical Bagel.js error in the game " + JSON.stringify(game.ID) + ", look at the error for some help. ^-^";
+            throw "Critical Bagel.js error in the game " + JSON.stringify(game.id) + ", look at the error for some help. ^-^";
         },
         current: {
-            "sprite": null,
-            "game": null
+            sprite: null,
+            game: null,
+            asset: null,
+            assetType: null,
+            assetTypeName: null
         },
         findCloneID: function(sprite, game) {
             var i = 0;
@@ -933,9 +1497,20 @@ Bagel = {
                 }
             }
         },
-        createSprite: function(data, spriteData, game) {
+        createSprite: function(spriteData, game, isClone) {
+            spriteData.type = spriteData.type == null? game.internal.combinedPlugins.defaults.sprites.type : spriteData.type; // If the sprite type isn't specified, default to default agreed by the plugins
+            let subFunctions = Bagel.internal.subFunctions.createSprite;
+
+            let sprite = subFunctions.check(spriteData, game, isClone);
+            let register = subFunctions.register;
+            register.scripts("init", sprite, game, isClone);
+            register.scripts("main", sprite, game, isClone);
+            register.values(sprite, game, isClone);
+            register.methods(sprite, game, isClone);
+
+            /*
             if (data.isClone) {
-                var parent = Bagel.methods.get.sprite(data.cloneOf);
+                var parent = Bagel.get.sprite(data.cloneOf);
                 Bagel.internal.checkClones(spriteData, data, game, parent);
                 var sprite = spriteData;
 
@@ -1022,8 +1597,8 @@ Bagel = {
 
                         sprite.scale = {};
                         sprite.scale.internal = {
-                            "game": game,
-                            "sprite": sprite
+                            game: game,
+                            sprite: sprite
                         };
                         sprite.scale.x = function(x) {
                             return Bagel.internal.render.scale.x(x, this.internal.game.internal.renderer, this.internal.game.internal.renderer.canvas);
@@ -1186,8 +1761,8 @@ Bagel = {
                         }, {
                             scripts: {
                                 default: {
-                                    "init": [],
-                                    "main": []
+                                    init: [],
+                                    main: []
                                 },
                                 types: [
                                     "object"
@@ -1245,8 +1820,8 @@ Bagel = {
 
                         sprite.scale = {};
                         sprite.scale.internal = {
-                            "game": game,
-                            "sprite": sprite
+                            game: game,
+                            sprite: sprite
                         };
                         sprite.scale.x = function(x) {
                             return Bagel.internal.render.scale.x(x, this.internal.game.internal.renderer, this.internal.game.internal.renderer.canvas) * this.internal.sprite.res;
@@ -1279,8 +1854,8 @@ Bagel = {
                             }, {
                                 scripts: {
                                     default: {
-                                        "init": [],
-                                        "main": []
+                                        init: [],
+                                        main: []
                                     },
                                     types: [
                                         "object"
@@ -1315,8 +1890,8 @@ Bagel = {
 
                             sprite.scale = {};
                             sprite.scale.internal = {
-                                "game": game,
-                                "sprite": sprite
+                                game: game,
+                                sprite: sprite
                             };
                             sprite.scale.x = function(x) {
                                 return Bagel.internal.render.scale.x(x, this.internal.game.internal.renderer, this.internal.game.internal.renderer.canvas);
@@ -1335,9 +1910,9 @@ Bagel = {
                             }
 
                             game.internal.renderer.renderers[sprite.order].push({
-                                "code": sprite.render,
-                                "game": game,
-                                "sprite": sprite
+                                code: sprite.render,
+                                game: game,
+                                sprite: sprite
                             });
                         }
                         else {
@@ -1702,7 +2277,7 @@ Bagel = {
             sprite.move = function(distance) { // TODO: add rotation
                 var me = this;
 
-                var rad = Bagel.methods.maths.degToRad(me.angle - 90);
+                var rad = Bagel.maths.degToRad(me.angle - 90);
 
                 me.x += Math.cos(rad) * distance;
                 me.y += Math.sin(rad) * distance;
@@ -1746,7 +2321,7 @@ Bagel = {
 
                 var i = 0;
                 for (i in newSprite.scripts.init) {
-                    newSprite.scripts.init[i](Bagel.internal.current.game, newSprite, Bagel.methods.step);
+                    newSprite.scripts.init[i](Bagel.internal.current.game, newSprite, Bagel.step);
                 }
 
                 Bagel.internal.current.sprite = spriteWas;
@@ -1759,14 +2334,14 @@ Bagel = {
                 var game = me.game;
                 // What if it's not run as a sprite? TODO
 
-                if (game.internal.assets.imgs[imgID] == null) {
+                if (game.internal.assets.assets.imgs[imgID] == null) {
                     console.error("Oops. You tried to switch the image of the sprite with the ID " + me.id + " to an image with the ID of " + imgID + ".");
                     console.error("Bagel.js hit a critical error, have a look at the error abovr for more info.");
                     debugger;
                 }
 
                 me.img = imgID;
-                var asset = game.internal.assets.imgs[imgID];
+                var asset = game.internal.assets.assets.imgs[imgID];
                 me.width = asset.img.width;
                 me.height = asset.img.height;
             };
@@ -1774,7 +2349,7 @@ Bagel = {
                 var me = this;
 
                 // Reset to the default dimensions
-                var img = Bagel.methods.get.image(me.img, me.game);
+                var img = Bagel.get.asset.img(me.img, me.game);
                 // TODO: What if it's null?
 
                 me.width = img.width;
@@ -1804,26 +2379,6 @@ Bagel = {
                 var idWas = me.idIndex;
                 game.game.sprites[me.idIndex] = null;
                 game.internal.IDIndex[me.id] = null;
-
-
-                // TODO \/\/\/\/\/\/
-                /*
-                var newIdIndex = {};
-                var newSprites = [];
-                var i = 0;
-                for (i in game.game.sprites) {
-                    if (game.game.sprites[i] != null) {
-                        newSprites.push(game.game.sprites[i]);
-                        if (i > idWas) {
-                            game.game.sprites[i].idIndex--;
-                        }
-                        var spriteID = game.game.sprites[i].id;
-                        newIdIndex[spriteID] = game.internal.IDIndex[spriteID];
-                    }
-                }
-                game.internal.IDIndex = newIdIndex;
-                game.game.sprites = newSprites;
-                */
 
                 // Delete the sprite scripts
                 var i = 0;
@@ -2005,6 +2560,8 @@ Bagel = {
                     scriptTime: 0
                 }
             };
+
+            */
 
             return sprite;
         },
@@ -2243,16 +2800,16 @@ Bagel = {
                                 // TODO: What if it doesn't exist?
 
                                 if (sprite.width == "auto") {
-                                    sprite.width = Bagel.internal.games[i].internal.assets.imgs[sprite.img].img.width;
+                                    sprite.width = Bagel.internal.games[i].internal.assets.assets.imgs[sprite.img].img.width;
                                     customDimentions = false;
                                 }
                                 if (sprite.height == "auto") {
-                                    sprite.height = Bagel.internal.games[i].internal.assets.imgs[sprite.img].img.height;
+                                    sprite.height = Bagel.internal.games[i].internal.assets.assets.imgs[sprite.img].img.height;
                                     customDimentions = false;
                                 }
                                 if (! customDimentions) {
-                                    sprite.width = Bagel.internal.games[i].internal.assets.imgs[sprite.img].img.width * sprite.scale;
-                                    sprite.height = Bagel.internal.games[i].internal.assets.imgs[sprite.img].img.height * sprite.scale;
+                                    sprite.width = Bagel.internal.games[i].internal.assets.assets.imgs[sprite.img].img.width * sprite.scale;
+                                    sprite.height = Bagel.internal.games[i].internal.assets.assets.imgs[sprite.img].img.height * sprite.scale;
                                 }
                             }
                         }
@@ -2298,7 +2855,7 @@ Bagel = {
                     }
 
                     sprite.visible = true;
-                    script.code(game, sprite, Bagel.methods.step);
+                    script.code(game, sprite, Bagel.step);
                 }
                 game.internal.lastState = game.state;
             }
@@ -2335,11 +2892,11 @@ Bagel = {
                     var idWas = sprite.id;
                     if (game.internal.scripts.index.spritesMain[game.state][i].isClone) {
                         Bagel.internal.current.sprite = sprite;
-                        sprite.scripts.main[game.internal.scripts.index.spritesMain[game.state][i].script](game, sprite, Bagel.methods.step);
+                        sprite.scripts.main[game.internal.scripts.index.spritesMain[game.state][i].script](game, sprite, Bagel.step);
                     }
                     else {
                         var script = sprite.scripts.main[game.internal.scripts.index.spritesMain[game.state][i].script];
-                        script.code(game, sprite, Bagel.methods.step);
+                        script.code(game, sprite, Bagel.step);
                     }
 
                     if (sprite.id == idWas) { // Detect if it's been deleted
@@ -2522,15 +3079,15 @@ Bagel = {
                                 sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
                                 if (sprite.angle == 90) { // Don't rotate if we don't need to
                                     ctx.globalAlpha = sprite.alpha;
-                                    ctx.drawImage(game.internal.assets.imgs[sprite.img].img, scaled.x * flip[0], scaled.y * flip[1], scaled.width * flip[0], scaled.height * flip[1]);
+                                    ctx.drawImage(game.internal.assets.assets.imgs[sprite.img].img, scaled.x * flip[0], scaled.y * flip[1], scaled.width * flip[0], scaled.height * flip[1]);
                                 }
                                 else {
                                     ctx.save();
 
                                     ctx.translate((scaled.x + (scaled.width / 2)) * flip[0], (scaled.y + (scaled.height / 2) * flip[1]));
-                                    ctx.rotate(Bagel.methods.maths.degToRad(sprite.angle - 90));
+                                    ctx.rotate(Bagel.maths.degToRad(sprite.angle - 90));
                                     ctx.globalAlpha = sprite.alpha;
-                                    ctx.drawImage(game.internal.assets.imgs[sprite.img].img, -((scaled.width / 2) * flip[0]), -((scaled.height / 2) * flip[1]), scaled.width * flip[0], scaled.height * flip[1]);
+                                    ctx.drawImage(game.internal.assets.assets.imgs[sprite.img].img, -((scaled.width / 2) * flip[0]), -((scaled.height / 2) * flip[1]), scaled.width * flip[0], scaled.height * flip[1]);
 
                                     ctx.restore();
                                 }
@@ -2554,27 +3111,27 @@ Bagel = {
         },
         games: {},
         collision: {
-            "methods": {
-                "spriteRect": function(sprite, expand, centre) {
+            methods: {
+                spriteRect: function(sprite, expand, centre) {
                     // Return the rectangle that this sprite occupies
                     return {
-                        "x": Math.round(sprite.x - ((sprite.width / 2) * centre)),
-                        "y": Math.round(sprite.y - ((sprite.height / 2) * centre)),
-                        "width": Math.round(sprite.width),
-                        "height": Math.round(sprite.height)
-                    }
+                        x: Math.round(sprite.x - ((sprite.width / 2) * centre)),
+                        y: Math.round(sprite.y - ((sprite.height / 2) * centre)),
+                        width: Math.round(sprite.width),
+                        height: Math.round(sprite.height)
+                    };
                 },
-                "AABB": function(rect1, rect2) {
+                AABB: function(rect1, rect2) {
                     if (rect1.x < rect2.x + rect2.width) {
                         if (rect1.x + rect1.width > rect2.x) {
                             if (rect1.y < rect2.y + rect2.height) {
                                 if (rect1.y + rect1.height > rect2.y) {
-                                    return true
+                                    return true;
                                 }
                             }
                         }
                     }
-                    return false
+                    return false;
                 }
             }
         },
@@ -2587,40 +3144,8 @@ Bagel = {
         spriteTick: function(sprite, game) {
             // Currently no processing for sprites. Was originally used for QTrees
         },
-        autoplaySounds: function() {
-            if (! Bagel.internal.autoPlay) {
-                Bagel.internal.testAutoPlay() // Might be able to play some queued sounds
-                if (Bagel.internal.autoPlay) {
-                    var i = 0
-                    for (i in Bagel.internal.games) {
-                        var game = Bagel.internal.games[i]
-                        var c = 0
-                        for (c in game.internal.soundsToPlay) {
-                            game.internal.assets.snds[game.internal.soundsToPlay[c]].snd.play()
-                        }
-                        game.internal.soundsToPlay = []
-                    }
-                }
-                setTimeout(Bagel.internal.testAutoPlay, 0)
-            }
-        },
-        loadImages: function() {
-            var i = 0
-            for (i in Bagel.internal.games) {
-                var game = Bagel.internal.games[i]
-
-                var keys = Object.keys(game.internal.assets.imgs)
-                var c = 0
-                while (c < keys.length) {
-                    var img = game.internal.assets.imgs[keys[c]].img
-
-                    img.src = game.game.assets.imgs[c].src
-                    c++
-                }
-            }
-        },
         onPageReady: function() {
-            Bagel.internal.loadImages();
+
         },
         onDocReadyStateChange: document.addEventListener("readystatechange", function() {
             if (document.readyState == "complete") {
@@ -2628,8 +3153,8 @@ Bagel = {
             }
         }),
         load: {
-            "snd": function(sndJSON, game, allowInternal) {
-                if (game.internal.assets.snds[sndJSON.id] != null) {
+            snd: function(sndJSON, game, allowInternal) {
+                if (game.internal.assets.assets.snds[sndJSON.id] != null) {
                     return
                 }
                 var snd = new Audio()
@@ -2646,12 +3171,12 @@ Bagel = {
                 }
                 snd.src = sndJSON.src
                 //game.internal.assets.loading++
-                game.internal.assets.snds[sndJSON.id] = {
-                    "snd": snd
+                game.internal.assets.assets.snds[sndJSON.id] = {
+                    snd: snd
                 }
             },
-            "img": function(imgJSON, game) {
-                if (game.internal.assets.imgs[imgJSON.id] != null) {
+            img: function(imgJSON, game) {
+                if (game.internal.assets.assets.imgs[imgJSON.id] != null) {
                     return
                 }
                 var img = new Image()
@@ -2672,8 +3197,8 @@ Bagel = {
 
                 }
                 game.internal.assets.loading++
-                game.internal.assets.imgs[imgJSON.id] = {
-                    "img": img
+                game.internal.assets.assets.imgs[imgJSON.id] = {
+                    img: img
                 }
             }
         },
@@ -2697,63 +3222,146 @@ Bagel = {
                 i++;
             }
             return newEntity;
+        },
+
+        check: (args) => {
+            // ob, where, syntax
+            let syntax;
+            let arg;
+
+
+            let useless = [];
+            let missing = [];
+            let wrongTypes = [];
+
+            for (let argID in {...args.ob, ...args.syntax}) {
+                syntax = args.syntax[argID];
+                arg = args.ob[argID];
+
+                if (syntax == null) {
+                    useless.push(argID);
+                    continue;
+                }
+
+                if (syntax.required) {
+                    if (arg == null) {
+                        missing.push(argID);
+                    }
+                }
+                else {
+                    if (arg == null) {
+                        args.ob[argID] = syntax.default;
+                        arg = args.ob[argID];
+                    }
+                }
+                if (! syntax.types.includes(Bagel.internal.getTypeOf(arg))) {
+                    wrongTypes.push(argID);
+                }
+            }
+
+            var otherErrors = missing.length != 0 || wrongTypes.length != 0;
+            if (useless.length > 0) {
+                if (useless.length == 1) {
+                    console.warn(
+                        "Oops, looks like you used an unsupported argument"
+                        + (otherErrors? (" in " + args.where) : "")
+                        + ": "
+                        + JSON.stringify(useless[0])
+                        + ". You can leave this alone if you want, but it doesn't need to be there."
+                    );
+                }
+                else {
+                    console.warn(
+                        "Hmm, looks like you used some unsupported arguments"
+                        + otherErrors? (" in " + args.where) : ""
+                        + ":\n  • "
+                        + useless.join("\n  • ")
+                        + "\n\nYou can leave these if you want, but they don't need to be there."
+                    );
+                }
+            }
+            if (missing.length > 0) {
+                if (missing.length == 1) {
+                    console.error(
+                        "Hmm, looks like you forgot the "
+                        + JSON.stringify(missing[0])
+                        + " argument."
+                    );
+                }
+                else {
+                    console.error(
+                        "Whelp, looks like you forgot some arguments:\n"
+                        + missing.map((index, item) =>
+                            (
+                                "  • "
+                                + JSON.stringify(item)
+                                + " -> "
+                                + args.syntax[item].description
+                            ).join("\n") + " argument."
+                        )
+                    );
+                }
+            }
+            if (wrongTypes.length > 0) {
+                if (wrongTypes.length == 1) {
+                    console.error(
+                        ":/ looks like you used the wrong type for the "
+                        + JSON.stringify(wrongTypes[0])
+                        + " argument. You used "
+                        + Bagel.internal.an(Bagel.internal.getTypeOf(wrongTypes[0]))
+                        + " instead of "
+                        + Bagel.internal.list(args.syntax[wrongTypes[0]].types, "or", true)
+                        + "."
+                    );
+                    // TODO ^^^ can be multiple valid types
+                }
+                else {
+                    console.error(
+                        "Hmm, looks like you got some types wrong:\n"
+                        + missing.map((index, item) =>
+                            (
+                                "  • "
+                                + JSON.stringify(item)
+                                + " -> Should be "
+                                + Bagel.internal.list(args.syntax[item].types, "or", true)
+                                + "."
+                            ).join("\n") + " argument."
+                        )
+                    );
+                }
+            }
+
+
+            if (otherErrors) {
+                console.log("In " + args.where);
+                Bagel.internal.oops(args.game);
+            }
+            return args.ob;
         }
     },
-    methods: {
-        get: {
-            image: function(id, gameInput) {
+    // == Methods ==
+    get: {
+        asset: {},
+        sprite: function(id, game) {
+            if (game == null) {
                 var game = Bagel.internal.current.game;
-                if (gameInput != null) {
-                    game = gameInput;
-                }
-                if (game == null) {
-                    // TODO: Review error
-                    console.error("Oops. You seem to be running this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
-                    console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
-                    debugger;
-                }
-                if (game.internal.assets.imgs[id] == null) {
-                    console.error("Oops, a problem occured while getting a image. There's no image with the ID " + JSON.stringify(id) + ".");
-                    Bagel.internal.oops(game);
-                }
-                return game.internal.assets.imgs[id].img;
-            },
-            audio: function(id, gameInput) {
-                var game = Bagel.internal.current.game;
-                if (gameInput != null) {
-                    game = gameInput;
-                }
-                if (game == null) {
-                    // TODO: Review error
-                    console.error("Oops. You seem to be running this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
-                    console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
-                    debugger;
-                }
-                if (game.internal.assets.snds[id] == null) {
-                    console.error("Ah, a problem occured while getting a sprite. There's no sprite with the ID " + JSON.stringify(id) + ".");
-                    Bagel.internal.oops(game);
-                }
-                return game.internal.assets.snds[id].snd;
-            },
-            sprite: function(id, gameInput) {
-                var game = Bagel.internal.current.game;
-                if (gameInput != null) {
-                    game = gameInput;
-                }
-                if (game == null) {
-                    // TODO: Review error
-                    console.error("Oops. You seem to be running this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
-                    Bagel.internal.oops(game);
-                }
-                if (game.internal.IDIndex[id] == null) {
-                    // TODO: Review error
-                    console.error("Ah, a problem occured while getting a sprite. There's no sprite with the ID " + JSON.stringify(id) + ".");
-                    Bagel.internal.oops(game);
-                }
-                return game.game.sprites[game.internal.IDIndex[id]];
             }
-        },
-        playSound: function(id) {
+            if (game == null) {
+                // TODO: Review error
+                console.error("Oops. Looks like you're tryimg to run this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
+                Bagel.internal.oops(null, true, true);
+                return;
+            }
+            if (game.internal.IDIndex[id] == null) {
+                // TODO: Review error
+                console.error("Ah, a problem occured while getting a sprite. There's no sprite with the ID " + JSON.stringify(id) + ".");
+                Bagel.internal.oops(game);
+                return;
+            }
+            return game.game.sprites[game.internal.IDIndex[id]];
+        }
+    },
+    playSound: function(id) {
             // TODO: Test for game
             // TODO: Test for ID
             // TODO: game.methods.playSound
@@ -2762,27 +3370,26 @@ Bagel = {
 
 
             if (Bagel.internal.autoPlay) {
-                game.internal.assets.snds[id].snd.play()
+                game.internal.assets.assets.snds[id].snd.play()
             }
             else {
                 game.internal.soundsToPlay.push(id)
             }
         },
-        maths: {
+    maths: {
             radToDeg: (rad) => (rad * 180) / Math.PI,
             degToRad: (deg) => deg * (Math.PI / 180),
-            getDirection: (x1, y1, x2, y2) => Bagel.methods.maths.radToDeg(Math.atan2(y2 - y1, x2 - x1)) + 90, // gist.github.com/conorbuck/2606166
+            getDirection: (x1, y1, x2, y2) => Bagel.maths.radToDeg(Math.atan2(y2 - y1, x2 - x1)) + 90, // gist.github.com/conorbuck/2606166
             getDistance: (x1, y1, x2, y2) => Math.sqrt(Math.pow(Math.abs(x2 - x1), 2) + Math.pow(Math.abs(y2 - y1), 2)) // a2 + b2 = c2
         },
-        step: (id) => {
+    step: (id) => {
             // TODO: Error if it's outside of a game or sprite
 
             var game = Bagel.internal.current.game;
             var me = Bagel.internal.current.sprite;
 
-            return me.scripts.steps[id](game, me, Bagel.methods.step);
-        }
-    },
+            return me.scripts.steps[id](game, me, Bagel.step);
+        },
     config: {
         flags: {
             warnOfUselessParameters: true
