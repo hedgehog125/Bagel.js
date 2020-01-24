@@ -1,11 +1,11 @@
 // TODO:
 // == Important ==
+// How will developers know from the errors that the type name is supposed to be plural?
 // Init each type so assets.assets[type] is [] instead of null
 
 // What happens to Bagel.methods when there's no game? Does the built-in plugin load?
 // .debug.avg.renderTime and scriptTime
 
-// Fix layering issue (remove tmplayers)
 // Check step functions. In .init.
 // External scripts?
 // If assets are already loaded in another game, should they be transfered to the game that's loading them?
@@ -49,21 +49,13 @@
 // Package on Atom to allow error checking before it's run?
 // Smart canvas rendering
 
-// == Credits ==
-// Images:
-// Back icon -> https://www.flaticon.com/authors/itim2101
-// Cross icon -> https://www.flaticon.com/authors/srip
-// Sounds:
-// Button click and hover sounds: https://scratch.mit.edu/projects/42854414/
-// Woosh: https://freesound.org/people/qubodup/sounds/60013/
-
 debug = console.log; // TODO. Only for development. Use instead of console.log
 Bagel = {
-    init: function(gameJSON) {
-        var internal = Bagel.internal; // A shortcut
-        var subFunctions = Bagel.internal.subFunctions.init;
+    init: (game) => {
+        let internal = Bagel.internal; // A shortcut
+        let subFunctions = Bagel.internal.subFunctions.init;
 
-        var game = subFunctions.check(gameJSON);
+        game = subFunctions.check(game);
         internal.current.game = game;
 
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
@@ -173,12 +165,9 @@ Bagel = {
         */
 
         // Sprites
-        var i = 0;
-        for (i in game.game.sprites) {
-            var sprite = Bagel.internal.createSprite({
-                isClone: false,
-                idIndex: parseInt(i)
-            }, game.game.sprites[i], game, i);
+        let i = 0;
+        for (i in game.game.sprites) { // TODO: Temporary
+            let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false);
         }
 
         if (typeof game.game.scripts.preload == "function") {
@@ -186,19 +175,21 @@ Bagel = {
         }
 
         Bagel.internal.games[game.id] = game;
-
         Bagel.internal.current.game = null;
-
         return game;
     },
     internal: {
         loadPlugin: (plugin, game, args) => {
-            var subFunctions = Bagel.internal.subFunctions.loadPlugin;
+            let subFunctions = Bagel.internal.subFunctions.loadPlugin;
 
+            let check = subFunctions.check;
             // Check the new types
-            var error = subFunctions.types.assets(game, plugin);
+            check.types.assets(game, plugin);
+            check.types.sprites(game, plugin);
 
-            subFunctions.merge(game, plugin); // Combine it in with all the other plugins
+            let merge = subFunctions.merge;
+            merge.types.assets(game, plugin); // Combine it in with all the other plugins
+            merge.types.sprites(game, plugin); // Combine it in with all the other plugins
         },
         plugin: { // The built in plugin
             info: {
@@ -227,7 +218,7 @@ Bagel = {
                                     description: "If the asset is internal or not. Internal assets are allowed to use dot prefixes."
                                 }
                             },
-                            description: "Images give a sprite its appearance. Just set its \"img\" argument to the id of the image you want to use.",
+                            description: "Images give a sprite (only the sprite type though) its appearance. Just set its \"img\" argument to the id of the image you want to use.",
                             check: (asset, game, check, standardChecks, plugin, index) => {
                                 var error = standardChecks.id();
                                 if (error) return error;
@@ -246,9 +237,7 @@ Bagel = {
                             },
                             get: {
                                 name: "img",
-                                handler: (id, defaultFind, game, plugin, type) => {
-                                    return defaultFind(id);
-                                }
+                                handler: (id, defaultFind, game, plugin, type) => defaultFind(id)
                             }
                         },
                         snds: {
@@ -403,6 +392,9 @@ Bagel = {
                                     description: "The angle of the sprite. In degrees. 0º = up. 180º = down. -90º = left. 90º = right."
                                 }
                             },
+                            cloneArgs: {
+
+                            },
                             listeners: {
                                 property: {
                                     steps: {
@@ -413,8 +405,7 @@ Bagel = {
                                         }
                                     },
                                     x: {
-                                        //set: (sprite, value, property, game, plugin) => {}, Set syntax
-                                        get: (sprite, property, game, plugin) => {
+                                        get: (sprite, property, game, plugin, triggerSprite) => {
                                             let value = sprite[property];
 
                                             if (typeof value == "string") {
@@ -454,10 +445,7 @@ Bagel = {
                                     }
                                 }
                             },
-                            cloneArgs: {
-
-                            },
-                            description: "",
+                            description: "A basic type of sprite. Has the appearance of the image specified.",
                             check: (asset, game, check, standardChecks, plugin, index) => {
 
                             },
@@ -465,10 +453,7 @@ Bagel = {
 
                             },
                             internal: (args, game, plugin, index) => { // Set all the internal attributes
-
-                            },
-                            methods: { // What methods will these types of sprite have?
-
+                                // Return the internal object
                             },
                             render: { // How do I render this type?
                                 ctx: (sprite, ctx, canvas, game, plugin) => {
@@ -681,6 +666,11 @@ Bagel = {
                             types: {},
                             methods: {},
                             spriteMethods: {},
+                            defaults: {
+                                sprites: {
+                                    type: "sprite"
+                                }
+                            }
                         } // The plugins are combined as they're loaded
                     };
                     return game;
@@ -931,136 +921,204 @@ Bagel = {
                 }
             },
             loadPlugin: {
-                types: {
-                    assets: (game, plugin) => {
-                        var type = 0;
-                        for (type in plugin.plugin.types.assets) {
-                            var typeJSON = plugin.plugin.types.assets[type];
-                            plugin.plugin.types.assets[type] = Bagel.internal.check({
-                                ob: typeJSON,
-                                where: "plugin " + plugin.info.id + ".plugin.types.assets." + type,
-                                syntax: {
-                                    args: {
-                                        required: true,
-                                        types: ["object"],
-                                        description: "The arguments for the asset."
+                check: {
+                    types: {
+                        assets: (game, plugin) => {
+                            for (let type in plugin.plugin.types.assets) {
+                                let typeJSON = plugin.plugin.types.assets[type];
+                                typeJSON = Bagel.internal.check({
+                                    ob: typeJSON,
+                                    where: "plugin " + plugin.info.id + ".plugin.types.assets." + type,
+                                    syntax: {
+                                        args: Bagel.internal.argsCheck,
+                                        description: {
+                                            required: true,
+                                            types: ["string"],
+                                            description: "The description of this asset type, make this short and clear to help people when they use the wrong syntax."
+                                        },
+                                        check: {
+                                            required: true,
+                                            types: ["function"],
+                                            description: [
+                                                "Your check function for this asset type. ",
+                                                "A good check function will avoid a standard JavaScript error when the user inputs something wrong (e.g a can't read property X of null error).",
+                                                "\nFortunately, Bagel.js helps you out in a few ways:\n",
+                                                "  You can use the check function provided (while the check function is being run) to easily check an object to make sure it has the desired properties as well as setting defaults. (works in the same way as the \"args\" argument.)\n",
+                                                "  You should also make use of the \"args\" argument as you can easily choose which data types you want to allow for each arguments as well as setting defaults and required arguments.\n",
+                                                "  \"standardChecks\" has, well... some standard checks. If you want to make sure an ID isn't used twice use \"standardChecks.id(<whichever argument is used for the id (defaults to \"id\")>)\". ",
+                                                "  You might also want to use the \"isInternal\" check with the arguments working the same as the previous but also having a second argument for the isInternal argument. This might be useful if you want to reserve some IDs for plugins as it'll block any IDs starting with a dot and without the asset having \"isInternal\" set to true.\n",
+                                                "  You probably want to use it like this:\n",
+                                                "    var error = standardChecks.id();\nif (error) return error;",
+                                                "  And if you find any problems with the user input, just use the return statement in the check function (e.g return \"Error\";) and Bagel.js will stop what it's doing, throw the error you specified and pause the game.\n",
+                                                "Some tips on making custom errors though:\n",
+                                                "  Always specifiy where the error is! Bagel.js will say which game it's in but, you know more than it about the error. You should specify which type they were making, the index of the problematic error and ideally how to fix it.\n",
+                                                "  Also, try to include information about the inputs the user provided. For example, if they used a duplicate ID, say what that ID was in the error itself.\n",
+                                                "  Lastly, be nice to the programmer. Treat them like a user. It's helpful to know that you can just put in something you know's wrong and get a helpful mini-tutorial.\n",
+                                                "\nOne more thing: the arguments for the function is structured like this:",
+                                                "(asset, game, check, standardChecks, plugin, index) => {\n};\n",
+                                                "Where standardChecks contains functions and check is a function that checks objects.",
+                                                "\n\nGood luck! :P"
+                                            ].join("")
+                                        },
+                                        init: {
+                                            required: true,
+                                            types: ["function"],
+                                            description: [
+                                                "Where you make the asset object. When it's ready, simply use the \"ready\" function to tell Bagel.js that the asset's loaded.",
+                                                "Here's an example:",
+                                                "(asset, ready, game, plugin, index) => {",
+                                                "    var img = new Image();",
+                                                "    img.onload = () => {",
+                                                "        ready({;",
+                                                "            img: img,",
+                                                "            JSON: asset",
+                                                "        });",
+                                                "    };",
+                                                "};"
+                                            ].join("\n")
+                                        },
+                                        get: {
+                                            required: false,
+                                            default: {},
+                                            types: ["object"],
+                                            description: [
+                                                "Contains the name of the function and the function that gets the asset. e.g {",
+                                                "    name: \"img\",",
+                                                "    handler: (id, defaultFind, game, plugin, type) => defaultFind(id)",
+                                                "}"
+                                            ].join("\n")
+                                        }
                                     },
-                                    description: {
-                                        required: true,
-                                        types: ["string"],
-                                        description: "The description of this asset type, make this short and clear to help people when they use the wrong syntax."
+                                    game: game
+                                });
+                                typeJSON.get = Bagel.internal.check({
+                                    ob: typeJSON.get,
+                                    where: "plugin " + plugin.info.id + ".plugin.types.assets." + type + ".get",
+                                    syntax: {
+                                        name: {
+                                            required: false,
+                                            default: type,
+                                            types: ["string"],
+                                            description: "The name of the function. Usually the singular version of the asset type. e.g: the type \"imgs\" would have the name \"img\" so the function would be \"Game.get.asset.img\". Defaults to the name of type."
+                                        },
+                                        handler: {
+                                            required: false,
+                                            default: null,
+                                            types: [
+                                                "function",
+                                                "undefined"
+                                            ],
+                                            description: "The handler function for the \"get\" method. Defaults to null. Most of the time you'll probably want to use this: \"(id, defaultFind, game, plugin, type) => defaultFind(id)\".\nThe function should return the asset specified by the arguments."
+                                        }
                                     },
-                                    check: {
-                                        required: true,
-                                        types: ["function"],
-                                        description: [
-                                            "Your check function for this asset type. ",
-                                            "A good check function will avoid a standard JavaScript error when the user inputs something wrong (e.g a can't read property X of null error).",
-                                            "\nFortunately, Bagel.js helps you out in a few ways:\n",
-                                            "  You can use the check function provided (while the check function is being run) to easily check an object to make sure it has the desired properties as well as setting defaults. (works in the same way as the \"args\" argument.)\n",
-                                            "  You should also make use of the \"args\" argument as you can easily choose which data types you want to allow for each arguments as well as setting defaults and required arguments.\n",
-                                            "  \"standardChecks\" has, well... some standard checks. If you want to make sure an ID isn't used twice use \"standardChecks.id(<whichever argument is used for the id (defaults to \"id\")>)\". ",
-                                            "  You might also want to use the \"isInternal\" check with the arguments working the same as the previous but also having a second argument for the isInternal argument. This might be useful if you want to reserve some IDs for plugins as it'll block any IDs starting with a dot and without the asset having \"isInternal\" set to true.\n",
-                                            "  You probably want to use it like this:\n",
-                                            "    var error = standardChecks.id();\nif (error) return error;",
-                                            "  And if you find any problems with the user input, just use the return statement in the check function (e.g return \"Error\";) and Bagel.js will stop what it's doing, throw the error you specified and pause the game.\n",
-                                            "Some tips on making custom errors though:\n",
-                                            "  Always specifiy where the error is! Bagel.js will say which game it's in but, you know more than it about the error. You should specify which type they were making, the index of the problematic error and ideally how to fix it.\n",
-                                            "  Also, try to include information about the inputs the user provided. For example, if they used a duplicate ID, say what that ID was in the error itself.\n",
-                                            "  Lastly, be nice to the programmer. Treat them like a user. It's helpful to know that you can just put in something you know's wrong and get a helpful mini-tutorial.\n",
-                                            "\nOne more thing: the arguments for the function is structured like this:",
-                                            "(asset, game, check, standardChecks, plugin, index) => {\n};\n",
-                                            "Where standardChecks contains functions and check is a function that checks objects.",
-                                            "\n\nGood luck! :P"
-                                        ].join("")
-                                    },
-                                    init: {
-                                        required: true,
-                                        types: ["function"],
-                                        description: [
-                                            "Where you make the asset object. When it's ready, simply use the \"ready\" function to tell Bagel.js that the asset's loaded.",
-                                            "Here's an example:",
-                                            "(asset, ready, game, plugin, index) => {",
-                                            "    var img = new Image();",
-                                            "    img.onload = () => {",
-                                            "        ready({;",
-                                            "            img: img,",
-                                            "            JSON: asset",
-                                            "        });",
-                                            "    };",
-                                            "};"
-                                        ].join("\n")
+                                    game: game
+                                });
+                                plugin.plugin.types.assets[type] = typeJSON;
+                            }
+                        },
+                        sprites: (game, plugin) => {
+                            for (let type in plugin.plugin.types.assets) {
+                                let typeJSON = plugin.plugin.types.assets[type];
+                                typeJSON = Bagel.internal.check({
+                                    ob: typeJSON,
+                                    where: "plugin " + plugin.info.id + ".plugin.types.assets." + type + ".get",
+                                    syntax: {
+                                        args: Bagel.internal.argsCheck,
+                                        cloneArgs: Bagel.internal.argsCheck,
+                                        listeners: {
+                                            required: false,
+                                            default: {
+                                                property: {}
+                                            },
+                                            types: ["object"],
+                                            description: [
+                                                "The listeners for this sprite, listeners can monitor things like when one of the sprite's properties are changed. e.g {",
+                                                "    property: {",
+                                                "        x: {",
+                                                "            set: (sprite, oldValue, property, newValue, game, plugin, triggerSprite) => {",
+                                                "                // The property has been set to the new value by the time this is run, but oldValue contains the previous value",
+                                                "                // In some cases, you may have to use triggerSprite to access some properties as it may contain some user defined atrributes not in sprite. However, they will mostly use the \"vars\" property, which is synced. \"internal\" is also synced. Note: when possible, you should use the sprite attribute instead as it won't trigger any listeners.",
+                                                "            },",
+                                                "            get: (sprite, property, game, plugin) => {",
+                                                "                // After this function is done, the value will be returned. If you want a different value to be returned, you need to change it in this function. e.g sprite.x = 10;",
+                                                "            }",
+                                                "        }",
+                                                "    }",
+                                                "}"
+                                            ].join("\n")
+                                        },
+                                        description: {
+
+                                        }
                                     }
-                                },
-                                game: game
-                            });
+                                    game: game
+                                });
+                            }
                         }
                     }
                 },
-                merge: (game, plugin) => {
-                    var subFunctions = Bagel.internal.subFunctions.loadPlugin.mergeSteps;
+                merge: {
+                    types: {
+                        assets: (game, plugin) => {
+                            let types = plugin.plugin.types.assets;
+                            let combined = game.internal.combinedPlugins;
 
-                    subFunctions.types(game, plugin, "assets");
-                },
-                mergeSteps: {
-                    types: (game, plugin, type) => {
-                        var types = plugin.plugin.types[type];
-                        var combined = game.internal.combinedPlugins;
+                            for (let newType in types) {
+                                let typeJSON = types[newType];
 
-                        var newType = 0;
-                        for (newType in types) {
-                            var typeJSON = types[newType];
+                                if (combined.types[type] == null) {
+                                    combined.types[type] = {};
+                                }
 
-                            if (combined.types[type] == null) {
-                                combined.types[type] = {};
-                            }
-
-                            var merge = false;
-                            if (combined.types[type][newType] != null) {
-                                if (typeJSON.overwrite) {
-                                    merge = true;
+                                let merge = false;
+                                if (combined.types[type][newType] != null) {
+                                    if (typeJSON.overwrite) {
+                                        merge = true;
+                                    }
+                                    else {
+                                        console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(newType) + " type without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older type definition, add this to the new type JSON: \"overwrite: true\".");
+                                    }
                                 }
                                 else {
-                                    console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(newType) + " type without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older type definition, add this to the new type JSON: \"overwrite: true\".");
+                                    merge = true;
                                 }
+                                if (merge) {
+                                    combined.types[type][newType] = typeJSON;
+                                    combined.types[type][newType].internal = {
+                                        plugin: plugin
+                                    };
+                                }
+
+                                if (game.internal.assets[type][newType] == null) {
+                                    game.internal.assets[type][newType] = {};
+                                }
+
+                                let defaultFind = Bagel.internal.defaultFind;
+
+                                // Define the getter function. The function wrapping is so some data can be saved to the function that isn't shared between all of the functions
+
+                                ((game, newType, typeJSON) => {
+                                    Bagel.get.asset[typeJSON.get.name] = (id) => {
+                                        Bagel.internal.current.game = game;
+                                        Bagel.internal.current.assetType = newType;
+                                        Bagel.internal.current.assetTypeName = typeJSON.get.name;
+
+                                        let output = typeJSON.get.handler(
+                                            id,
+                                            defaultFind,
+                                            game,
+                                            plugin,
+                                            type
+                                        );
+
+                                        Bagel.internal.current.game = null;
+                                        Bagel.internal.current.assetType = null;
+                                        Bagel.internal.current.assetTypeName = null;
+
+                                        return output;
+                                    };
+                                })(game, newType, typeJSON);
                             }
-                            else {
-                                merge = true;
-                            }
-                            if (merge) {
-                                combined.types[type][newType] = typeJSON;
-                                combined.types[type][newType].internal = {
-                                    plugin: plugin
-                                };
-                            }
-
-                            if (game.internal.assets[type][newType] == null) {
-                                game.internal.assets[type][newType] = {};
-                            }
-
-                            var defaultFind = Bagel.internal.defaultFind;
-
-                            ((game, newType, typeJSON) => {
-                                Bagel.get.asset[typeJSON.get.name] = (id) => {
-                                    Bagel.internal.current.game = game;
-                                    Bagel.internal.current.assetType = newType;
-                                    Bagel.internal.current.assetTypeName = typeJSON.get.name;
-
-                                    let output = typeJSON.get.handler(
-                                        id,
-                                        defaultFind,
-                                        game,
-                                        plugin,
-                                        type
-                                    );
-
-                                    Bagel.internal.current.game = null;
-                                    Bagel.internal.current.assetType = null;
-                                    Bagel.internal.current.assetTypeName = null;
-
-                                    return output;
-                                };
-                            })(game, newType, typeJSON);
                         }
                     }
                 }
@@ -1069,7 +1127,8 @@ Bagel = {
                 check: (sprite, game) => {
                     let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
 
-                    let sprite = Bagel.internal.check(handler.);
+                    console.log(handler)
+                    sprite = Bagel.internal.check(handler);
                 },
                 checkClone: (sprite, game) => {
 
@@ -1156,6 +1215,25 @@ Bagel = {
             current.assetType = null;
 
             game.internal.assets.loading++;
+        },
+
+        argsCheck: {
+            required: true,
+            types: ["object"],
+            description: [
+                "The required and optional arguments for the sprite. Is an object where the key is the argument name. e.g {",
+                "    x: {",
+                "        required: false,",
+                "        default: \"centred\",",
+                "        types: [",
+                "            \"number\",",
+                "            \"string\",",
+                "            \"function\",",
+                "        ],",
+                "        description: \"The X position for the sprite to start at. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n(game, me) => game.width - 50\"",
+                "    }",
+                "}"
+            ].join("\n")
         },
 
         an: (str) => ["a", "e", "i", "o", "u"].includes(str[0].toLowerCase())? "an " + str : "a " + str,
@@ -1497,7 +1575,7 @@ Bagel = {
                 }
             }
         },
-        createSprite: function(spriteData, game, isClone) {
+        createSprite: (spriteData, game, isClone) => {
             spriteData.type = spriteData.type == null? game.internal.combinedPlugins.defaults.sprites.type : spriteData.type; // If the sprite type isn't specified, default to default agreed by the plugins
             let subFunctions = Bagel.internal.subFunctions.createSprite;
 
@@ -2567,12 +2645,12 @@ Bagel = {
         },
         getTypeOf: function(entity) {
             if (Array.isArray(entity)) {
-                return "array"
+                return "array";
             }
             if (entity == null) {
-                return "undefined"
+                return "undefined";
             }
-            return typeof entity
+            return typeof entity;
         },
         checkOb: function(ob, required, optional, where, obType, game, noID, dontPause) {
             var missing = [];
@@ -3264,7 +3342,7 @@ Bagel = {
                 if (useless.length == 1) {
                     console.warn(
                         "Oops, looks like you used an unsupported argument"
-                        + (otherErrors? (" in " + args.where) : "")
+                        + (otherErrors? "" : (" in " + args.where))
                         + ": "
                         + JSON.stringify(useless[0])
                         + ". You can leave this alone if you want, but it doesn't need to be there."
@@ -3273,7 +3351,7 @@ Bagel = {
                 else {
                     console.warn(
                         "Hmm, looks like you used some unsupported arguments"
-                        + otherErrors? (" in " + args.where) : ""
+                        + (otherErrors? "" : (" in " + args.where))
                         + ":\n  • "
                         + useless.join("\n  • ")
                         + "\n\nYou can leave these if you want, but they don't need to be there."
