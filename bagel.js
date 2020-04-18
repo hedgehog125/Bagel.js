@@ -354,7 +354,74 @@ Bagel = {
                                 }
                             },
                             cloneArgs: {
+                                vars: {
+                                    syntax: {
+                                        description: "An object you can use to store data for the clone."
+                                    },
+                                    mode: "merge"
+                                },
 
+                                x: {
+                                    syntax: {
+                                        description: "The X position for the clone to start at. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n(me, game) => game.width - 50"
+                                    },
+                                    mode: "replace"
+                                },
+                                y: {
+                                    syntax: {
+                                        description: "The Y position for the clone to start at. Can also be set to \"centred\" to centre it along the Y axis, or set to a function that returns a position when the game loads. e.g:\n(me, game) => game.height - 50"
+                                    },
+                                    mode: "replace"
+                                },
+                                img: {
+                                    syntax: {
+                                        description: "The image for the clone to use to start with. If set to null or not specified anywhere, the clone will be invisible
+                                    },
+                                    mode: "replace"
+                                },
+                                width: {
+                                    syntax: {
+                                        description: "The width for the clone. Defaults to the width of the image. You can also set it to a multiple of the image width by setting it to \"1x\", \"2x\", etc."
+                                    },
+                                    mode: "replace"
+                                },
+                                height: {
+                                    syntax: {
+                                        description: "The height for the clone. Defaults to the height of the image. You can also set it to a multiple of the image height by setting it to \"1x\", \"2x\", etc."
+                                    },
+                                    mode: "replace"
+                                },
+                                scripts: {
+                                    syntax: {
+                                        subcheck: {
+                                            init: {
+                                                required: false,
+                                                default: [],
+                                                types:
+                                                // TODO <=================
+                                            },
+                                            main: {
+                                                // TODO <=======================
+                                            }
+                                        },
+                                        description: "The clones's scripts."
+                                    },
+                                },
+                                clones: {
+                                    default: {},
+                                    types: [
+                                        "object"
+                                    ],
+                                    description: "The default data for a clone of this sprite. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                                },
+                                visible: {
+                                    required: false,
+                                    default: true,
+                                    types: [
+                                        "boolean"
+                                    ],
+                                    description: "Determines if the sprite is visible or not."
+                                },
                             },
                             listeners: {
                                 steps: {},
@@ -371,14 +438,14 @@ Bagel = {
                                             sprite.internal.JSON[property] = value(me, game); // Avoid the setter
                                         }
                                     },
-                                    dimensions: (sprite, property, game, plugin) => {
+                                    dimensions: (sprite, property, game, plugin, triggerSprite) => {
                                         let value = sprite[property];
 
                                         if (typeof value == "string") {
                                             if (value.includes("x")) {
-                                                let scale = value.split("x")[0];
+                                                let scale = parseInt(value.split("x")[0]);
 
-                                                sprite[property] = Bagel.get.asset.img(sprite.img)[property] * scale;
+                                                sprite[property] = Bagel.get.asset.img(triggerSprite.img)[property] * scale;
                                             }
                                         }
                                     }
@@ -394,10 +461,7 @@ Bagel = {
                                         get: "dimensions"
                                     },
                                     height: {
-                                        //get: "dimensions"
-                                        get: () => {
-                                            console.trace("hmm")
-                                        }
+                                        get: "dimensions"
                                     },
                                     scale: {
                                         set: (sprite, property, game, plugin, triggerSprite) => {
@@ -1130,6 +1194,41 @@ Bagel = {
                                                                 default: {},
                                                                 types: ["object"],
                                                                 description: "Functions that can replace the functions in listeners. The key is the id for it. The id can be used in place of this function in listeners."
+                                                            },
+                                                            property: {
+                                                                required: false,
+                                                                default: {},
+                                                                subcheck: {
+                                                                    set: {
+                                                                        required: false,
+                                                                        default: null,
+                                                                        types: [
+                                                                            "function",
+                                                                            "string",
+                                                                            "undefined"
+                                                                        ],
+                                                                        description: "TODO"
+                                                                    },
+                                                                    get: {
+                                                                        required: false,
+                                                                        default: null,
+                                                                        check: (fn, listeners, property, game, prev) => {
+                                                                            if (typeof fn == "string") { // It's an id
+                                                                                listeners[property] = prev.ob.fns[fn];
+                                                                            }
+                                                                            // TODO: If string, should become the function wirh that ID from fns. <===============
+                                                                        },
+                                                                        types: [
+                                                                            "function",
+                                                                            "string",
+                                                                            "undefined"
+                                                                        ],
+                                                                        description: "TODO"
+                                                                    }
+                                                                },
+                                                                arrayLike: true,
+                                                                types: ["object"],
+                                                                description: "TODO"
                                                             }
                                                         },
                                                         types: ["object"],
@@ -1417,7 +1516,7 @@ Bagel = {
                                             defaultFind,
                                             game,
                                             plugin,
-                                            type
+                                            newType
                                         );
 
                                         Bagel.internal.current.game = null;
@@ -1599,12 +1698,22 @@ Bagel = {
                             let handlers = listeners.property[property];
 
                             sprite.internal.properties[property] = sprite[property];
-                            ((sprite, property, game, plugin, triggerSprite) => {
+                            ((sprite, property, game, plugin, handlers) => {
                                 Object.defineProperty(sprite, property, {
-                                    get: () => handlers.get(sprite, property, game, plugin, triggerSprite),
-                                    set: (value) => handler.set(sprite, value, property, game, plugin, triggerSprite)
+                                    get: () => {
+                                        if (handlers.get != null) {
+                                            handlers.get(sprite.internal.properties, property, game, plugin, sprite);
+                                        }
+                                        return sprite.internal.properties[property];
+                                    },
+                                    set: (value) => {
+                                        sprite.internal.properties[property] = value;
+                                        if (handlers.set != null) {
+                                            handlers.set(sprite.internal.properties, value, property, game, plugin, sprite);
+                                        }
+                                    }
                                 });
-                            })(sprite.internal.properties, property, game, spriteHandler.internal.plugin, sprite);
+                            })(sprite, property, game, spriteHandler.internal.plugin, handlers);
                         }
                     }
                 }
@@ -1643,11 +1752,19 @@ Bagel = {
             }
         },
         defaultFind: (id) => {
+            if (id == null) {
+                console.error("Huh, looks like you forgot the \"id\" argument for the \"defaultFind\" function.");
+                Bagel.internal.oops(Bagel.internal.current.game);
+            }
             let current = Bagel.internal.current;
+            let assets = current.game.internal.assets.assets[current.assetType];
 
-            // TODO: Invalid asset
+            if (assets[id] == null) { // Invalid id
+                console.error("Oops. That asset doesn't exist. You tried to get the asset with the id " + JSON.stringify(id) + ".");
+                Bagel.internal.oops(Bagel.internal.current.game);
+            }
 
-            return current.game.internal.assets.assets[current.assetType][id][current.assetTypeName];
+            return assets[id][current.assetTypeName];
         },
 
         loadAsset: (asset, game, type, i) => {
@@ -2069,6 +2186,14 @@ Bagel = {
             // TODO: Function for making all the very core stuff
             sprite.internal.internal = {
                 cloneIDs: []
+            };
+            sprite.debug = {
+                renderTime: 0,
+                scriptTime: 0,
+                avg: {
+                    renderTime: 0,
+                    scriptTime: 0
+                }
             };
             sprite.game = game;
             sprite.clone = function(inputCloneData) {
@@ -3732,7 +3857,7 @@ Bagel = {
     // == Methods ==
 
     check: (args, disableChecks, where, logObject) => {
-        if (! disableChecks) {
+        if (! (disableChecks || args.prev)) {
             args = Bagel.check({
                 ob: args,
                 where: where? where : "the check function. (Bagel.check)",
@@ -3901,7 +4026,8 @@ Bagel = {
                             Bagel.check({
                                 ob: args.ob[argID][i],
                                 where: isArray? (args.where + "." + argID + " item " + i) : args.where + "." + argID + "." + i,
-                                syntax: syntax.subcheck
+                                syntax: syntax.subcheck,
+                                prev: args
                             });
                         }
                     }
@@ -3909,14 +4035,15 @@ Bagel = {
                         Bagel.check({
                             ob: args.ob[argID],
                             where: args.where + "." + argID,
-                            syntax: args.syntax[argID].subcheck
+                            syntax: args.syntax[argID].subcheck,
+                            prev: args
                         });
                     }
                 }
                 if (syntax.check) {
                     if (syntax.checkEach) {
                         for (let i in args.ob[argID]) {
-                            let error = syntax.check(args.ob[argID][i], i, args.ob[argID], argID, args.game);
+                            let error = syntax.check(args.ob[argID][i], i, args.ob[argID], argID, args.game, args.prev);
                             if (error) {
                                 console.error(error);
                                 console.log("In " + args.where + ".");
@@ -3925,7 +4052,7 @@ Bagel = {
                         }
                     }
                     else {
-                        let error = syntax.check(args.ob[argID], args.ob, argID, args.game);
+                        let error = syntax.check(args.ob[argID], args.ob, argID, args.game, args.prev);
                         if (error) {
                             console.error(error);
                             console.log("In " + args.where + ".");
