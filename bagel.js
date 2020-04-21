@@ -1,6 +1,7 @@
 /*
 
 TODO:
+Review cloneArgs[x].syntax, does it have all the check function arguments?
 Steps in other places. Especially listeners
 Should no handler mean it uses defaultFind
 loadPlugin checks should use subcheck <==
@@ -34,7 +35,7 @@ Bagel = {
         var i = 0;
         for (i in game.game.assets.imgs) {
             if (Bagel.internal.getTypeOf(game.game.assets.imgs[i]) != "object") {
-                console.error("Oh no! You need to use the type 'object' to define an asset. \nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(game.game.assets.imgs[i])) + " in ''GameJSON.game.assets.imgs' item '" + i + "'.");
+                console.error("Oh no! You need to use the type 'object' to define an asset.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(game.game.assets.imgs[i])) + " in ''GameJSON.game.assets.imgs' item '" + i + "'.");
                 console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
                 error = true;
             }
@@ -53,12 +54,12 @@ Bagel = {
                 }
             }, {}, "GameJSON.game.assets.imgs item " + i + ".", "AssetJSON", game);
             if (game.internal.assets.assets.imgs.hasOwnProperty(game.game.assets.imgs[i].id)) {
-                console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i + "'.");
+                console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else.\nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i + "'.");
                 console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
                 error = true;
             }
             if (game.game.assets.imgs[i].id.includes("Internal.")) {
-                console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Bagel.js to load some of its own assets for things like GUI sprites. \nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i + "'.");
+                console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Bagel.js to load some of its own assets for things like GUI sprites.\nYou used " + JSON.stringify(game.game.assets.imgs[i].id) + " in 'GameJSON.game.assets.imgs item " + i + "'.");
                 console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
                 error = true;
             }
@@ -73,7 +74,7 @@ Bagel = {
         var i = 0;
         for (i in game.game.assets.snds) {
             if (Bagel.internal.getTypeOf(game.game.assets.snds[i]) != "object") {
-                console.error("Oh no! You need to use the type 'object' to define an asset. \nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(game.game.assets.snds[i])) + " in ''GameJSON.game.assets.snds' item '" + i + "'.");
+                console.error("Oh no! You need to use the type 'object' to define an asset.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(game.game.assets.snds[i])) + " in ''GameJSON.game.assets.snds' item '" + i + "'.");
                 console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
                 error = true;
             }
@@ -92,12 +93,12 @@ Bagel = {
                 }
             }, {}, "GameJSON.game.assets.snds item " + i + ".", "AssetJSON", game);
             if (game.internal.assets.assets.snds.hasOwnProperty(game.game.assets.snds[i].id)) {
-                console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.game.assets.snds[i].id) + " in 'GameJSON.game.assets.snds item " + i + "'.");
+                console.error("Oh no! You used an ID for an asset that is already being used. Try and think of something else.\nYou used " + JSON.stringify(game.game.assets.snds[i].id) + " in 'GameJSON.game.assets.snds item " + i + "'.");
                 console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
                 error = true;
             }
             if (game.game.assets.snds[i].id.includes("Internal.")) {
-                console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Bagel.js to load some of its own assets for things like GUI sprites. \nYou used " + JSON.stringify(game.game.assets.snds[i].id) + " in 'GameJSON.game.assets.snds item " + i + "'.");
+                console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Bagel.js to load some of its own assets for things like GUI sprites.\nYou used " + JSON.stringify(game.game.assets.snds[i].id) + " in 'GameJSON.game.assets.snds item " + i + "'.");
                 console.error("Bagel.js hit a critical error, have a look at the error above for more info.");
                 error = true;
             }
@@ -152,7 +153,7 @@ Bagel = {
             merge.types.sprites(game, plugin);
             merge.spriteMethods(game, plugin);
         },
-        plugin: { // The built in plugin
+        plugin: { // The built-in plugin
             info: {
                 id: "Internal",
                 description: "The built-in plugin, adds an image based sprite type, a canvas and a renderer. Also contains some useful methods.",
@@ -214,7 +215,7 @@ Bagel = {
                                     description: "The src of the sound."
                                 }
                             },
-                            description: "",
+                            description: "Sounds can be played by anything. They're played using Game.playSound(<id>)",
                             check: (asset, game, check, standardChecks, plugin, index) => {
                                 let error = standardChecks.id();
                                 if (error) return error;
@@ -240,11 +241,16 @@ Bagel = {
                             args: {
                                 id: {
                                     required: true,
-                                    types: [
-                                        "string"
-                                    ],
-                                    description: "The ID for the sprite to be targeted by."
+                                    types: ["string"],
+                                    description: "The id for the sprite to be targeted by."
                                 },
+                                vars: {
+                                    required: false,
+                                    default: {},
+                                    types: ["object"],
+                                    description: "An object you can use to store data for the sprite."
+                                },
+
                                 x: {
                                     required: false,
                                     default: "centred",
@@ -309,7 +315,7 @@ Bagel = {
                                     types: [
                                         "object"
                                     ],
-                                    description: "The default data for a clone of this sprite. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                                    description: "The default data for a clone of this sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
                                 },
                                 visible: {
                                     required: false,
@@ -318,14 +324,6 @@ Bagel = {
                                         "boolean"
                                     ],
                                     description: "Determines if the sprite is visible or not."
-                                },
-                                vars: {
-                                    required: false,
-                                    default: {},
-                                    types: [
-                                        "object"
-                                    ],
-                                    description: "An object you can use to store data for the sprite."
                                 },
                                 /*
                                 type: {
@@ -354,6 +352,12 @@ Bagel = {
                                 }
                             },
                             cloneArgs: {
+                                id: {
+                                    syntax: {
+                                        description: "The id for the clone to be targeted by. Defaults to the parent's name followed by a hashtag and then the lowest number starting from 0 that hasn't already been used.",
+                                        required: false
+                                    }
+                                },
                                 vars: {
                                     syntax: {
                                         description: "An object you can use to store data for the clone."
@@ -375,7 +379,7 @@ Bagel = {
                                 },
                                 img: {
                                     syntax: {
-                                        description: "The image for the clone to use to start with. If set to null or not specified anywhere, the clone will be invisible
+                                        description: "The image for the clone to use to start with. If set to null or not specified anywhere, the clone will be invisible."
                                     },
                                     mode: "replace"
                                 },
@@ -397,31 +401,43 @@ Bagel = {
                                             init: {
                                                 required: false,
                                                 default: [],
-                                                types:
-                                                // TODO <=================
+                                                types: ["array"],
+                                                check: (item) => {
+                                                    if (typeof item != "function") {
+                                                        return "Oops. Looks like you used the wrong type, you used " + Bagel.internal.an(Bagel.internal.getTypeOf(item)) + " instead of a function.";
+                                                    }
+                                                },
+                                                checkEach: true,
+                                                description: "An array of functions to run when this clone is initialised."
                                             },
                                             main: {
-                                                // TODO <=======================
+                                                required: false,
+                                                default: [],
+                                                types: ["array"],
+                                                description: "An array of functions to run on every frame for this clone."
                                             }
                                         },
-                                        description: "The clones's scripts."
+                                        description: "The clones's scripts.",
+                                        default: {}
                                     },
+                                    mode: "ignore"
                                 },
                                 clones: {
-                                    default: {},
-                                    types: [
-                                        "object"
-                                    ],
-                                    description: "The default data for a clone of this sprite. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                                    syntax: {
+                                        default: {},
+                                        types: [
+                                            "object"
+                                        ],
+                                        description: "The default data for a clone of this sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                                    },
+                                    mode: "ignore"
                                 },
                                 visible: {
-                                    required: false,
-                                    default: true,
-                                    types: [
-                                        "boolean"
-                                    ],
-                                    description: "Determines if the sprite is visible or not."
-                                },
+                                    syntax: {
+                                        description: "Determines if the clone is visible or not."
+                                    },
+                                    mode: "replace"
+                                }
                             },
                             listeners: {
                                 steps: {},
@@ -484,9 +500,6 @@ Bagel = {
                             init: (args, game, plugin, index) => {
 
                             },
-                            internal: (args, game, plugin, index) => { // Set all the internal attributes
-                                // Return the internal object
-                            },
                             render: { // How do I render this type?
                                 ctx: (sprite, ctx, canvas, game, plugin) => {
 
@@ -500,32 +513,32 @@ Bagel = {
                 sprites: [],
 
                 methods: {
-
-                }, // For game objects
-                spriteMethods: {
-                    move: {
-                        appliesTo: [
-                            "sprite",
-                            "canvas"
-                        ],
-                        obArg: false,
-                        args: {
-                            amount: {
-                                required: true,
-                                types: [
-                                    "number"
-                                ],
-                                description: "The number of in game pixels (independent of the rendered canvas width and height) to move the sprite (in the direction specified in degrees from the sprite's angle argument. 0° -> Straight up. -180/180° -> Straight down. 90° -> Right (default)).",
+                    bagel: {},
+                    game: {},
+                    sprite: {
+                        move: {
+                            appliesTo: [
+                                "sprite",
+                                "canvas"
+                            ],
+                            obArg: false,
+                            args: {
+                                amount: {
+                                    required: true,
+                                    types: [
+                                        "number"
+                                    ],
+                                    description: "The number of in game pixels (independent of the rendered canvas width and height) to move the sprite (in the direction specified in degrees from the sprite's angle argument. 0° -> Straight up. -180/180° -> Straight down. 90° -> Right (default)).",
+                                }
+                            },
+                            fn: (me, args, game) => {
+                                let rad = Bagel.maths.degToRad(me.angle - 90);
+                                me.x += Math.cos(rad) * args.amount;
+                                me.y += Math.sin(rad) * args.amount;
                             }
-                        },
-                        fn: (me, args, game) => {
-                            let rad = Bagel.maths.degToRad(me.angle - 90);
-                            me.x += Math.cos(rad) * args.amount;
-                            me.y += Math.sin(rad) * args.amount;
                         }
                     }
-                }, // For sprites
-
+                },
                 scripts: {
                     init: [
                         {
@@ -556,7 +569,7 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
                     if (document.getElementById(game.htmlElementID) == null && game.htmlElementID != null) { // Make sure the element exists
-                        console.error("Oops, you specified the element to add the game canvas to but it doesn't seem to exist. \nThis is specified in \"GameJSON.htmlElementID\" and is set to " + JSON.stringify(game.htmlElementID) + ". You might want to check that the HTML that creates the element is before your JavaScript.");
+                        console.error("Oops, you specified the element to add the game canvas to but it doesn't seem to exist.\nThis is specified in \"GameJSON.htmlElementID\" and is set to " + JSON.stringify(game.htmlElementID) + ". You might want to check that the HTML that creates the element is before your JavaScript.");
                         Bagel.internal.oops(game);
                     }
 
@@ -817,7 +830,7 @@ Bagel = {
                     */
 
                     if (Bagel.internal.games[game.id] != null) {
-                        console.error("Oh no! You used an ID for your game that is already being used. Try and think of something else. \nYou used " + JSON.stringify(game.id) + " in \"GameJSON.htmlElementID\".");
+                        console.error("Oh no! You used an ID for your game that is already being used. Try and think of something else.\nYou used " + JSON.stringify(game.id) + " in \"GameJSON.htmlElementID\".");
                         Bagel.internal.oops(game);
                     }
 
@@ -1005,7 +1018,7 @@ Bagel = {
                     for (let i in scripts) {
                         let script = scripts[i];
                         if (Bagel.internal.getTypeOf(script) != "object") {
-                            console.error("Oh no! You need to use the type \"object\" to define a script. \nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(script)) + " in GameJSON.game.scripts." + type + " item " + i + ".");
+                            console.error("Oh no! You need to use the type \"object\" to define a script.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(script)) + " in GameJSON.game.scripts." + type + " item " + i + ".");
                             Bagel.internal.oops(game);
                             return;
                         }
@@ -1065,7 +1078,7 @@ Bagel = {
                                     description: {
                                         required: true,
                                         types: ["string"],
-                                        description: "A breif description of what the plugin is and what it does."
+                                        description: "A brief description of what the plugin is and what it does."
                                     }
                                 },
                                 description: "Contains some information about the plugin."
@@ -1177,6 +1190,97 @@ Bagel = {
                                                     cloneArgs: {
                                                         required: true,
                                                         types: ["object"],
+                                                        subcheck: {
+                                                            syntax: {
+                                                                required: false,
+                                                                default: {},
+                                                                subcheck: {
+                                                                    description: {
+                                                                        required: false,
+                                                                        check: (item, ob, index, game, prev) => {
+                                                                            if (item == null) {
+                                                                                ob[index] = prev.prev.ob.args[prev.prevName].description;
+                                                                            }
+                                                                        },
+                                                                        types: ["string"],
+                                                                        description: "A brief description of what this property does. You might want to change this to mention clones instead of sprites."
+                                                                    },
+                                                                    types: {
+                                                                        required: false,
+                                                                        check: (item, ob, index, game, prev) => {
+                                                                            if (item == null) {
+                                                                                ob[index] = prev.prev.ob.args[prev.prevName].types;
+                                                                            }
+                                                                        },
+                                                                        types: ["array"],
+                                                                        description: "The different data types this property accepts. e.g string, array, object etc."
+                                                                    },
+                                                                    required: {
+                                                                        required: false,
+                                                                        check: (item, ob, index, game, prev) => {
+                                                                            if (item == null) {
+                                                                                ob[index] = prev.prev.ob.args[prev.prevName].required;
+                                                                            }
+                                                                        },
+                                                                        types: ["boolean"],
+                                                                        description: "If the argument is required or not. Most of the time, it should be optional."
+                                                                    },
+                                                                    check: {
+                                                                        required: false,
+                                                                        check: (item, ob, index, game, prev) => {
+                                                                            if (item == null) {
+                                                                                ob[index] = prev.prev.ob.args[prev.prevName].check;
+                                                                            }
+                                                                        },
+                                                                        types: ["function"],
+                                                                        description: "The check function."
+                                                                    },
+                                                                    subcheck: {
+                                                                        required: false,
+                                                                        check: (item, ob, index, game, prev) => {
+                                                                            if (item == null) {
+                                                                                ob[index] = prev.prev.ob.args[prev.prevName].subcheck;
+                                                                            }
+                                                                        },
+                                                                        types: ["object"],
+                                                                        description: "The subcheck. Same as a \"syntax\" argument."
+                                                                    },
+                                                                    default: {
+                                                                        required: false,
+                                                                        check: (item, ob, index, game, prev) => {
+                                                                            if (item == null) {
+                                                                                ob[index] = prev.prev.ob.args[prev.prevName].default;
+                                                                            }
+                                                                        },
+                                                                        types: "any",
+                                                                        description: "The default value for when \"ignore\" mode is used and no value is found for a property."
+                                                                    }
+                                                                },
+                                                                types: ["object"],
+                                                                description: "The syntax for clones of this sprite type. Any unspecified arguments will default to the values specified in the \"args\" argument for normal sprites."
+                                                            },
+                                                            mode: {
+                                                                required: false,
+                                                                default: "replace",
+                                                                check: (value) => {
+                                                                    if (! [
+                                                                        "replace",
+                                                                        "merge",
+                                                                        "ignore"
+                                                                    ].includes(value)) {
+                                                                        return "Huh, looks like you used an invalid option for this. It can only be \"replace\", \"merge\" or \"ignore\".";
+                                                                    }
+                                                                },
+                                                                types: ["string"],
+                                                                description: [
+                                                                    "The adoption method for this property. Either:",
+                                                                    "  • \"replace\" -> The value is given based on the order of preference (from high to low): the \"clone\" function inputs, the \"clones\" attribute in the parent and the parent sprite's properties.",
+                                                                    "  • \"merge\" -> Only for objects and arrays. They are merged together, in the event of a conflict, the order of preference applies.",
+                                                                    "  • \"ignore\" -> Ignores the parent's properties. However, properties will still be taken from the parent's \"clones\" argument and the \"clone\" function using the order of preference. The property will be set to the default from either the parent or the clone's arguments if no value is assigned."
+                                                                ].join("\n")
+                                                            }
+                                                        },
+                                                        arrayLike: true,
                                                         description: "Same as the \"syntax\" argument for the check function. These checks are only run on clones, not original sprites."
                                                     },
                                                     listeners: {
@@ -1204,8 +1308,7 @@ Bagel = {
                                                                         default: null,
                                                                         types: [
                                                                             "function",
-                                                                            "string",
-                                                                            "undefined"
+                                                                            "string"
                                                                         ],
                                                                         description: "TODO"
                                                                     },
@@ -1220,8 +1323,7 @@ Bagel = {
                                                                         },
                                                                         types: [
                                                                             "function",
-                                                                            "string",
-                                                                            "undefined"
+                                                                            "string"
                                                                         ],
                                                                         description: "TODO"
                                                                     }
@@ -1237,20 +1339,14 @@ Bagel = {
                                                     check: {
                                                         required: false,
                                                         default: null,
-                                                        types: [
-                                                            "function",
-                                                            "undefined"
-                                                        ],
+                                                        types: ["function"],
                                                         description: "TODO"
                                                     },
                                                     init: {
                                                         required: false,
                                                         default: null,
-                                                        types: [
-                                                            "function",
-                                                            "undefined"
-                                                        ],
-                                                        description: "Initialises the sprite. Is a function."
+                                                        types: ["function"],
+                                                        description: "Initialises the sprite. Is a function. Can be used to define miscellaneous attributes."
                                                     },
                                                     render: {
                                                         required: false,
@@ -1285,6 +1381,77 @@ Bagel = {
                                         },
                                         types: ["object"],
                                         description: "Creates new types. (assets, sprites)"
+                                    },
+                                    assets: { // TODO: check
+                                        required: false,
+                                        default: {},
+                                        types: ["object"],
+                                        description: "Which assets to load for the plugin."
+                                    },
+                                    methods: {
+                                        required: false,
+                                        default: {},
+                                        subcheck: {
+                                            bagel: { // TODO: check
+                                                required: false,
+                                                default: {},
+                                                types: ["object"],
+                                                description: "Contains framework functions. (Bagel.<function>...) The key is the name and the value is the function."
+                                            },
+                                            game: { // TODO: check
+                                                required: false,
+                                                default: {},
+                                                types: ["object"],
+                                                description: "Contains game functions. (Game.<function>...) The key is the name and the value is the function."
+                                            },
+                                            sprite: { // TODO: check
+                                                required: false,
+                                                default: {},
+                                                types: ["object"],
+                                                description: "Contains sprite functions. (me.<function>...) The key is the name and the value is the function."
+                                            }
+                                        },
+                                        types: ["object"],
+                                        description: "Contains the 3 different method types: \"bagel\", \"game\" and \"sprite\"."
+                                    },
+                                    scripts: {
+                                        required: false,
+                                        default: {},
+                                        subcheck: {
+                                            preload: { // TODO: check
+                                                required: false,
+                                                default: [],
+                                                types: ["array"],
+                                                description: "Preload functions. They run before the plugin is checked or initialised."
+                                            },
+                                            init: { // TODO: check
+                                                required: false,
+                                                default: [],
+                                                types: ["array"],
+                                                description: "Init functions. They run once the plugin's been checked and mostly initialised. This function finishes it by doing stuff specific to this plugin."
+                                            },
+                                            main: { // TODO: check
+                                                required: false,
+                                                default: [],
+                                                types: ["array"],
+                                                description: "Main functions. They run on every frame before the rendering."
+                                            },
+                                            steps: { // TODO: check
+                                                required: false,
+                                                default: {},
+                                                types: ["object"],
+                                                description: "Mini functions. They can help make your code clearer by spitting functions into the individual steps."
+                                            }
+                                        },
+                                        types: ["object"],
+                                        description: "Contains the plugin's scripts. \"preload\", \"init\" and \"main\". Steps can also be used."
+                                    },
+                                    sprites: { // TODO: check
+                                        required: false,
+                                        default: [],
+                                        subcheck: {}, // TODO
+                                        types: ["array"],
+                                        description: "Contains the plugin's sprites. Works the same way as Game.game.sprites. These will be created in every game where the plugin's active."
                                     }
                                 },
                                 types: ["object"],
@@ -1552,10 +1719,15 @@ Bagel = {
                                     merge = true;
                                 }
                                 if (merge) {
-                                    combined.types.sprites[newType] = typeJSON;
-                                    combined.types.sprites[newType].internal = {
-                                        plugin: plugin
+                                    let syntax = {};
+                                    for (i in typeJSON.cloneArgs) {
+                                        syntax[i] = typeJSON.cloneArgs[i].syntax;
+                                    }
+                                    typeJSON.internal = {
+                                        plugin: plugin,
+                                        cloneSyntax: syntax
                                     };
+                                    combined.types.sprites[newType] = typeJSON;
                                 }
                             }
                         }
@@ -1601,11 +1773,49 @@ Bagel = {
                 }
             },
             createSprite: {
-                check: (sprite, game, isClone, where) => {
+                check: (sprite, game, parent, where) => {
                     let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
 
-                    // TODO: isClone
+                    if (parent) { // Clone
+                        let clone = Bagel.internal.deepClone;
 
+                        // Assign the parent's properties to the clone
+                        for (let i in handler.cloneArgs) {
+                            let argJSON = handler.cloneArgs[i];
+
+                            // TODO: What if a property is missing in the cloneArgs?
+                            if (argJSON.mode == "replace") {
+                                if (! sprite.hasOwnProperty(i)) {
+                                    if (! parent.clones.hasOwnProperty(i)) {
+                                        sprite[i] = clone(parent[i]);
+                                    }
+                                    else {
+                                        sprite[i] = clone(parent.clones[i]);
+                                    }
+                                }
+                            }
+                            else if (argJSON.mode == "merge") {
+                                if (! (parent.hasOwnProperty(i) || parent.clones.hasOwnProperty(i) || sprite.hasOwnProperty(i))) {
+                                    sprite[i] = argJSON.syntax.default; // No values specified. Default to the default
+                                    continue;
+                                }
+
+                                sprite[i] = Object.assign(clone(parent[i]), clone(parent.clones[i]), clone(sprite[i]));
+                            }
+                            else if (argJSON.mode == "ignore") { // Ignore the parent's properties
+                                if (! sprite.hasOwnProperty(i)) {
+                                    if (! parent.clones.hasOwnProperty(i)) {
+                                        sprite[i] = argJSON.syntax.default;
+                                    }
+                                    else {
+                                        sprite[i] = clone(parent.clones[i]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // TODO: run the other checks
                     const typeSyntax = {
                         type: {
                             required: true,
@@ -1614,20 +1824,18 @@ Bagel = {
                         }
                     };
 
-                    // TODO: run the other checks
-
                     return Bagel.check({
                         ob: sprite,
                         where: where,
                         syntax: {
-                            ...(isClone? handler.cloneArgs : handler.args),
+                            ...(parent? handler.internal.cloneSyntax : handler.args),
                             ...typeSyntax
                         },
                         game: game
                     });
                 },
                 register: {
-                    scripts: (type, sprite, game, isClone) => {
+                    scripts: (type, sprite, game, parent) => {
                         let scripts = sprite.scripts[type];
                         let scriptIndex = game.internal.scripts.index.sprites[type];
 
@@ -1648,14 +1856,14 @@ Bagel = {
                             });
                         }
                     },
-                    values: (sprite, game, isClone) => {
+                    values: (sprite, game, parent) => {
                         let handler = game.internal.combinedPlugins.values;
 
                         // TODO: How should this work?
 
                         //for (let i in )
                     },
-                    methods: (sprite, game, isClone) => {
+                    methods: (sprite, game, parent) => {
                         let handler = game.internal.combinedPlugins.spriteMethods[sprite.type];
 
                         if (handler == null) {
@@ -1686,7 +1894,7 @@ Bagel = {
                             })(method, sprite, game);
                         }
                     },
-                    listeners: (sprite, game) => {
+                    listeners: (sprite, game, parent) => {
                         let spriteHandler = game.internal.combinedPlugins.types.sprites[sprite.type];
                         let listeners = spriteHandler.listeners;
 
@@ -1729,7 +1937,7 @@ Bagel = {
                     id = id == null? "id" : id;
 
                     if (game.internal.assets.assets[type][asset[id]] != null) {
-                        return "Oh no! You used an ID for an asset that's already being used. Maybe try something else. \nYou used "
+                        return "Oh no! You used an ID for an asset that's already being used. Maybe try something else.\nYou used "
                         + JSON.stringify(game.game.assets[type][i][id])
                         + " in GameJSON.game.assets." + type + " item " + index + ".";
                     }
@@ -1845,7 +2053,7 @@ Bagel = {
         },
         oops: (game) => { // When something goes wrong
             if (game == null) {
-                throw "Critical Bagel.js error, please look at the error above for more info.";
+                throw "Critical Bagel.js error, please look at the error above for more info. ^-^";
             }
             game.paused = true;
             throw "Critical Bagel.js error in the game " + JSON.stringify(game.id) + ", look at the error for some help. ^-^";
@@ -1858,12 +2066,12 @@ Bagel = {
             assetTypeName: null
         },
         findCloneID: function(sprite, game) {
-            for (let i in sprite.internal.internal.cloneIDs) {
-                if (sprite.internal.internal.cloneIDs[i] == null) {
+            for (let i in sprite.cloneIDs) {
+                if (sprite.cloneIDs[i] == null) {
                     return i;
                 }
             }
-            return sprite.internal.internal.cloneIDs.length;
+            return sprite.cloneIDs.length;
         },
         findSpriteID: function(game) {
             for (let i in game.game.sprites) {
@@ -1874,6 +2082,7 @@ Bagel = {
             return game.game.sprites.length;
         },
         checkClones: function(spriteData, data, game, parent) {
+            console.log("A")
             if (data.type == null) {
                 let type = parent.type;
             }
@@ -1908,7 +2117,7 @@ Bagel = {
                         types: [
                             "object"
                         ],
-                        description: "The default data for a clone of this clone. \nAll arguments are optional as the child clone will adopt the arguments from the clone function and the parent clone (in that priority)"
+                        description: "The default data for a clone of this clone.\nAll arguments are optional as the child clone will adopt the arguments from the clone function and the parent clone (in that priority)"
                     },
                     width: {
                         default: parent.width,
@@ -2021,7 +2230,7 @@ Bagel = {
                             types: [
                                 "object"
                             ],
-                            description: "The default data for a clone of this canvas sprite. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                            description: "The default data for a clone of this canvas sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
                         },
                         visible: {
                             default: parent.visible,
@@ -2075,7 +2284,7 @@ Bagel = {
                                 types: [
                                     "object"
                                 ],
-                                description: "The default data for a clone of this renderer. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                                description: "The default data for a clone of this renderer.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
                             },
                             vars: {
                                 default: {},
@@ -2108,7 +2317,7 @@ Bagel = {
                         }, "the function \"sprite.clone\" cloning the sprite " + JSON.stringify(data.spriteToClone) + ".", "function cloneSprite arguments (merged with the parentSprite's arguments)", game);
                     }
                     else {
-                        console.error("Oh no! Looks like you used an invalid type for a clone. \nYou used " + JSON.stringify(type) + " in \"GameJSON.game.sprites\" item \"type\". While cloning the sprite " + JSON.stringify(parent.id) + ".");
+                        console.error("Oh no! Looks like you used an invalid type for a clone.\nYou used " + JSON.stringify(type) + " in \"GameJSON.game.sprites\" item \"type\". While cloning the sprite " + JSON.stringify(parent.id) + ".");
                         console.log("Here's sprite's JSON: ^-^");
                         console.log(parent);
                         Bagel.internal.oops(game);
@@ -2143,7 +2352,7 @@ Bagel = {
 
             for (let c in sprite.scripts.init) {
                 if (Bagel.internal.getTypeOf(sprite.scripts.init[c]) != "function") {
-                    console.error("Oh no! You need to use the type 'function' in a clone's array of init scripts. \nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(sprite.scripts.init[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
+                    console.error("Oh no! You need to use the type 'function' in a clone's array of init scripts.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(sprite.scripts.init[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
                     //console.log(sprite.scripts.init[c])
                     console.error("Bagel.js hit a critical error, look at the error above for more information.")
                     debugger
@@ -2152,7 +2361,7 @@ Bagel = {
             }
             for (c in sprite.scripts.main) {
                 if (Bagel.internal.getTypeOf(sprite.scripts.main[c]) != "function") {
-                    console.error("Oh no! You need to use the type 'function' in a clone's array of main scripts. \nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(sprite.scripts.main[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
+                    console.error("Oh no! You need to use the type 'function' in a clone's array of main scripts.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(sprite.scripts.main[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
                     //console.log(sprite.scripts.main[c])
                     console.error("Bagel.js hit a critical error, look at the error above for more information.")
                     debugger
@@ -2160,13 +2369,13 @@ Bagel = {
                 }
             }
         },
-        createSprite: (sprite, game, isClone, where, noCheck) => {
+        createSprite: (sprite, game, parent, where, noCheck) => {
             let subFunctions = Bagel.internal.subFunctions.createSprite;
 
 
             if (! noCheck) {
                 sprite.type = sprite.type == null? game.internal.combinedPlugins.defaults.sprites.type : sprite.type; // If the sprite type isn't specified, default to default agreed by the plugins
-                sprite = subFunctions.check(sprite, game, isClone, where);
+                sprite = subFunctions.check(sprite, game, parent, where);
             }
             sprite.internal = {
                 scripts: {
@@ -2176,17 +2385,15 @@ Bagel = {
             };
 
             let register = subFunctions.register;
-            register.scripts("init", sprite, game, isClone);
-            register.scripts("main", sprite, game, isClone);
-            register.values(sprite, game, isClone);
-            register.methods(sprite, game, isClone);
-            register.listeners(sprite, game);
+            register.scripts("init", sprite, game, parent);
+            register.scripts("main", sprite, game, parent);
+            register.values(sprite, game, parent);
+            register.methods(sprite, game, parent);
+            register.listeners(sprite, game, parent);
 
 
             // TODO: Function for making all the very core stuff
-            sprite.internal.internal = {
-                cloneIDs: []
-            };
+            sprite.cloneIDs = [];
             sprite.debug = {
                 renderTime: 0,
                 scriptTime: 0,
@@ -2196,56 +2403,36 @@ Bagel = {
                 }
             };
             sprite.game = game;
-            sprite.clone = function(inputCloneData) {
-                var spriteWas = Bagel.internal.current.sprite;
-                var gameWas = Bagel.internal.current.game;
+            ((me) => {
+                sprite.clone = (clone) => {
+                    let parent = me;
+                    let game = sprite.game;
+                    clone = clone? clone : {};
 
+                    let cloneID = Bagel.internal.findCloneID(parent, game);
+                    let spriteID;
+                    if (clone.id == null) {
+                        spriteID = parent.id + "#" + cloneID;
+                        clone.id = spriteID;
+                    }
+                    else {
+                        spriteID = clone.id;
+                    }
+                    parent.cloneIDs[cloneID] = spriteID;
+                    parent.cloneCount++;
 
-                var sprite = this;
-                var game = sprite.game;
-                Bagel.internal.current.sprite = sprite;
-                Bagel.internal.current.game = game;
+                    clone = Bagel.internal.createSprite(clone, game, parent, "the function \"sprite.clone\"");
+                    clone.cloneID = cloneID; // Declare it after creating it so it's not "useless"
 
-                if (inputCloneData == null) {
-                    var cloneData = {};
-                }
-                else {
-                    var cloneData = inputCloneData;
-                }
+                    Bagel.internal.current.sprite = clone;
+                    for (let i in clone.scripts.init) {
+                        clone.scripts.init[i](clone, game, Bagel.step);
+                    }
+                    Bagel.internal.current.sprite = parent;
 
-                var id = Bagel.internal.findCloneID(sprite, game);
-                var cloneSpriteID = Bagel.internal.findSpriteID(game);
-                sprite.internal.internal.cloneIDs[id] = sprite.id;
-                sprite.internal.cloneCount++;
-
-                var newSpriteData = {};
-                newSpriteData = {...Bagel.internal.deepClone(sprite.clones), ...cloneData}; // Merge the .clones atrribute argument with the input to the function
-
-                /*
-                var newSprite = Bagel.internal.createSprite({
-                    isClone: true,
-                    cloneOf: sprite.id,
-                    idIndex: cloneSpriteID
-                }, newSpriteData, game);
-                */
-                let newSprite = Bagel.internal.createSprite(newSpriteData, game, true, "the function \"sprite.clone\"");
-                newSprite.id = sprite.id + "#" + id;
-                newSprite.cloneID = id;
-                game.game.sprites[cloneSpriteID] = newSprite;
-                game.internal.IDIndex[sprite.id + "#" + id] = cloneSpriteID;
-
-                Bagel.internal.current.sprite = newSprite;
-
-                var i = 0;
-                for (i in newSprite.scripts.init) {
-                    newSprite.scripts.init[i](Bagel.internal.current.game, newSprite, Bagel.step);
-                }
-
-                Bagel.internal.current.sprite = spriteWas;
-                Bagel.internal.current.game = gameWas;
-
-                return newSprite;
-            };
+                    return clone;
+                };
+            })(sprite);
 
             /*
             if (data.isClone) {
@@ -2425,7 +2612,7 @@ Bagel = {
                             types: [
                                 "object"
                             ],
-                            description: "The default data for a clone of this sprite. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                            description: "The default data for a clone of this sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
                         },
                         visible: {
                             default: true,
@@ -2513,7 +2700,7 @@ Bagel = {
                                 types: [
                                     "object"
                                 ],
-                                description: "The default data for a clone of this canvas sprite. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                                description: "The default data for a clone of this canvas sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
                             },
                             visible: {
                                 default: true,
@@ -2606,7 +2793,7 @@ Bagel = {
                                     types: [
                                         "object"
                                     ],
-                                    description: "The default data for a clone of this renderer. \nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                                    description: "The default data for a clone of this renderer.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
                                 },
                                 vars: {
                                     default: {},
@@ -2642,7 +2829,7 @@ Bagel = {
                             // TODO: What if it's not one of the options?
 
                             if (! ["high", "low"].includes(sprite.order)) {
-                                console.error("Oops, you used an invalid option. It can only be either \"high\" or \"low\". \nYou used " + JSON.stringify(sprite.order) + " in 'GameJSON.game.sprites item' " + data.idIndex + " -> order.");
+                                console.error("Oops, you used an invalid option. It can only be either \"high\" or \"low\".\nYou used " + JSON.stringify(sprite.order) + " in 'GameJSON.game.sprites item' " + data.idIndex + " -> order.");
                                 console.log("Sprite JSON:");
                                 console.log(sprite);
                                 Bagel.internal.oops(game);
@@ -2655,7 +2842,7 @@ Bagel = {
                             });
                         }
                         else {
-                            console.error("Oh no! You used an invalid type for a sprite. \nYou used " + JSON.stringify(sprite.type) + " in 'GameJSON.game.sprites item' " + data.idIndex + ".");
+                            console.error("Oh no! You used an invalid type for a sprite.\nYou used " + JSON.stringify(sprite.type) + " in 'GameJSON.game.sprites item' " + data.idIndex + ".");
                             Bagel.internal.oops(game);
                         }
                     }
@@ -2702,12 +2889,12 @@ Bagel = {
 
                 if (game.internal.IDIndex[sprite.id] != null) {
                     // TODO: Better error message
-                    console.error("Oh no! You used an ID for a sprite that is already being used. Try and think of something else. \nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item' " + data.idIndex + ".")
+                    console.error("Oh no! You used an ID for a sprite that is already being used. Try and think of something else.\nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item' " + data.idIndex + ".")
                     Bagel.internal.oops(game);
                 }
                 if (! data.isInternal) {
                     if (sprite.id.includes("Internal.")) {
-                        console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Bagel.js to load some of its own assets for things like GUI sprites. \nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item " + data.idIndex + "'.")
+                        console.error("Oops! Looks like you tried to use the reserved asset starter. These just allow Bagel.js to load some of its own assets for things like GUI sprites.\nYou used " + JSON.stringify(sprite.id) + " in 'GameJSON.game.sprites item " + data.idIndex + "'.")
                         Bagel.internal.oops(game);
                     }
                 }
@@ -3150,7 +3337,7 @@ Bagel = {
                 for (c in scripts) {
                     if (Bagel.internal.getTypeOf(scripts[c]) != "object") {
                         // TODO: Better error
-                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(game.game.sprites[data.i].scripts.init[c])) + " in ''GameJSON.game.game.sprites' item " + c + " -> scripts.init.");
+                        console.error("Oh no! You need to use the type 'object' to define a script.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(game.game.sprites[data.i].scripts.init[c])) + " in ''GameJSON.game.game.sprites' item " + c + " -> scripts.init.");
                         console.error("Bagel.js hit a critical error, look at the error above for more information.");
                         debugger;
                     }
@@ -3191,7 +3378,7 @@ Bagel = {
                 var c = 0;
                 for (c in scripts) {
                     if (Bagel.internal.getTypeOf(scripts[c]) != "object") {
-                        console.error("Oh no! You need to use the type 'object' to define a script. \nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(game.game.sprites[data.i].scripts.main[c])) + " in ''GameJSON.game.game.sprites' item " + c + " -> scripts.main.");
+                        console.error("Oh no! You need to use the type 'object' to define a script.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(game.game.sprites[data.i].scripts.main[c])) + " in ''GameJSON.game.game.sprites' item " + c + " -> scripts.main.");
                         console.error("data.Bagel.js hit a critical error, look at the error above for more information.");
                         debugger;
                     }
@@ -3317,15 +3504,15 @@ Bagel = {
             if (missing.length > 0) {
                 var message = [];
                 if (missing.length == 1) {
-                    message.push("Oops, looks like you missed this one out from " + JSON.stringify(where) + ": ^-^\n \n");
+                    message.push("Oops, looks like you missed this one out from " + JSON.stringify(where) + ": ^-^\n\n");
                 }
                 else {
-                    message.push("Hmm, looks like you missed these in " + JSON.stringify(where) + ": ^-^\n \n");
+                    message.push("Hmm, looks like you missed these in " + JSON.stringify(where) + ": ^-^\n\n");
                 }
 
                 var i = 0;
                 for (i in missing) {
-                    message.push(" " + missing[i] + " -> " + required[missing[i]].description + " \n");
+                    message.push(" " + missing[i] + " -> " + required[missing[i]].description + "\n");
                 }
 
                 console.error(message.join(""));
@@ -3347,7 +3534,7 @@ Bagel = {
                             message.push(" • " + c + " -> " + required[c].description + "\n You've the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", but it can only be " + Bagel.internal.an(required[c].types[0]) + ".\n");
                         }
                         else {
-                            message.push(" " + c + " -> " + required[c].description + " \n You used the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", it has to be one of these types:\n");
+                            message.push(" " + c + " -> " + required[c].description + "\n You used the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", it has to be one of these types:\n");
                             var a = 0;
                             for (a in required[c].types) {
                                 message.push(" - " + Bagel.internal.an(required[c].types[a]) + "\n");
@@ -3359,7 +3546,7 @@ Bagel = {
                             message.push(" • " + c + " -> " + optional[c].description + "\n You used the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", but it can only be " + Bagel.internal.an(optional[c].types[0]) + ".\n");
                         }
                         else {
-                            message.push(" • " + c + " -> " + optional[c].description + " \n You used the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", it has to be one of these types: \n");
+                            message.push(" • " + c + " -> " + optional[c].description + "\n You used the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", it has to be one of these types:\n");
                             var a = 0;
                             for (a in optional[c].types) {
                                 message.push(" • " + Bagel.internal.an(optional[c].types[a]) + "\n");
@@ -3391,7 +3578,7 @@ Bagel = {
                     }
 
                     message.push("\nIn " + where + "\n");
-                    message.push("\n\nTip: You can disable these sorts of warnings by changing the \"warnOfUselessParameters\" flag. \nUse: \"Bagel.config.flags.warnOfUselessParameters = false\" :).");
+                    message.push("\n\nTip: You can disable these sorts of warnings by changing the \"warnOfUselessParameters\" flag.\nUse: \"Bagel.config.flags.warnOfUselessParameters = false\" :).");
                     console.warn(message.join(""));
                 }
             }
@@ -3832,6 +4019,9 @@ Bagel = {
             }
         }),
         deepClone: (entity) => {
+            if (typeof entity != "object") { // Includes arrays
+                return entity;
+            }
             let newEntity;
             if (Array.isArray(entity)) {
                 newEntity = [];
@@ -3852,12 +4042,44 @@ Bagel = {
                 i++;
             }
             return newEntity;
+        },
+
+        debug: {
+            add: message => {
+                Bagel.internal.debug.queue.push(message);
+            },
+            warn: message => Bagel.internal.debug.add(["warning", message]),
+            log: message => Bagel.internal.debug.add(["log", message]),
+            send: () => {
+                let queue = Bagel.internal.debug.queue;
+                if (queue.length == 0) {
+                    return;
+                }
+                let log = Bagel.internal.debug.log;
+                let stringQueue = JSON.stringify(queue);
+
+                if (! log.includes(stringQueue)) {
+                    log.push(stringQueue);
+                    for (let i in queue) {
+                        let item = queue[i];
+                        if (item[0] == "warning") {
+                            console.warn(item[1]);
+                        }
+                        else {
+                            console.log(item[1]);
+                        }
+                    }
+                }
+                Bagel.internal.debug.queue = [];
+            },
+            queue: [],
+            log: []
         }
     },
     // == Methods ==
 
     check: (args, disableChecks, where, logObject) => {
-        if (! (disableChecks || args.prev)) {
+        if (! (disableChecks || args.prev)) { // TODO: allow subcheck, check etc. arguments
             args = Bagel.check({
                 ob: args,
                 where: where? where : "the check function. (Bagel.check)",
@@ -3901,6 +4123,8 @@ Bagel = {
             }, true, null, true);
         }
 
+        let output = Bagel.internal.debug;
+
         let useless = [];
         let missing = [];
         let wrongTypes = [];
@@ -3915,20 +4139,39 @@ Bagel = {
                 useless.push(argID);
                 continue;
             }
+            if (syntax == "ignore") {
+                continue;
+            }
 
+            let defaulted = false;
             if (syntax.required) {
                 if (! args.ob.hasOwnProperty(argID)) {
                     missing.push(argID);
                 }
             }
             else {
-                if (arg == null) {
+                if (! args.ob.hasOwnProperty(argID)) {
                     args.ob[argID] = syntax.default;
                     arg = args.ob[argID];
+                    defaulted = true;
                 }
             }
-            if (! missing.includes(argID)) {
-                if (! syntax.types.includes(Bagel.internal.getTypeOf(arg))) {
+            if ((! defaulted) && missing.length == 0) {
+                if (syntax.types == null) {
+                    console.error("The syntax for " + args.where + "." + argID + " is missing the \"types\" argument.");
+                    console.log("In " + args.where + ".");
+                    console.log("Object:");
+                    console.log(args.ob);
+                    Bagel.internal.oops(args.game);
+                }
+                if (! ["array", "string"].includes(Bagel.internal.getTypeOf(syntax.types))) {
+                    console.error("The syntax for " + args.where + "." + argID + " has the wrong data type for the \"types\" argument. You used " + Bagel.internal.an(Bagel.internal.getTypeOf(syntax.types)) + ".");
+                    console.log("In " + args.where + ".");
+                    console.log("Object:");
+                    console.log(args.ob);
+                    Bagel.internal.oops(args.game);
+                }
+                if ((! syntax.types.includes(Bagel.internal.getTypeOf(arg))) && syntax.types != "any") {
                     wrongTypes.push(argID);
                 }
             }
@@ -3942,7 +4185,7 @@ Bagel = {
 
         if (useless.length > 0) {
             if (useless.length == 1) {
-                console.warn(
+                output.warn(
                     "Oops, looks like you used an unsupported argument"
                     + (otherErrors? "" : (" in " + args.where))
                     + ": "
@@ -3951,7 +4194,7 @@ Bagel = {
                 );
             }
             else {
-                console.warn(
+                output.warn(
                     "Hmm, looks like you used some unsupported arguments"
                     + (otherErrors? "" : (" in " + args.where))
                     + ":\n  • "
@@ -3971,11 +4214,11 @@ Bagel = {
             else {
                 console.error(
                     "Whelp, looks like you forgot some arguments:\n"
-                    + missing.map((index, item) =>
+                    + missing.map(name =>
                         "  • "
-                        + JSON.stringify(index)
+                        + JSON.stringify(name)
                         + " -> "
-                        + args.syntax[index].description
+                        + args.syntax[name].description
                     ).join("\n")
                 );
             }
@@ -3993,26 +4236,43 @@ Bagel = {
                 );
             }
             else {
-                console.log(wrongTypes)
                 console.error(
                     "Hmm, looks like you got some types wrong:\n"
-                    + wrongTypes.map((index, item) =>
+                    + wrongTypes.map((name, item) =>
                         "  • "
-                        + JSON.stringify(index)
+                        + JSON.stringify(name)
                         + " -> Should be "
-                        + Bagel.internal.list(args.syntax[index].types, "or", true)
+                        + Bagel.internal.list(args.syntax[name].types, "or", true)
                         + ". You used " + Bagel.internal.an(Bagel.internal.getTypeOf(args.ob[wrongTypes[item]])) + "."
                     ).join("\n")
                 );
             }
         }
 
+        if (useless.length + wrongTypes.length != 0) {
+            output.warn(
+                "FYI, these are the arguments:\n"
+                + Object.keys(args.syntax).map(name =>
+                    "  • "
+                    + (args.syntax[name].required? "" : "(optional) ")
+                    + JSON.stringify(name)
+                    + " -> "
+                    + args.syntax[name].description
+                    + "\n  Can use " + Bagel.internal.list(args.syntax[name].types, "or", true)
+                    + "."
+                ).join("\n\n")
+            );
+        }
+
         if (otherErrors) {
-            console.log("In " + args.where + ".");
-            console.log("Object:");
-            console.log(args.ob);
+            output.log("In " + args.where + ".");
+            output.log("Object:");
+            output.log(args.ob);
+
+            output.send();
             Bagel.internal.oops(args.game);
         }
+        output.send();
 
         if (extraChecks.length > 0) {
             for (let i in extraChecks) {
@@ -4027,7 +4287,8 @@ Bagel = {
                                 ob: args.ob[argID][i],
                                 where: isArray? (args.where + "." + argID + " item " + i) : args.where + "." + argID + "." + i,
                                 syntax: syntax.subcheck,
-                                prev: args
+                                prev: args,
+                                prevName: i
                             });
                         }
                     }
@@ -4036,7 +4297,8 @@ Bagel = {
                             ob: args.ob[argID],
                             where: args.where + "." + argID,
                             syntax: args.syntax[argID].subcheck,
-                            prev: args
+                            prev: args,
+                            prevName: argID
                         });
                     }
                 }
@@ -4063,7 +4325,7 @@ Bagel = {
             }
         }
 
-        delete args;
+        //delete args;
         return args.ob;
     },
 
