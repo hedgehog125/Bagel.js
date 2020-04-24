@@ -35,7 +35,7 @@ Bagels = Bagel.init({
                     init: [],
                     main: [
                         {
-                            code: (gameRef, me) => {
+                            code: me => {
                                 me.vars.delay--;
                                 if (me.vars.delay <= 0) {
                                     me.vars.delay = 1;
@@ -43,7 +43,7 @@ Bagels = Bagel.init({
                                     me.clone();
                                 }
 
-                                me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + (Bagels.game.sprites.length - 1);
+                                me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + me.cloneCount;
                             },
                             stateToRun: "Hail the bagel overlords"
                         }
@@ -59,7 +59,7 @@ Bagels = Bagel.init({
                     visible: true,
                     scripts: {
                         init: [
-                            (gameRef, me) => {
+                            me => {
                                 me.visible = true;
                                 me.scale = 0.05;
 
@@ -70,7 +70,7 @@ Bagels = Bagel.init({
                             }
                         ],
                         main: [
-                            (gameRef, me) => {
+                            me => {
                                 //me.vars.distance += 0.1;
 
                                 //me.angle += 0.1;
@@ -79,8 +79,8 @@ Bagels = Bagel.init({
                                 }
                                 //me.x = Bagels.width / 2;
                                 //me.y = Bagels.height / 2;
-                                //me.move(me.vars.distance, me.angle);
-                                me.move(1, me.angle);
+                                //me.move(me.vars.distance);
+                                me.move(1);
 
                                 me.alpha -= 0.0025;
 
