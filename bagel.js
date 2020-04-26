@@ -1,27 +1,26 @@
 /*
 
 TODO:
-Does obArg in sprite methods work?
+Review internal stuff, what's used, what's not needed and what needs rewriting
+Does obArg in sprite methods work? (Needs testing)
 Plugins should be able to make existing methods apply to their sprites
-Update plugin loading so it respects that methods.sprite is now used instead of spriteMethods <=====
-Plugins have widths?!
 Completely rewrite "tick" function
 Update "step" function
 Delete clones on state change
-Deep clone plugin before loading?
+Deep clone plugin before loading? What about the built-in plugin?
 Avoid constantly declaring anonymous functions, declare them and then access them to save resources.
 Do all the functions show their arguments?
 Review cloneArgs[x].syntax, does it have all the check function arguments?
 Steps in other places. Especially listeners
-Should no handler mean it uses defaultFind
-loadPlugin checks should use subcheck <==
+Should no handler mean it uses defaultFind?
+loadPlugin checks should use subcheck <== Done?
 Does subcheck make sure it's an object?
-Use let i in loops (so setting i to 0 isn't needed)
 Nested checking
 How will developers know from the errors that the type name is supposed to be plural?
 When is the sprite description used?
 Finish the TODO descriptions
 Automatic clone recycling?
+String ints in idIndex
 
 */
 
@@ -140,7 +139,7 @@ Bagel = {
 
         // Sprites
         for (let i in game.game.sprites) { // TODO: Temporary
-            let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "GameJSON.game.sprites item " + i);
+            let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "GameJSON.game.sprites item " + i, false, parseInt(i));
         }
 
         if (typeof game.game.scripts.preload == "function") {
@@ -160,7 +159,7 @@ Bagel = {
             // Combine all the plugins into one plugin
             let merge = subFunctions.merge;
             merge.types.assets(game, plugin);
-            merge.types.sprites(game, plugin);
+            merge.types.sprites(game, plugin); // .width
 
             merge.methods.bagel(plugin);
             merge.methods.game(game, plugin);
@@ -493,8 +492,9 @@ Bagel = {
                                         get: "dimensions"
                                     },
                                     scale: {
-                                        set: (sprite, property, game, plugin, triggerSprite) => {
-                                            triggerSprite.width =  + "x";
+                                        set: (sprite, value, property, game, plugin, triggerSprite) => {
+                                            triggerSprite.width = value + "x";
+                                            triggerSprite.height = value + "x";
                                         },
                                         get: (sprite, property, game, plugin) => {
                                             let img = Bagel.get.asset.img(sprite.img);
@@ -596,7 +596,7 @@ Bagel = {
                             canvas: document.createElement("canvas")
                         },
                         ids: [],
-                        IDIndex: {},
+                        idIndex: {},
                         FPSFrames: 0,
                         lastFPSUpdate: new Date(),
                         loadedDelay: 0,
@@ -1703,33 +1703,31 @@ Bagel = {
                                     combined.types.assets[newType].internal = {
                                         plugin: plugin
                                     };
+
+                                    let defaultFind = Bagel.internal.defaultFind;
+                                    // Define the getter function. The function wrapping is so some data can be saved to the function that isn't shared between all of the functions
+                                    ((game, newType, typeJSON) => {
+                                        Bagel.get.asset[typeJSON.get.name] = (id) => {
+                                            Bagel.internal.current.game = game;
+                                            Bagel.internal.current.assetType = newType;
+                                            Bagel.internal.current.assetTypeName = typeJSON.get.name;
+
+                                            let output = typeJSON.get.handler(
+                                                id,
+                                                defaultFind,
+                                                game,
+                                                plugin,
+                                                newType
+                                            );
+
+                                            Bagel.internal.current.game = null;
+                                            Bagel.internal.current.assetType = null;
+                                            Bagel.internal.current.assetTypeName = null;
+
+                                            return output;
+                                        };
+                                    })(game, newType, typeJSON);
                                 }
-
-                                let defaultFind = Bagel.internal.defaultFind;
-
-                                // Define the getter function. The function wrapping is so some data can be saved to the function that isn't shared between all of the functions
-
-                                ((game, newType, typeJSON) => {
-                                    Bagel.get.asset[typeJSON.get.name] = (id) => {
-                                        Bagel.internal.current.game = game;
-                                        Bagel.internal.current.assetType = newType;
-                                        Bagel.internal.current.assetTypeName = typeJSON.get.name;
-
-                                        let output = typeJSON.get.handler(
-                                            id,
-                                            defaultFind,
-                                            game,
-                                            plugin,
-                                            newType
-                                        );
-
-                                        Bagel.internal.current.game = null;
-                                        Bagel.internal.current.assetType = null;
-                                        Bagel.internal.current.assetTypeName = null;
-
-                                        return output;
-                                    };
-                                })(game, newType, typeJSON);
                             }
                         },
                         sprites: (game, plugin) => {
@@ -1782,13 +1780,11 @@ Bagel = {
 
                             for (let methodName in methods) {
                                 let method = methods[methodName];
-
                                 for (let i in method.appliesTo) {
                                     let spriteType = method.appliesTo[i];
                                     let merge = false;
 
                                     let combinedMethods = combined.methods.sprite;
-
                                     if (combinedMethods[spriteType] == null) {
                                         combinedMethods[spriteType] = {};
                                     }
@@ -1912,36 +1908,56 @@ Bagel = {
                     },
                     methods: (sprite, game, parent) => {
                         let handler = game.internal.combinedPlugins.methods.sprite[sprite.type];
-
-                        if (handler == null) {
-                            return;
-                        }
+                        if (handler == null) return;
 
                         for (let methodName in handler) {
                             let method = handler[methodName];
                             // TODO: Can functions overwrite values?
 
-                            ((method, sprite, game) => {
-                                sprite[methodName] = (...args) => {
-                                    let keys = Object.keys(method.args);
-                                    let newArgs = {};
-
-                                    // Convert the array to an object using the keys
-                                    for (let i in args) {
-                                        if (keys[i] == null) {
-                                            keys[i] = "Your " + Bagel.internal.th(parseInt(i)) + " argument";
+                            if (method.obArg) {
+                                ((method, sprite, game) => {
+                                    sprite[methodName] = (args) => {
+                                        if (args == null) {
+                                            console.error("Oops, this function takes one argument: an object. You didn't give any arguments.");
+                                            Bagel.internal.oops(game);
                                         }
-                                        newArgs[keys[i]] = args[i];
-                                    }
+                                        if (Bagel.internal.getTypeOf(args) != "object") {
+                                            console.error("Huh, looks like you used " + Bagel.internal.an(Bagel.internal.getTypeOf(args)) + " instead of an object.");
+                                            Bagel.internal.oops(game);
+                                        }
 
-                                    Bagel.check({
-                                        ob: newArgs,
-                                        syntax: method.args,
-                                        where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
-                                    });
-                                    method.fn(sprite, newArgs, game); // Passed the argument checks
-                                };
-                            })(method, sprite, game);
+                                        Bagel.check({
+                                            ob: args,
+                                            syntax: method.args,
+                                            where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
+                                        });
+                                        method.fn(sprite, newArgs, game); // Passed the argument checks
+                                    };
+                                })(method, sprite, game);
+                            }
+                            else {
+                                ((method, sprite, game) => {
+                                    sprite[methodName] = (...args) => {
+                                        let keys = Object.keys(method.args);
+                                        let newArgs = {};
+
+                                        // Convert the array to an object using the keys
+                                        for (let i in args) {
+                                            if (keys[i] == null) {
+                                                keys[i] = "Your " + Bagel.internal.th(parseInt(i)) + " argument";
+                                            }
+                                            newArgs[keys[i]] = args[i];
+                                        }
+
+                                        Bagel.check({
+                                            ob: newArgs,
+                                            syntax: method.args,
+                                            where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
+                                        });
+                                        method.fn(sprite, newArgs, game); // Passed the argument checks
+                                    };
+                                })(method, sprite, game);
+                            }
                         }
                     },
                     listeners: (sprite, game, parent) => {
@@ -2006,6 +2022,44 @@ Bagel = {
                 },
                 tick: () => {
                     Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
+                }
+            },
+            delete: {
+                layers: (me, game) => {
+                    let renderer = game.internal.renderer;
+                    let layerIndex = renderer.layers.indexOf(me.idIndex);
+                    renderer.layers = renderer.layers.filter((item, index) => index != layerIndex);
+                },
+                scripts: (type, me, game) => {
+                    let scriptIndex = game.internal.scripts.index.sprites[type];
+                    let scripts = me.internal.scripts[type];
+                    for (let i in scripts) {
+                        let script = scripts[i];
+                        scriptIndex[script.state][script.id] = null; // Mark them as null so we know which ones to remove in a minute
+                    }
+
+                    // Remove the nulls
+                    for (i in scriptIndex) {
+                        let removed = 0;
+                        let newScripts = [];
+                        for (let c in scriptIndex[i]) {
+                            let script = scriptIndex[i][c];
+                            if (script == null) { // This will be removed
+                                removed++;
+                            }
+                            else {
+                                script.sprite.internal.scripts[type][script.script].id -= removed; // The id will have changed for anything after a deleted script
+                                newScripts.push(script); // If it's not null, it can stay
+                            }
+                        }
+                        scriptIndex[i] = newScripts;
+                    }
+                },
+                misc: (me, game) => {
+                    game.game.sprites[me.idIndex] = null;
+                    game.internal.idIndex[me.id] = null;
+                    me.parent.cloneCount--;
+                    me.parent.cloneIDs[me.parent.cloneIDs.indexOf(me.id)] = null;
                 }
             }
         },
@@ -2159,7 +2213,7 @@ Bagel = {
         findSpriteID: function(game) {
             for (let i in game.game.sprites) {
                 if (game.game.sprites[i] == null) {
-                    return i;
+                    return parseInt(i);
                 }
             }
             return game.game.sprites.length;
@@ -2452,7 +2506,7 @@ Bagel = {
                 }
             }
         },
-        createSprite: (sprite, game, parent, where, noCheck) => {
+        createSprite: (sprite, game, parent, where, noCheck, idIndex) => {
             let subFunctions = Bagel.internal.subFunctions.createSprite;
 
 
@@ -2478,6 +2532,8 @@ Bagel = {
             // TODO: Function for making all the very core stuff
             sprite.cloneIDs = [];
             sprite.cloneCount = 0;
+            sprite.idIndex = idIndex;
+            game.internal.idIndex[sprite.id] = idIndex;
 
             sprite.debug = {
                 renderTime: 0,
@@ -2506,12 +2562,12 @@ Bagel = {
                     parent.cloneIDs[cloneID] = spriteID;
                     parent.cloneCount++;
 
-                    clone = Bagel.internal.createSprite(clone, game, parent, "the function \"sprite.clone\"");
+                    let spriteIndex = Bagel.internal.findSpriteID(game);
+                    clone = Bagel.internal.createSprite(clone, game, parent, "the function \"sprite.clone\"", false, spriteIndex);
                     clone.cloneID = cloneID; // Declare it after creating it so it's not "useless"
                     clone.parent = parent; // Same here
                     clone.isClone = true;
-
-                    // TODO: add to game.game.sprites. Find a position. <=====
+                    game.game.sprites[spriteIndex] = clone;
 
                     Bagel.internal.current.sprite = clone;
                     for (let i in clone.scripts.init) {
@@ -2521,87 +2577,17 @@ Bagel = {
 
                     return clone;
                 };
+                sprite.delete = () => {
+                    // TODO: check if the required properties are present?
+                    let game = me.game;
+                    let remove = Bagel.internal.subFunctions.delete;
+
+                    remove.layers(me, game);
+                    remove.scripts("init", me, game);
+                    remove.scripts("main", me, game);
+                    remove.misc(me, game);
+                };
             })(sprite);
-            sprite.delete = function() {
-                // TODO: Make it work for sprites not just clones <=====
-                // TODO: Reuse these?
-
-                var me = this;
-                var game = me.game;
-
-                var index = game.internal.renderer.layers.indexOf(me.idIndex);
-                game.internal.renderer.layers[index] = null;
-                game.internal.renderer.layers = game.internal.renderer.layers.filter((item) => item != null);
-
-                var idWas = me.idIndex;
-                game.game.sprites[me.idIndex] = null;
-                game.internal.IDIndex[me.id] = null;
-
-                // Delete the sprite scripts
-                var i = 0;
-                var allScripts = game.internal.scripts.index.sprites.init;
-                var scripts = me.internal.scriptIDs.init;
-                for (i in scripts) {
-                    allScripts[scripts[i].state][scripts[i].id] = null;
-                }
-
-                // Remove the nulls
-                var i = 0;
-                for (i in allScripts) {
-                    var removed = 0;
-                    var newInitScripts = [];
-                    var c = 0;
-                    for (c in allScripts[i]) {
-                        if (allScripts[i][c] == null) {
-                            removed++;
-                        }
-                        else {
-                            newInitScripts.push(allScripts[i][c]);
-                            allScripts[i][c].sprite.internal.scriptIDs.init[allScripts[i][c].script].id -= removed;
-                        }
-                    }
-                    game.internal.scripts.index.sprites.init[i] = newInitScripts;
-                }
-
-                var i = 0;
-                var allScripts = game.internal.scripts.index.sprites.main;
-                var scripts = me.internal.scriptIDs.main;
-                for (i in scripts) {
-                    allScripts[scripts[i].state][scripts[i].id] = null;
-                }
-                // Remove the nulls
-                var i = 0;
-                for (i in allScripts) {
-                    var removed = 0;
-                    var newMainScripts = [];
-                    var c = 0;
-                    for (c in allScripts[i]) {
-                        if (allScripts[i][c] == null) {
-                            removed++;
-                        }
-                        else {
-                            newMainScripts.push(allScripts[i][c]);
-                            allScripts[i][c].sprite.internal.scriptIDs.main[allScripts[i][c].script].id -= removed;
-                        }
-                    }
-                    game.internal.scripts.index.sprites.main[i] = newMainScripts;
-                }
-
-                // Delete my renderer
-
-                if (me.internal.rendererID != null) {
-                    game.internal.renderer.renderers[me.order][me.internal.rendererID] = null;
-                    var newRenderers = [];
-                    var i = 0;
-                    for (i in game.internal.renderer.renderers[me.order]) {
-                        var renderer = game.internal.renderer.renderers[me.order][i];
-                        if (renderer != null) {
-                            newRenderers.push(renderer);
-                        }
-                    }
-                    game.internal.renderer.renderers[me.order] = newRenderers;
-                }
-            };
 
             /*
             if (data.isClone) {
@@ -3690,6 +3676,7 @@ Bagel = {
 
                 if (game.internal.assets.loading == 0) { // game.loading?
                     if (game.state != game.internal.lastState) {
+                        // TODO: delete clones
                         subFunctions.scripts("init", true, game);
                         subFunctions.scripts("init", false, game);
                         game.internal.lastState = game.state;
@@ -3722,7 +3709,7 @@ Bagel = {
                 }
                 for (i in game.internal.scripts.index.sprites.init[game.state]) {
                     let sprite = game.internal.scripts.index.sprites.init[game.state][i].sprite;
-                    Bagel.internal.current.sprite = game.game.sprites[game.internal.IDIndex[sprite.id]]; // What if it's null?
+                    Bagel.internal.current.sprite = game.game.sprites[game.internal.idIndex[sprite.id]]; // What if it's null?
                     let script = sprite.scripts.init[game.internal.scripts.index.sprites.init[game.state][i].script];
 
                     if (sprite.type == "canvas") {
@@ -3748,7 +3735,7 @@ Bagel = {
                     let start = new Date();
 
                     let sprite = game.internal.scripts.index.sprites.main[game.state][i].sprite;
-                    Bagel.internal.current.sprite = game.game.sprites[game.internal.IDIndex[sprite.id]]; // What if it's null?
+                    Bagel.internal.current.sprite = game.game.sprites[game.internal.idIndex[sprite.id]]; // What if it's null?
 
                     if (sprite.type == "canvas") {
                         if (sprite.customRes) {
@@ -4345,13 +4332,13 @@ Bagel = {
                 Bagel.internal.oops(null);
                 return;
             }
-            if (game.internal.IDIndex[id] == null) {
+            if (game.internal.idIndex[id] == null) {
                 // TODO: Review error
                 console.error("Ah, a problem occured while getting a sprite. There's no sprite with the ID " + JSON.stringify(id) + ".");
                 Bagel.internal.oops(game);
                 return;
             }
-            return game.game.sprites[game.internal.IDIndex[id]];
+            return game.game.sprites[game.internal.idIndex[id]];
         }
     },
     playSound: (id) => {
