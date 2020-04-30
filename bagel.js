@@ -1,6 +1,20 @@
 /*
 
 TODO:
+Sounds and autoPlaySounds error
+Do sounds work?
+
+PERFORMANCE
+Prescale images on canvases?
+Disable alpha?
+Clear the canvas more efficiently?
+Automatic clone recycling?
+
+"null" for sprite.img, does it crash?
+Tidy up unused properties and code. Don't forget renderers
+Value argument in getters
+Layers doesn't have anything in
+Sounds
 Review internal stuff, what's used, what's not needed and what needs rewriting
 Does obArg in sprite methods work? (Needs testing)
 Plugins should be able to make existing methods apply to their sprites
@@ -15,12 +29,10 @@ Steps in other places. Especially listeners
 Should no handler mean it uses defaultFind?
 loadPlugin checks should use subcheck <== Done?
 Does subcheck make sure it's an object?
-Nested checking
+Nested checking (make sure it's used everywhere)
 How will developers know from the errors that the type name is supposed to be plural?
 When is the sprite description used?
 Finish the TODO descriptions
-Automatic clone recycling?
-String ints in idIndex
 
 */
 
@@ -366,9 +378,9 @@ Bagel = {
                             cloneArgs: {
                                 id: {
                                     syntax: {
-                                        description: "The id for the clone to be targeted by. Defaults to the parent's name followed by a hashtag and then the lowest number starting from 0 that hasn't already been used.",
-                                        required: false
-                                    }
+                                        description: "The id for the clone to be targeted by. Defaults to the parent's name followed by a hashtag and then the lowest number starting from 0 that hasn't already been used."
+                                    },
+                                    mode: "replace"
                                 },
                                 vars: {
                                     syntax: {
@@ -449,6 +461,18 @@ Bagel = {
                                         description: "Determines if the clone is visible or not."
                                     },
                                     mode: "replace"
+                                },
+                                alpha: {
+                                    syntax: {
+                                        description: "The alpha of the sprite. 1 = Fully visible. 0 = Invisible."
+                                    },
+                                    mode: "replace"
+                                },
+                                angle: {
+                                    syntax: {
+                                        description: "The angle of the clone. In degrees. 0º = up. 180º = down. -90º = left. 90º = right."
+                                    },
+                                    mode: "replace"
                                 }
                             },
                             listeners: {
@@ -471,7 +495,7 @@ Bagel = {
 
                                         if (typeof value == "string") {
                                             if (value.includes("x")) {
-                                                let scale = parseInt(value.split("x")[0]);
+                                                let scale = parseFloat(value.split("x")[0]);
 
                                                 sprite[property] = Bagel.get.asset.img(triggerSprite.img)[property] * scale;
                                             }
@@ -514,8 +538,37 @@ Bagel = {
 
                             },
                             render: { // How do I render this type?
-                                ctx: (sprite, ctx, canvas, game, plugin) => {
+                                ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
+                                    sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
+                                    ctx.globalAlpha = sprite.alpha;
 
+                                    let flipX = sprite.width >= 0? 1 : -1;
+                                    let flipY = sprite.height >= 0? 1 : -1;
+                                    scaleX = scaleX * flipX;
+                                    scaleY = scaleY * flipY;
+                                    ctx.scale(scaleX, scaleY);
+
+                                    let halfWidth = sprite.width / 2;
+                                    let halfHeight = sprite.height / 2;
+                                    if (sprite.angle == 90 && false) { // Don't rotate if we don't need to. TODO: test
+                                        ctx.globalAlpha = sprite.alpha;
+                                        ctx.drawImage(game.internal.assets.assets.imgs[sprite.img].img, sprite.x - halfWidth, sprite.y - halfHeight, sprite.width, sprite.height);
+                                    }
+                                    else { // TODO: fix
+                                        let img = game.internal.assets.assets.imgs[sprite.img].img;
+                                        let angle = Bagel.maths.degToRad(sprite.angle - 90);
+                                        let x = sprite.x;
+                                        let y = sprite.y;
+
+                                        ctx.translate(x, y);
+                                        ctx.rotate(angle);
+                                        ctx.drawImage(img, -halfWidth, -halfHeight, sprite.width, sprite.height);
+
+                                        ctx.rotate(-angle);
+                                        ctx.translate(-x, -y);
+                                    }
+                                    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
+                                    ctx.globalAlpha = 1;
                                 },
                                 // webgl: (sprite, ctx, canvas, game, plugin)...
                             }
@@ -551,7 +604,7 @@ Bagel = {
                                 if (args.angle == null) {
                                     args.angle = me.angle;
                                 }
-                                let rad = Bagel.maths.degToRad(me.angle - 90);
+                                let rad = Bagel.maths.degToRad(me.angle + 90);
                                 me.x += Math.cos(rad) * args.amount;
                                 me.y += Math.sin(rad) * args.amount;
                             }
@@ -593,7 +646,8 @@ Bagel = {
                                 high: [],
                                 low: []
                             },
-                            canvas: document.createElement("canvas")
+                            canvas: document.createElement("canvas"),
+                            ratio: game.width / game.height
                         },
                         ids: [],
                         idIndex: {},
@@ -722,9 +776,14 @@ Bagel = {
                                 default: {},
                                 types: ["object"],
                                 description: "Very hush hush. (Contains stuff that Bagel.js needs to make the game work)"
+                            },
+                            vars: {
+                                required: false,
+                                default: {},
+                                types: ["object"],
+                                description: "Can be used to store variables for the game."
                             }
-                        },
-                        game: game
+                        }
                     });
 
                     /*
@@ -872,128 +931,130 @@ Bagel = {
                         }
                     };
 
-                    addEventListener("mousemove", function(context) {
-                        let rect = game.internal.renderer.canvas.getBoundingClientRect();
+                    (game => {
+                        addEventListener("mousemove", ctx => {
+                            let canvas = game.internal.renderer.canvas;
+                            let rect = canvas.getBoundingClientRect();
+                            let mouse = game.input.mouse;
 
-                        game.input.mouse.x = Math.round(((context.clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width);
-                        game.input.mouse.y = Math.round(((context.clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height);
-                    }, false);
-                    addEventListener("mousedown", function(context) {
-                        Bagel.device.is.touchscreen = false;
+                            mouse.x = ((ctx.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                            mouse.y = ((ctx.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                        }, false);
+                        addEventListener("mousedown", ctx => {
+                            Bagel.device.is.touchscreen = false;
+                            game.input.mouse.down = true;
+                        }, false);
+                        addEventListener("mouseup", ctx => {
+                            game.input.mouse.down = false;
+                        }, false);
+                        addEventListener("touchstart", ctx => {
+                            Bagel.device.is.touchscreen = true;
 
-                        Bagel.internal.autoplaySounds();
+                            let canvas = game.internal.renderer.canvas;
+                            let rect = canvas.getBoundingClientRect();
+                            let mouse = game.input.mouse;
 
-                        game.input.mouse.down = true;
-                    }, false);
-                    addEventListener("mouseup", function(context) {
-                        Bagel.internal.autoplaySounds();
+                            if (ctx.touches == null) {
+                                mouse.x = ((ctx.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                                mouse.y = ((ctx.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                game.input.touches = [
+                                    {
+                                        x: game.input.mouse.x,
+                                        y: game.input.mouse.y
+                                    }
+                                ];
+                            }
+                            else {
+                                mouse.x = ((ctx.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                                mouse.y = ((ctx.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
 
-                        game.input.mouse.down = false;
-                    }, false);
-                    addEventListener("touchstart", function(context) {
-                        Bagel.device.is.touchscreen = true;
-
-                        let rect = game.internal.renderer.canvas.getBoundingClientRect();
-
-                        if (context.touches == null) {
-                            game.input.mouse.x = Math.round(((context.clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width);
-                            game.input.mouse.y = Math.round(((context.clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height);
-                            game.input.touches = [
-                                {
-                                    x: game.input.mouse.x,
-                                    y: game.input.mouse.y
+                                game.input.touches = [];
+                                for (let i in context.touches) {
+                                    game.input.touches.push({
+                                        x: ((ctx.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
+                                        y: ((ctx.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
+                                    });
                                 }
-                            ];
-                        }
-                        else {
-                            game.input.mouse.x = Math.round(((context.touches[0].clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width);
-                            game.input.mouse.y = Math.round(((context.touches[0].clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height);
+                            }
+                            Bagel.internal.autoplaySounds();
+
+                            mouse.down = true;
+                            context.preventDefault();
+                        }, false);
+                        addEventListener("touchmove", ctx => {
+                            Bagel.device.is.touchscreen = true;
+
+                            let canvas = game.internal.renderer.canvas;
+                            let rect = canvas.getBoundingClientRect();
+                            let mouse = game.input.mouse;
+
+                            if (ctx.touches == null) {
+                                mouse.x = ((ctx.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                                mouse.y = ((ctx.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                game.input.touches = [
+                                    {
+                                        x: mouse.x,
+                                        y: mouse.y
+                                    }
+                                ];
+                            }
+                            else {
+                                mouse.x = ((ctx.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                                mouse.y = ((ctx.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+
+                                game.input.touches = [];
+                                for (let i in context.touches) {
+                                    game.input.touches.push({
+                                        x: ((ctx.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
+                                        y: ((ctx.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
+                                    });
+                                }
+                            }
+
+                            mouse.down = true;
+                            context.preventDefault();
+                        }, false);
+                        addEventListener("touchend", (ctx) => {
+                            Bagel.device.is.touchscreen = true;
 
                             game.input.touches = [];
-                            for (let i in context.touches) {
-                                game.input.touches.push({
-                                    x: Math.round(((context.touches[i].clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width),
-                                    y: Math.round(((context.touches[i].clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height)
-                                });
-                            }
-                        }
-                        Bagel.internal.autoplaySounds();
+                            Bagel.internal.autoplaySounds();
 
-                        game.input.mouse.down = true;
-                        context.preventDefault();
-                    }, false);
-                    addEventListener("touchmove", (ctx) => {
-                        Bagel.device.is.touchscreen = true;
-
-                        let rect = game.internal.renderer.canvas.getBoundingClientRect();
-
-                        if (context.touches == null) {
-                            game.input.mouse.x = Math.round(((ctx.clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width);
-                            game.input.mouse.y = Math.round(((ctx.clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height);
-                            game.input.touches = [
-                                {
-                                    x: game.input.mouse.x,
-                                    y: game.input.mouse.y
-                                }
-                            ];
-                        }
-                        else {
-                            game.input.mouse.x = Math.round(((ctx.touches[0].clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width);
-                            game.input.mouse.y = Math.round(((ctx.touches[0].clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height);
-
-                            game.input.touches = [];
-                            for (let i in context.touches) {
-                                game.input.touches.push({
-                                    x: Math.round(((context.touches[i].clientX - rect.left) / (game.internal.renderer.canvas.width / window.devicePixelRatio)) * game.width),
-                                    y: Math.round(((context.touches[i].clientY  - rect.top) / (game.internal.renderer.canvas.height / window.devicePixelRatio)) * game.height)
-                                });
-                            }
-                        }
-                        Bagel.internal.autoplaySounds();
-
-                        game.input.mouse.down = true;
-                        context.preventDefault();
-                    }, false);
-                    addEventListener("touchend", (ctx) => {
-                        Bagel.device.is.touchscreen = true;
-
-                        game.input.touches = [];
-                        Bagel.internal.autoplaySounds();
-
-                        game.input.mouse.down = false;
-                        context.preventDefault();
-                    }, false);
-                    document.addEventListener("keydown", (ctx) => {
-                        for (let i in Bagel.internal.games) {
-                            let game = Bagel.internal.games[i];
-                            game.input.keys.keys[ctx.keyCode] = true;
-                        }
-                    }, false);
-                    document.addEventListener("keyup", (ctx) => {
-                        for (let i in Bagel.internal.games) {
-                            let game = Bagel.internal.games[i];
-                            game.input.keys.keys[ctx.keyCode] = false;
-                        }
-                    }, false);
-
-                    document.addEventListener("readystatechange", () => {
-                        if (document.readyState == "complete") { // Wait for the document to load
+                            game.input.mouse.down = false;
+                            context.preventDefault();
+                        }, false);
+                        document.addEventListener("keydown", (ctx) => {
                             for (let i in Bagel.internal.games) {
                                 let game = Bagel.internal.games[i];
-                                if (game.htmlElementID == null) {
-                                    if (document.body != null) {
-                                        document.body.appendChild(game.internal.renderer.canvas);
+                                game.input.keys.keys[ctx.keyCode] = true;
+                            }
+                        }, false);
+                        document.addEventListener("keyup", (ctx) => {
+                            for (let i in Bagel.internal.games) {
+                                let game = Bagel.internal.games[i];
+                                game.input.keys.keys[ctx.keyCode] = false;
+                            }
+                        }, false);
+
+                        document.addEventListener("readystatechange", () => {
+                            if (document.readyState == "complete") { // Wait for the document to load
+                                for (let i in Bagel.internal.games) {
+                                    let game = Bagel.internal.games[i];
+                                    if (game.htmlElementID == null) {
+                                        if (document.body != null) {
+                                            document.body.appendChild(game.internal.renderer.canvas);
+                                        }
+                                        else {
+                                            document.appendChild(game.internal.renderer.canvas);
+                                        }
                                     }
                                     else {
-                                        document.appendChild(game.internal.renderer.canvas);
+                                        document.getElementById(game.htmlElementID).appendChild(game.internal.renderer.canvas);
                                     }
                                 }
-                                else {
-                                    document.getElementById(game.htmlElementID).appendChild(game.internal.renderer.canvas);
-                                }
                             }
-                        }
-                    });
+                        });
+                    })(game);
                 },
                 misc: (game) => {
                     game.loaded = false;
@@ -1007,8 +1068,9 @@ Bagel = {
                     game.internal.renderer.ctx.imageSmoothingEnabled = false;
                     game.internal.renderer.canvas.width = game.width;
                     game.internal.renderer.canvas.height = game.height;
-                    if (game.config.display.fillScreen) {
+                    if (game.config.display.mode == "fill") {
                         game.internal.renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); position: absolute; top:0; bottom: 0; left: 0; right: 0; margin: auto;"; // CSS from Phaser (https://phaser.io)
+                        Bagel.internal.scaleCanvas(game);
                     }
                     else {
                         game.internal.renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);" ;// CSS from Phaser (https://phaser.io)
@@ -1706,27 +1768,28 @@ Bagel = {
 
                                     let defaultFind = Bagel.internal.defaultFind;
                                     // Define the getter function. The function wrapping is so some data can be saved to the function that isn't shared between all of the functions
-                                    ((game, newType, typeJSON) => {
+                                    ((newType, typeJSON) => {
                                         Bagel.get.asset[typeJSON.get.name] = (id) => {
-                                            Bagel.internal.current.game = game;
-                                            Bagel.internal.current.assetType = newType;
-                                            Bagel.internal.current.assetTypeName = typeJSON.get.name;
+                                            let current = Bagel.internal.current;
+                                            let assetTypeWas = current.assetType;
+                                            let assetTypeNameWas = current.assetTypeName;
+
+                                            current.assetType = newType;
+                                            current.assetTypeName = typeJSON.get.name;
 
                                             let output = typeJSON.get.handler(
                                                 id,
                                                 defaultFind,
-                                                game,
+                                                current.game,
                                                 plugin,
                                                 newType
                                             );
 
-                                            Bagel.internal.current.game = null;
-                                            Bagel.internal.current.assetType = null;
-                                            Bagel.internal.current.assetTypeName = null;
-
+                                            current.assetType = assetTypeWas;
+                                            current.assetTypeName = assetTypeNameWas;
                                             return output;
                                         };
-                                    })(game, newType, typeJSON);
+                                    })(newType, typeJSON);
                                 }
                             }
                         },
@@ -1851,7 +1914,6 @@ Bagel = {
                             }
                         }
                     }
-
                     // TODO: run the other checks
                     const typeSyntax = {
                         type: {
@@ -1860,16 +1922,15 @@ Bagel = {
                             description: "The type of sprite."
                         }
                     };
-
-                    return Bagel.check({
+                    let banana = Bagel.check({
                         ob: sprite,
                         where: where,
                         syntax: {
                             ...(parent? handler.internal.cloneSyntax : handler.args),
                             ...typeSyntax
-                        },
-                        game: game
+                        }
                     });
+                    return banana;
                 },
                 register: {
                     scripts: (type, sprite, game, parent) => {
@@ -1954,7 +2015,7 @@ Bagel = {
                                             syntax: method.args,
                                             where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
                                         });
-                                        method.fn(sprite, newArgs, game); // Passed the argument checks
+                                        return method.fn(sprite, newArgs, game); // Passed the argument checks
                                     };
                                 })(method, sprite, game);
                             }
@@ -2004,13 +2065,14 @@ Bagel = {
                     if (scripts == null) { // No scripts
                         return;
                     }
-
                     for (let i in scripts) {
                         let scriptInfo = scripts[i];
+                        if (scriptInfo == null) continue;
 
                         let sprite = scriptInfo.sprite;
                         Bagel.internal.current.sprite = sprite;
                         let script = sprite.scripts[type][scriptInfo.script];
+
                         if (sprite.isClone) {
                             script(sprite, game, Bagel.step);
                         }
@@ -2018,7 +2080,36 @@ Bagel = {
                             script.code(sprite, game, Bagel.step);
                         }
                     }
-                    Bagel.internal.current.sprite = null;
+                },
+                render: game => {
+                    let renderer = game.internal.renderer;
+                    let canvas = renderer.canvas;
+                    let ctx = renderer.ctx;
+
+                    let scaleX = canvas.width / game.width;
+                    let scaleY = canvas.height / game.height;
+
+                    let layers = renderer.layers;
+                    let handlers = game.internal.combinedPlugins.types.sprites;
+
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    for (let spriteIndex in layers) {
+                        let sprite = game.game.sprites[layers[spriteIndex]];
+                        let handler = handlers[sprite.type];
+
+                        if (sprite.visible) {
+                            handler.render.ctx(
+                                sprite,
+                                ctx,
+                                canvas,
+                                game,
+                                handler.internal.plugin,
+                                scaleX,
+                                scaleY
+                            );
+                        }
+                    }
                 },
                 tick: () => {
                     Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
@@ -2126,8 +2217,7 @@ Bagel = {
             Bagel.check({
                 ob: asset,
                 where: "GameJSON.game.assets." + type + " item " + i,
-                syntax: assetLoader.args,
-                game: game
+                syntax: assetLoader.args
             }); // TODO
             let error = assetLoader.check(asset, game, Bagel.internal.check, Bagel.internal.standardChecks.asset, plugin, i);
             if (error) {
@@ -2144,6 +2234,9 @@ Bagel = {
                 assets.assets[type][game.game.assets[type][i].id] = asset;
                 assets.loaded++;
                 assets.loading--;
+                if (assets.loading == 0) {
+                    game.loaded = true;
+                }
             }
             let assetOb = assetLoader.init(asset, loaded, game, assetLoader.internal.plugin, i);
 
@@ -2509,10 +2602,11 @@ Bagel = {
         createSprite: (sprite, game, parent, where, noCheck, idIndex) => {
             let subFunctions = Bagel.internal.subFunctions.createSprite;
 
+            // TODO: current.game is changed somewhere in here
 
             if (! noCheck) {
                 sprite.type = sprite.type == null? game.internal.combinedPlugins.defaults.sprites.type : sprite.type; // If the sprite type isn't specified, default to default agreed by the plugins
-                sprite = subFunctions.check(sprite, game, parent, where);
+                sprite = subFunctions.check(sprite, game, parent, where); // TODO: it's changed here
             }
             sprite.internal = {
                 scripts: {
@@ -2528,12 +2622,13 @@ Bagel = {
             register.methods(sprite, game, parent);
             register.listeners(sprite, game, parent);
 
-
             // TODO: Function for making all the very core stuff
             sprite.cloneIDs = [];
             sprite.cloneCount = 0;
+            sprite.isClone = (!! parent);
             sprite.idIndex = idIndex;
             game.internal.idIndex[sprite.id] = idIndex;
+            game.internal.renderer.layers.push(idIndex);
 
             sprite.debug = {
                 renderTime: 0,
@@ -2544,10 +2639,10 @@ Bagel = {
                 }
             };
             sprite.game = game;
-            ((me) => {
-                sprite.clone = (clone) => {
+            (me => {
+                sprite.clone = clone => {
                     let parent = me;
-                    let game = sprite.game;
+                    let game = parent.game;
                     clone = clone? clone : {};
 
                     let cloneID = Bagel.internal.findCloneID(parent, game);
@@ -2564,9 +2659,9 @@ Bagel = {
 
                     let spriteIndex = Bagel.internal.findSpriteID(game);
                     clone = Bagel.internal.createSprite(clone, game, parent, "the function \"sprite.clone\"", false, spriteIndex);
+
                     clone.cloneID = cloneID; // Declare it after creating it so it's not "useless"
                     clone.parent = parent; // Same here
-                    clone.isClone = true;
                     game.game.sprites[spriteIndex] = clone;
 
                     Bagel.internal.current.sprite = clone;
@@ -2574,6 +2669,7 @@ Bagel = {
                         clone.scripts.init[i](clone, game, Bagel.step);
                     }
                     Bagel.internal.current.sprite = parent;
+
 
                     return clone;
                 };
@@ -3674,6 +3770,7 @@ Bagel = {
                 let game = Bagel.internal.games[i];
                 Bagel.internal.current.game = game;
 
+                Bagel.internal.scaleCanvas(game);
                 if (game.internal.assets.loading == 0) { // game.loading?
                     if (game.state != game.internal.lastState) {
                         // TODO: delete clones
@@ -3684,9 +3781,18 @@ Bagel = {
 
                     subFunctions.scripts("main", true, game);
                     subFunctions.scripts("main", false, game);
+                    subFunctions.render(game);
                 }
                 else {
                     // TODO: Loading logic
+                }
+
+                game.internal.FPSFrames++;
+                let now = new Date();
+                if (now - game.internal.lastFPSUpdate >= 1000) {
+                    game.currentFPS = game.internal.FPSFrames;
+                    game.internal.FPSFrames = 0;
+                    game.internal.lastFPSUpdate = now;
                 }
             }
             Bagel.internal.current.game = null;
@@ -3773,6 +3879,37 @@ Bagel = {
             Bagel.internal.current.sprite = null;
             Bagel.internal.current.game = null;
 
+        },
+        scaleCanvas: (game) => {
+            let width = window.innerWidth;
+            let height = window.innerHeight;
+            let ratio = game.internal.renderer.ratio;
+            let wHeight = width / ratio;
+            if (height > wHeight) {
+                height = wHeight;
+            }
+            else {
+                if (height != wHeight) { // TODO: test
+                    width = height * ratio;
+                }
+            }
+            width *= window.devicePixelRatio;
+            height *= window.devicePixelRatio;
+
+
+            let renderer = game.internal.renderer;
+            let canvas = renderer.canvas;
+            if (canvas.width != width || canvas.height != height || true) {
+                canvas.width = width;
+                canvas.height = height;
+
+                canvas.style.removeProperty("width");
+                canvas.style.setProperty("width", (width / window.devicePixelRatio) + "px", "important");
+                canvas.style.removeProperty("height");
+                canvas.style.setProperty("height", (height / window.devicePixelRatio) + "px", "important");
+
+                renderer.ctx.imageSmoothingEnabled = false; // It's reset when the canvas is resized
+            }
         },
         render: {
             vars: {
@@ -4041,7 +4178,7 @@ Bagel = {
                 if (queue.length == 0) {
                     return;
                 }
-                let log = Bagel.internal.debug.log;
+                let log = Bagel.internal.debug.logList;
                 let stringQueue = JSON.stringify(queue);
 
                 if (! log.includes(stringQueue)) {
@@ -4059,12 +4196,13 @@ Bagel = {
                 Bagel.internal.debug.queue = [];
             },
             queue: [],
-            log: []
+            logList: []
         }
     },
     // == Methods ==
 
     check: (args, disableChecks, where, logObject) => {
+        // TODO: is where needed?
         if (! (disableChecks || args.prev)) { // TODO: allow subcheck, check etc. arguments
             args = Bagel.check({
                 ob: args,
@@ -4104,9 +4242,11 @@ Bagel = {
                         types: ["object"],
                         description: "The game object. Optional if this is being run in a script."
                     }
-                },
-                game: Bagel.internal.current.game
+                }
             }, true, null, true);
+        }
+        if (! args.hasOwnProperty("game")) {
+            args.game = Bagel.internal.current.game;
         }
 
         let output = Bagel.internal.debug;
@@ -4324,11 +4464,11 @@ Bagel = {
         asset: {},
         sprite: (id, game) => {
             if (game == null) {
-                let game = Bagel.internal.current.game;
+                game = Bagel.internal.current.game;
             }
             if (game == null) {
                 // TODO: Review error
-                console.error("Oops. Looks like you're tryimg to run this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
+                console.error("Oops. Looks like you're trying to run this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
                 Bagel.internal.oops(null);
                 return;
             }
@@ -4341,6 +4481,7 @@ Bagel = {
             return game.game.sprites[game.internal.idIndex[id]];
         }
     },
+    /*
     playSound: (id) => {
             // TODO: Test for game
             // TODO: Test for ID
@@ -4356,10 +4497,11 @@ Bagel = {
                 game.internal.soundsToPlay.push(id);
             }
         },
+    */
     maths: {
             radToDeg: (rad) => (rad * 180) / Math.PI,
             degToRad: (deg) => deg * (Math.PI / 180),
-            getDirection: (x1, y1, x2, y2) => Bagel.maths.radToDeg(Math.atan2(y2 - y1, x2 - x1)) + 90, // gist.github.com/conorbuck/2606166
+            getDirection: (x1, y1, x2, y2) => Bagel.maths.radToDeg(Math.atan2(y2 - y1, x2 - x1)) - 90, // gist.github.com/conorbuck/2606166
             getDistance: (x1, y1, x2, y2) => Math.sqrt(Math.pow(Math.abs(x2 - x1), 2) + Math.pow(Math.abs(y2 - y1), 2)) // a2 + b2 = c2
         },
     step: (id) => {
