@@ -1,6 +1,13 @@
 /*
 
 TODO:
+Create functions from plugins in games and Bagel.
+Plugin argument in custom functions
+The 3 types of functions
+3rd argument in get functions should make it return false instead of an error if it doesn't exist
+Non-internal createSprite. Make sure init scripts run when the scripts are set to game.state!
+.delete for sprites
+Reserved ids for plugins
 Sounds and autoPlaySounds error
 Do sounds work?
 
@@ -10,6 +17,7 @@ Disable alpha?
 Clear the canvas more efficiently?
 Automatic clone recycling?
 
+Allow loading of other plugins
 "null" for sprite.img, does it crash?
 Tidy up unused properties and code. Don't forget renderers
 Value argument in getters
@@ -33,6 +41,8 @@ Nested checking (make sure it's used everywhere)
 How will developers know from the errors that the type name is supposed to be plural?
 When is the sprite description used?
 Finish the TODO descriptions
+Handling of two plugins with the same ids
+id or ID in descriptions?
 
 */
 
@@ -51,6 +61,7 @@ Bagel = {
         subFunctions.scripts(game);
         subFunctions.plugins(game);
         subFunctions.assets(game);
+        subFunctions.methods(game);
 
         /*
         var i = 0;
@@ -154,7 +165,7 @@ Bagel = {
             let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "GameJSON.game.sprites item " + i, false, parseInt(i));
         }
 
-        if (typeof game.game.scripts.preload == "function") {
+        if (game.game.scripts.preload != null) {
             game.game.scripts.preload(game);
         }
 
@@ -165,17 +176,16 @@ Bagel = {
     internal: {
         loadPlugin: (plugin, game, args) => {
             let subFunctions = Bagel.internal.subFunctions.loadPlugin;
+            plugin = Bagel.internal.deepClone(plugin); // Create a copy of the plugin
 
             subFunctions.check(game, plugin);
 
             // Combine all the plugins into one plugin
             let merge = subFunctions.merge;
             merge.types.assets(game, plugin);
-            merge.types.sprites(game, plugin); // .width
+            merge.types.sprites(game, plugin);
 
-            merge.methods.bagel(plugin);
-            merge.methods.game(game, plugin);
-            merge.methods.sprite(game, plugin);
+            merge.methods(game, plugin);
         },
         plugin: { // The built-in plugin
             info: {
@@ -580,7 +590,103 @@ Bagel = {
 
                 methods: {
                     bagel: {},
-                    game: {},
+                    game: {
+                        playSound: {
+                            obArg: false,
+                            args: {
+                                id: {
+                                    required: true,
+                                    types: ["string"],
+                                    description: "The ID of the sound to play."
+                                },
+                                loop: {
+                                    required: false,
+                                    default: false,
+                                    types: ["boolean"],
+                                    description: "If the audio should loop or not."
+                                },
+                                startTime: {
+                                    required: false,
+                                    default: 0,
+                                    types: ["number"],
+                                    description: "The starting time for the audio in seconds."
+                                }
+                            },
+                            fn: (me, args, game, plugin) => {
+                                let snd = Bagel.get.asset.snd(args.id, game).snd;
+
+                                snd.currentTime = args.startTime;
+                                if (! plugin.vars.audio.autoPlay) { // Wait for an unmute instead of treating every input as one
+                                    let promise = snd.play();
+                                    if (promise != null) {
+                                        promise.then(() => { // Autoplay worked
+                                            plugin.vars.audio.autoPlay = true;
+                                        }).catch(() => { // Nope. Prompt the user
+                                            // TODO: create unmute button
+                                            plugin.vars.audio.autoPlay = false;
+                                            if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
+                                                if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
+                                                    // Create one instead
+                                                    // TODO: how does it handle state changes?
+                                                    game.add.asset.img({
+                                                        id: ".Internal.unmuteButtonMuted",
+                                                        src: "TODO"
+                                                    }, "plugin Internal, function game.playSound"); // Load its image
+                                                    game.add.asset.img({
+                                                        id: ".Internal.unmuteButton",
+                                                        src: "TODO"
+                                                    }, "plugin Internal, function game.playSound"); // Load its image
+
+                                                    game.add.sprite({
+                                                        id: ".Internal.unmute", // We can use this as we're that plugin
+                                                        type: "sprite",
+                                                        img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
+                                                        scripts: {
+                                                            main: [
+                                                                {
+                                                                    code: (me, game) => {
+                                                                        let vars = me.vars.plugin.vars;
+                                                                        // TODO: animations?
+                                                                        if (me.touchingMouse()) {
+                                                                            if (game.input.mouse.down) { // TODO: wait for release?
+                                                                                for (let i in vars.audio.queue) {
+                                                                                    let snd = vars.audio.queue[i];
+                                                                                    snd.play().then().catch(() => alert("TODO")); // Play it
+                                                                                }
+                                                                                vars.autoPlay = true;
+                                                                                vars.audio.queue = []; // Clear the queue
+                                                                                me.img = ".Internal.unmute"; // Change to the unmuted image
+                                                                            }
+                                                                        }
+                                                                        else {
+                                                                            if (vars.audio.autoPlay) { // Unmuted
+                                                                                // TODO: animation
+                                                                                me.delete(); // Bye
+                                                                            }
+                                                                        }
+                                                                        // TODO: remove once autoPlay is enabled <==========================
+                                                                    },
+                                                                    stateToRun: game.state // Runs immediately
+                                                                }
+                                                            ]
+                                                        },
+                                                        vars: {
+                                                            plugin: plugin
+                                                        },
+                                                        x: me => game.width - me.width,
+                                                        y: me => game.height - me.height,
+                                                        width: Math.min(game.width, game.height) / 50, // Review. Is this the right size? TODO
+                                                        height: Math.min(game.width, game.height) / 50
+                                                    }, "plugin Internal, function game.playSound"); // TODO: use the defaults to allow skipping of checking
+                                                }
+                                                plugin.vars.audio.queue.push(args.id);
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    },
                     sprite: {
                         move: {
                             appliesTo: [
@@ -615,6 +721,12 @@ Bagel = {
                     init: [],
                     main: [],
                     steps: {}
+                },
+                vars: {
+                    audio: {
+                        autoPlay: true, // We probably don't have it but assume we do for now
+                        queue: []
+                    }
                 }
             }
         },
@@ -1830,6 +1942,7 @@ Bagel = {
                             }
                         }
                     },
+                    /*
                     methods: {
                         bagel: (plugin) => {
 
@@ -1865,7 +1978,76 @@ Bagel = {
                                     }
                                     if (merge) {
                                         // TODO: What locals are needed?
+                                        method.internal = {
+                                            plugin: plugin
+                                        };
                                         combinedMethods[spriteType][methodName] = method;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    */
+                    methods: (game, plugin) => {
+                        let combined = game.internal.combinedPlugins;
+
+                        let types = ["bagel", "game", "sprite"];
+                        for (i in types) {
+                            let type = types[i];
+                            let methods = plugin.plugin.methods[type];
+
+                            for (let methodName in methods) {
+                                let method = methods[methodName];
+                                let appliesTo = type == "sprite"? method.appliesTo : [null]; // Only needed for sprites
+                                for (let i in appliesTo) {
+                                    let spriteType = appliesTo[i];
+                                    let merge = false;
+
+                                    let combinedMethods = combined.methods[type];
+                                    if (spriteType != null) {
+                                        if (combinedMethods[spriteType] == null) {
+                                            combinedMethods[spriteType] = {};
+                                        }
+                                    }
+
+                                    if (spriteType == null) {
+                                        if (combinedMethods[methodName] == null) {
+                                            merge = true;
+                                        }
+                                        else {
+                                            if (method.overwrite) {
+                                                merge = true;
+                                            }
+                                            else {
+                                                console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(methodName) + " " + type + " method without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older method, add this to the new method JSON: \"overwrite: true\".");
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        if (combinedMethods[spriteType][methodName] == null) {
+                                            merge = true;
+                                        }
+                                        else {
+                                            if (method.overwrite) {
+                                                merge = true;
+                                            }
+                                            else {
+                                                console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(methodName) + " method for the " + spriteType + " type without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older method, add this to the new method JSON: \"overwrite: true\".");
+                                            }
+                                        }
+                                    }
+
+                                    if (merge) {
+                                        // TODO: What locals are needed?
+                                        method.internal = {
+                                            plugin: plugin
+                                        };
+                                        if (spriteType == null) {
+                                            combinedMethods[methodName] = method;
+                                        }
+                                        else {
+                                            combinedMethods[spriteType][methodName] = method;
+                                        }
                                     }
                                 }
                             }
@@ -4142,7 +4324,7 @@ Bagel = {
             }
         }),
         deepClone: (entity) => {
-            if (typeof entity != "object") { // Includes arrays
+            if (typeof entity != "object" || entity == null) { // Includes arrays
                 return entity;
             }
             let newEntity;
@@ -4152,6 +4334,7 @@ Bagel = {
             else {
                 newEntity = {};
             }
+
             let keys = Object.keys(entity);
 
             let i = 0;
