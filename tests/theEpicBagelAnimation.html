@@ -32,21 +32,14 @@ Bagels = Bagel.init({
             {
                 id: "THEWorldsSourceOfBagels",
                 vars: {
-                    delay: 0,
                     debugDisplay: document.getElementById("debug")
                 },
                 visible: false,
                 scripts: {
-                    init: [],
                     main: [
                         {
                             code: me => {
-                                me.vars.delay--;
-                                if (me.vars.delay <= 0) {
-                                    me.vars.delay = 1;
-
-                                    me.clone();
-                                }
+                                me.clone();
 
                                 me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + me.cloneCount;
                             },
@@ -56,9 +49,6 @@ Bagels = Bagel.init({
                 },
                 img: "THE_Bagel",
                 clones: {
-                    vars: {
-                        distance: 0
-                    },
                     visible: true,
                     scripts: {
                         init: [
