@@ -24,7 +24,7 @@ Bagels = Bagel.init({
             snds: [
                 {
                     id: "TODO",
-                    src: "../assets/snds/clickDown.mp3"
+                    src: "../assets/snds/music.mp3"
                 }
             ]
         },
@@ -39,7 +39,11 @@ Bagels = Bagel.init({
                     main: [
                         {
                             code: me => {
-                                me.clone();
+                                let i = 0;
+                                while (i < 3) {
+                                    me.clone();
+                                    i++;
+                                }
 
                                 me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + me.cloneCount;
                             },
@@ -75,7 +79,17 @@ Bagels = Bagel.init({
                     }
                 }
             }
-        ]
+        ],
+        scripts: {
+            init: [
+                {
+                    code: game => {
+                        game.playSound("TODO");
+                    },
+                    stateToRun: "Hail the bagel overlords"
+                }
+            ]
+        }
     },
     width: 800,
     height: 450,
