@@ -1337,21 +1337,9 @@ Bagel = {
                 let game = Bagel.internal.games[i];
                 Bagel.internal.current.game = game;
 
-                Bagel.internal.scaleCanvas(game);
+                subFunctions.scaleCanvas(game);
                 if (game.loaded) {
-                    // TODO: separate function?
-                    if (! game.paused) {
-                        if (game.state != game.internal.lastState) {
-                            // TODO: delete clones
-                            subFunctions.scripts("init", true, game);
-                            subFunctions.scripts("init", false, game);
-                            game.internal.lastState = game.state;
-                        }
-
-                        subFunctions.scripts("main", true, game);
-                        subFunctions.scripts("main", false, game);
-                        subFunctions.render(game);
-                    }
+                    subFunctions.loaded(game);
                 }
                 else {
                     // TODO: Loading logic
@@ -1544,20 +1532,27 @@ Bagel = {
                                         required: false,
                                         default: {},
                                         types: ["object"],
-
                                         check: (ob) => {
                                             if (! ["fill", "static"].includes(ob.mode)) {
-                                                return "Oops! You used an invalid value in GameJSON.config.display.mode. You used " + ob.mode + ", it can only be either \"fill\" or \"static\".";
+                                                return "Oops! You used an invalid option in GameJSON.config.display.mode. You used " + ob.mode + ", it can only be either \"fill\" or \"static\".";
+                                            }
+                                            if (! ["auto", "canvas", "webgl"].includes(ob.renderer)) {
+                                                return "Oops. You used an invalid option in GameJSON.config.display.renderer. You used " + ob.renderer + ", it can only be either \"auto\", \"canvas\" or \"webgl\".";
                                             }
                                         },
                                         checkEach: false,
-
                                         subcheck: {
                                             mode: {
                                                 required: false,
                                                 default: "fill",
                                                 types: ["string"],
                                                 description: "The display mode. e.g static (always the same size) or fill (fills the whole window)."
+                                            },
+                                            renderer: {
+                                                required: false,
+                                                default: "auto",
+                                                types: ["string"],
+                                                description: "The renderer for this game. Either \"auto\", \"canvas\" or \"webgl\". \"auto\" will use WebGL if it's supported by the browser, otherwise it'll use the basic 2d renderer (slower)."
                                             }
                                         },
                                         description: "Contains a few options for how the game is displayed."
@@ -1753,7 +1748,26 @@ Bagel = {
                     game.currentRenderFPS = Bagel.config.fps;
 
                     let renderer = game.internal.renderer;
-                    renderer.ctx = game.internal.renderer.canvas.getContext("2d");
+                    if (game.config.display.renderer == "auto") {
+                        // This is just to test
+                        let canvas = document.createElement("canvas");
+                        let ctx = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+                        if (ctx == null) { // No webgl
+                            game.config.display.renderer = "ctx";
+                        }
+                        else {
+                            game.config.display.renderer = "webgl";
+                        }
+                    }
+                    else {
+
+                    }
+                    if (game.config.display.renderer == "webgl") {
+                        renderer.ctx = renderer.canvas.getContext("webgl") || renderer.canvas.getContext("experimental-webgl");
+                    }
+                    else {
+                        renderer.ctx = renderer.canvas.getContext("2d");
+                    }
                     renderer.canvas.id = "Bagel.js " + game.id;
 
                     renderer.ctx.imageSmoothingEnabled = false;
@@ -1761,11 +1775,11 @@ Bagel = {
                     renderer.canvas.height = game.height;
                     if (game.config.display.mode == "fill") {
                         renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); position: absolute; top:0; bottom: 0; left: 0; right: 0; margin: auto;"; // CSS from Phaser (https://phaser.io)
-                        Bagel.internal.scaleCanvas(game);
                     }
                     else {
                         renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);" ; // CSS from Phaser (https://phaser.io)
                     }
+                    Bagel.internal.subFunctions.tick.scaleCanvas(game);
 
                     (game => {
                         game.add = {
@@ -2218,20 +2232,42 @@ Bagel = {
                                                             ctx: {
                                                                 required: false,
                                                                 default: null,
-                                                                types: [
-                                                                    "function",
-                                                                    "undefined"
-                                                                ],
+                                                                types: ["function"],
                                                                 description: "The ctx render function. Runs every frame."
                                                             },
                                                             webgl: {
                                                                 required: false,
-                                                                default: null,
-                                                                types: [
-                                                                    "function",
-                                                                    "undefined"
-                                                                ],
-                                                                description: "The webgl render function. Runs every frame."
+                                                                default: {},
+                                                                subcheck: {
+                                                                    shaders: {
+                                                                        required: false,
+                                                                        default: {},
+                                                                        subcheck: {
+                                                                            vertex: { // TODO: check?
+                                                                                required: false,
+                                                                                default: [],
+                                                                                types: ["array"],
+                                                                                description: "An array of vertex shaders to run from first to last."
+                                                                            },
+                                                                            fragment: { // TODO: check?
+                                                                                required: false,
+                                                                                default: [],
+                                                                                types: ["array"],
+                                                                                description: "An array of fragment shaders to run from first to last."
+                                                                            }
+                                                                        },
+                                                                        types: ["object"],
+                                                                        description: "Contains the \"vertex\" and \"fragment\" shaders."
+                                                                    },
+                                                                    render: {
+                                                                        required: false,
+                                                                        default: {},
+                                                                        types: ["function"],
+                                                                        description: "Does extra processing before the sprite is renderer." // TODO: arguments
+                                                                    }
+                                                                },
+                                                                types: ["object"],
+                                                                description: "The webgl renderer. Runs every frame. Contains \"shaders\" and an optional \"render\" function which allows for extra processing before the vertex and fragment shaders are run."
                                                             }
                                                         },
                                                         types: ["object"],
@@ -2922,39 +2958,94 @@ Bagel = {
                         }
                     }
                 },
-                render: game => {
-                    let renderer = game.internal.renderer;
-                    let canvas = renderer.canvas;
-                    let ctx = renderer.ctx;
+                render: {
+                    ctx: game => {
+                        let renderer = game.internal.renderer;
+                        let canvas = renderer.canvas;
+                        let ctx = renderer.ctx;
 
-                    let scaleX = canvas.width / game.width;
-                    let scaleY = canvas.height / game.height;
+                        let scaleX = canvas.width / game.width;
+                        let scaleY = canvas.height / game.height;
 
-                    let layers = renderer.layers;
-                    let handlers = game.internal.combinedPlugins.types.sprites;
+                        let layers = renderer.layers;
+                        let handlers = game.internal.combinedPlugins.types.sprites;
 
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    for (let spriteIndex in layers) {
-                        let sprite = game.game.sprites[layers[spriteIndex]];
-                        let handler = handlers[sprite.type];
+                        ctx.fillStyle = "white";
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        for (let spriteIndex in layers) {
+                            let sprite = game.game.sprites[layers[spriteIndex]];
+                            let handler = handlers[sprite.type];
 
-                        if (sprite.visible) {
-                            handler.render.ctx(
-                                sprite,
-                                ctx,
-                                canvas,
-                                game,
-                                handler.internal.plugin,
-                                scaleX,
-                                scaleY
-                            );
+                            if (sprite.visible) {
+                                if (handler.render != null) {
+                                    handler.render.ctx(
+                                        sprite,
+                                        ctx,
+                                        canvas,
+                                        game,
+                                        handler.internal.plugin,
+                                        scaleX,
+                                        scaleY
+                                    );
+                                }
+                            }
                         }
+                    },
+                    webgl: game => {
+                        // TODO
+                    }
+                },
+                loaded: game => { // Loaded logic
+                    let subFunctions = Bagel.internal.subFunctions.tick;
+
+                    if (! game.paused) {
+                        if (game.state != game.internal.lastState) {
+                            // TODO: delete clones
+                            subFunctions.scripts("init", true, game);
+                            subFunctions.scripts("init", false, game);
+                            game.internal.lastState = game.state;
+                        }
+
+                        subFunctions.scripts("main", true, game);
+                        subFunctions.scripts("main", false, game);
+                        subFunctions.render[game.config.display.renderer](game);
+                        // TODO: prevent changing in runtime?
                     }
                 },
                 tick: () => {
                     Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
-                }
+                },
+                scaleCanvas: (game) => {
+                    let width = window.innerWidth;
+                    let height = window.innerHeight;
+                    let ratio = game.internal.renderer.ratio;
+                    let wHeight = width / ratio;
+                    if (height > wHeight) {
+                        height = wHeight;
+                    }
+                    else {
+                        if (height != wHeight) { // TODO: test
+                            width = height * ratio;
+                        }
+                    }
+                    width *= window.devicePixelRatio;
+                    height *= window.devicePixelRatio;
+
+
+                    let renderer = game.internal.renderer;
+                    let canvas = renderer.canvas;
+                    if (canvas.width != width || canvas.height != height) {
+                        canvas.width = width;
+                        canvas.height = height;
+
+                        canvas.style.removeProperty("width");
+                        canvas.style.setProperty("width", (width / window.devicePixelRatio) + "px", "important");
+                        canvas.style.removeProperty("height");
+                        canvas.style.setProperty("height", (height / window.devicePixelRatio) + "px", "important");
+
+                        renderer.ctx.imageSmoothingEnabled = false; // It's reset when the canvas is resized
+                    }
+                },
             },
             delete: {
                 layers: (me, game) => {
@@ -3086,319 +3177,7 @@ Bagel = {
             }
             return output;
         },
-        oops: (game) => { // When something goes wrong
-            if (game == null) {
-                throw "Critical Bagel.js error, please look at the error above for more info. ^-^";
-            }
-            game.paused = true;
-            throw "Critical Bagel.js error in the game " + JSON.stringify(game.id) + ", look at the error for some help. ^-^";
-        },
-        current: {
-            sprite: null,
-            game: null,
-            asset: null,
-            assetType: null,
-            assetTypeName: null,
-            i: null,
-            where: null,
-            plugin: null
-        },
-        findCloneID: function(sprite, game) {
-            for (let i in sprite.cloneIDs) {
-                if (sprite.cloneIDs[i] == null) {
-                    return i;
-                }
-            }
-            return sprite.cloneIDs.length;
-        },
-        findSpriteID: function(game) {
-            for (let i in game.game.sprites) {
-                if (game.game.sprites[i] == null) {
-                    return parseInt(i);
-                }
-            }
-            return game.game.sprites.length;
-        },
-        checkClones: function(spriteData, data, game, parent) {
-            console.log("A")
-            if (data.type == null) {
-                let type = parent.type;
-            }
-            else {
-                let type = data.type;
-            }
-            if (type == "sprite") {
-                let sprite = Bagel.internal.checkOb(spriteData, {}, {
-                    x: {
-                        default: parent.x,
-                        types: [
-                            "number"
-                        ],
-                        description: "The x position for the sprite to start at."
-                    },
-                    y: {
-                        default: parent.y,
-                        types: [
-                            "number"
-                        ],
-                        description: "The y position for the sprite to start at."
-                    },
-                    img: {
-                        default: parent.img,
-                        types: [
-                            "string"
-                        ],
-                        description: "The image for the sprite to use to start with."
-                    },
-                    clones: {
-                        default: parent.clones,
-                        types: [
-                            "object"
-                        ],
-                        description: "The default data for a clone of this clone.\nAll arguments are optional as the child clone will adopt the arguments from the clone function and the parent clone (in that priority)"
-                    },
-                    width: {
-                        default: parent.width,
-                        types: [
-                            "number"
-                        ],
-                        description: "The width for the sprite."
-                    },
-                    height: {
-                        default: parent.height,
-                        types: [
-                            "number"
-                        ],
-                        description: "The height for the sprite."
-                    },
-                    visible: {
-                        default: parent.visible,
-                        types: [
-                            "boolean"
-                        ],
-                        description: "Determines if the sprite is visible or not."
-                    },
-                    scripts: {
-                        default: {
-                            init: [],
-                            main: [],
-                            steps: {}
-                        },
-                        types: [
-                            "object"
-                        ],
-                        description: "Determines if the sprite is visible or not."
-                    },
-                    vars: {
-                        default: {},
-                        types: [
-                            "object"
-                        ],
-                        description: "An object you can use to store data for the sprite."
-                    },
-                    alpha: {
-                        default: parent.alpha,
-                        types: [
-                            "number"
-                        ],
-                        description: "The alpha of the sprite. 1 = Fully visible. 0 = Invisible."
-                    },
-                    angle: {
-                        default: parent.angle,
-                        types: [
-                            "number"
-                        ],
-                        description: "The angle of the sprite. In degrees. 0º = up. 180º = down. -90º = left. 90º = right."
-                    }
-                }, "the function \"sprite.clone\" cloning the sprite " + JSON.stringify(data.spriteToClone) + ".", "function cloneSprite arguments (merged with the parentSprite's arguments)", game);
-            }
-            else {
-                if (type == "canvas") {
-                    let sprite = Bagel.internal.checkOb(spriteData, {}, {
-                        x: {
-                            default: parent.x,
-                            types: [
-                                "number"
-                            ],
-                            description: "The x position for the canvas sprite to start at."
-                        },
-                        y: {
-                            default: parent.y,
-                            types: [
-                                "number"
-                            ],
-                            description: "The y position for the canvas sprite to start at."
-                        },
-                        width: {
-                            default: parent.width,
-                            types: [
-                                "number"
-                            ],
-                            description: "The width for the canvas sprite."
-                        },
-                        height: {
-                            default: parent.height,
-                            types: [
-                                "number"
-                            ],
-                            description: "The height for the canvas sprite."
-                        },
-                        scripts: {
-                            default: {
-                                init: [],
-                                main: [],
-                                steps: {}
-                            },
-                            types: [
-                                "object"
-                            ],
-                            description: "The canvas sprite's scripts."
-                        },
-                        clones: {
-                            default: {},
-                            types: [
-                                "object"
-                            ],
-                            description: "The default data for a clone of this canvas sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
-                        },
-                        visible: {
-                            default: parent.visible,
-                            types: [
-                                "boolean"
-                            ],
-                            description: "Determines if the canvas sprite is visible or not."
-                        },
-                        vars: {
-                            default: {},
-                            types: [
-                                "object"
-                            ],
-                            description: "An object you can use to store data for the canvas sprite."
-                        },
-                        type: {
-                            default: parent.type,
-                            types: [
-                                "string"
-                            ],
-                            description: "The type of the sprite (the built in types are: sprite, canvas and renderer)."
-                        },
-                        res: {
-                            default: parent.res,
-                            types: ["number"],
-                            description: "The resolution of the canvas."
-                        },
-                        customRes: {
-                            default: parent.customRes,
-                            types: ["boolean"],
-                            description: "Determines whether Bagel.js should allow the canvas resolution to be changed."
-                        }
-                    }, "the function \"sprite.clone\" cloning the sprite " + JSON.stringify(data.spriteToClone) + ".", "function cloneSprite arguments (merged with the parentSprite's arguments)", game);
-                }
-                else {
-                    if (type == "renderer") {
-                        let sprite = Bagel.internal.checkOb(spriteData, {}, {
-                            scripts: {
-                                default: {
-                                    init: [],
-                                    main: [],
-                                    steps: {}
-                                },
-                                types: [
-                                    "object"
-                                ],
-                                description: "The renderer's scripts."
-                            },
-                            clones: {
-                                default: {},
-                                types: [
-                                    "object"
-                                ],
-                                description: "The default data for a clone of this renderer.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
-                            },
-                            vars: {
-                                default: {},
-                                types: [
-                                    "object"
-                                ],
-                                description: "An object you can use to store data for the renderer."
-                            },
-                            type: {
-                                default: parent.type,
-                                types: [
-                                    "string"
-                                ],
-                                description: "The type of the sprite (sprite, canvas, renderer)."
-                            },
-                            render: {
-                                default: parent.render,
-                                types: [
-                                    "function"
-                                ],
-                                description: "A function to run every render to render anything you like."
-                            },
-                            order: {
-                                default: parent.order,
-                                types: [
-                                    "string"
-                                ],
-                                description: "When to render. Either \"high\" (renders on top of all sprites) or \"low\" (renders below all other sprites)"
-                            }
-                        }, "the function \"sprite.clone\" cloning the sprite " + JSON.stringify(data.spriteToClone) + ".", "function cloneSprite arguments (merged with the parentSprite's arguments)", game);
-                    }
-                    else {
-                        console.error("Oh no! Looks like you used an invalid type for a clone.\nYou used " + JSON.stringify(type) + " in \"GameJSON.game.sprites\" item \"type\". While cloning the sprite " + JSON.stringify(parent.id) + ".");
-                        console.log("Here's sprite's JSON: ^-^");
-                        console.log(parent);
-                        Bagel.internal.oops(game);
-                    }
-                }
-            }
-
-            sprite.type = type;
-            sprite.scripts = Bagel.internal.checkOb(sprite.scripts, {}, {
-                init: {
-                    default: [],
-                    types: [
-                        "array"
-                    ],
-                    description: "The array of init functions for the clone."
-                },
-                main: {
-                    default: [],
-                    types: [
-                        "array"
-                    ],
-                    description: "The array of main functions for the sprite."
-                },
-                steps: {
-                    default: {},
-                    types: [
-                        "object"
-                    ],
-                    description: "The object of steps for the sprite. Each step is a function which can be called in a script to help you organise your code. It's provided with the same arguments as a script."
-                }
-            }, "the function \"sprite.clone\" cloning the sprite " + JSON.stringify(data.spriteToClone) + ".", "function cloneSprite arguments (merged with the parentSprite's arguments) -> scripts.");
-
-            for (let c in sprite.scripts.init) {
-                if (Bagel.internal.getTypeOf(sprite.scripts.init[c]) != "function") {
-                    console.error("Oh no! You need to use the type 'function' in a clone's array of init scripts.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(sprite.scripts.init[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
-                    //console.log(sprite.scripts.init[c])
-                    console.error("Bagel.js hit a critical error, look at the error above for more information.")
-                    debugger
-                    // TODO: Clearer error
-                }
-            }
-            for (c in sprite.scripts.main) {
-                if (Bagel.internal.getTypeOf(sprite.scripts.main[c]) != "function") {
-                    console.error("Oh no! You need to use the type 'function' in a clone's array of main scripts.\nYou used type " + JSON.stringify(Bagel.internal.getTypeOf(sprite.scripts.main[c])) + " while cloning the sprite " + data.spriteToClone + ".  The value is...")
-                    //console.log(sprite.scripts.main[c])
-                    console.error("Bagel.js hit a critical error, look at the error above for more information.")
-                    debugger
-                    // TODO: Clearer error
-                }
-            }
-        },
-        getTypeOf: function(entity) {
+        getTypeOf: (entity) => {
             if (Array.isArray(entity)) {
                 return "array";
             }
@@ -3406,478 +3185,6 @@ Bagel = {
                 return "undefined";
             }
             return typeof entity;
-        },
-        checkOb: function(ob, required, optional, where, obType, game, noID, dontPause) {
-            var missing = [];
-            var wrongTypes = [];
-
-            var i = 0;
-            for (i in required) {
-                if (ob[i] == null) {
-                    missing[missing.length] = i;
-                }
-                else {
-                    if (ob.hasOwnProperty(i)) {
-                        if (required[i].types != null) {
-                            if (! required[i].types.includes(Bagel.internal.getTypeOf(ob[i]))) {
-                                wrongTypes[wrongTypes.length] = i;
-                            }
-                        }
-                    }
-                }
-            }
-            var i = 0;
-            for (i in optional) {
-                if (ob.hasOwnProperty(i)) {
-                    if (optional[i].types != null) {
-                        if (! optional[i].types.includes(Bagel.internal.getTypeOf(ob[i]))) {
-                            wrongTypes[wrongTypes.length] = i
-                        }
-                    }
-                }
-            }
-
-            var newOb = ob;
-
-            var i = 0;
-            for (i in optional) {
-                if (ob[i] == null && optional[i].default != null) {
-                    newOb[i] = optional[i].default
-                }
-            }
-
-            var useless = [];
-
-            var i = 0;
-            for (i in ob) {
-                if (! (required.hasOwnProperty(i) || optional.hasOwnProperty(i))) {
-                    useless[useless.length] = i;
-                }
-            }
-
-            if (missing.length > 0) {
-                var message = [];
-                if (missing.length == 1) {
-                    message.push("Oops, looks like you missed this one out from " + JSON.stringify(where) + ": ^-^\n\n");
-                }
-                else {
-                    message.push("Hmm, looks like you missed these in " + JSON.stringify(where) + ": ^-^\n\n");
-                }
-
-                var i = 0;
-                for (i in missing) {
-                    message.push(" " + missing[i] + " -> " + required[missing[i]].description + "\n");
-                }
-
-                console.error(message.join(""));
-            }
-            if (wrongTypes.length > 0) {
-                var message = [];
-                if (wrongTypes.length == 1) {
-                    message.push("Oops, looks like you've put an incorrect input type in " + JSON.stringify(where) + ": ^-^\n");
-                }
-                else {
-                    message.push("Oops, looks like you've put some incorrect input types in " + JSON.stringify(where) + ": ^-^\n");
-                }
-
-                var i = 0;
-                for (i in wrongTypes) {
-                    var c = wrongTypes[i];
-                    if (required.hasOwnProperty(c)) {
-                        if (required[c].types.length == 1) {
-                            message.push(" • " + c + " -> " + required[c].description + "\n You've the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", but it can only be " + Bagel.internal.an(required[c].types[0]) + ".\n");
-                        }
-                        else {
-                            message.push(" " + c + " -> " + required[c].description + "\n You used the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", it has to be one of these types:\n");
-                            var a = 0;
-                            for (a in required[c].types) {
-                                message.push(" - " + Bagel.internal.an(required[c].types[a]) + "\n");
-                            }
-                        }
-                    }
-                    else {
-                        if (optional[c].types.length == 1) {
-                            message.push(" • " + c + " -> " + optional[c].description + "\n You used the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", but it can only be " + Bagel.internal.an(optional[c].types[0]) + ".\n");
-                        }
-                        else {
-                            message.push(" • " + c + " -> " + optional[c].description + "\n You used the type " + JSON.stringify(Bagel.internal.getTypeOf(ob[c])) + ", it has to be one of these types:\n");
-                            var a = 0;
-                            for (a in optional[c].types) {
-                                message.push(" • " + Bagel.internal.an(optional[c].types[a]) + "\n");
-                            }
-                        }
-                    }
-                }
-
-                console.error(message.join(""));
-            }
-            if (Bagel.config.flags.warnOfUselessParameters) { // Check the flag
-                if (useless.length > 0) {
-                    var message = [];
-                    if (useless.length == 1) {
-                        message.push("You might want to remove this: ^-^\n");
-                    }
-                    else {
-                        message.push("You might want to remove these: ^-^\n");
-                    }
-
-                    var i = 0;
-                    for (i in useless) {
-                        message.push(useless[i] + "\n");
-                    }
-                    message.push("\nOr you might've made a typo and it could be one of these:\n");
-                    var i = 0;
-                    for (i in optional) {
-                        message.push(" • " + JSON.stringify(i) + " -> " + optional[i].description + "\n");
-                    }
-
-                    message.push("\nIn " + where + "\n");
-                    message.push("\n\nTip: You can disable these sorts of warnings by changing the \"warnOfUselessParameters\" flag.\nUse: \"Bagel.config.flags.warnOfUselessParameters = false\" :).");
-                    console.warn(message.join(""));
-                }
-            }
-
-            if (missing.length > 0 || wrongTypes.length > 0) { // Was there an error?
-                console.log(obType + ":");
-                console.log(ob);
-                Bagel.internal.oops(game, noID, dontPause);
-            }
-            return newOb;
-        },
-        requestAnimationFrame: window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,
-        scripts: (game) => {
-            if (game.internal.lastState != game.state) {
-                for (let i in game.game.sprites) {
-                    let sprite = game.game.sprites[i];
-                    sprite.visible = false;
-                }
-
-                // TODO: Delete clones
-
-                Bagel.internal.current.sprite = null;
-                for (i in game.internal.scripts.index.init[game.state]) {
-                    let script = game.game.scripts.init[game.internal.scripts.index.init[game.state][i]];
-                    script.code(game);
-                }
-                for (i in game.internal.scripts.index.sprites.init[game.state]) {
-                    let sprite = game.internal.scripts.index.sprites.init[game.state][i].sprite;
-                    Bagel.internal.current.sprite = game.game.sprites[game.internal.idIndex[sprite.id]]; // What if it's null?
-                    let script = sprite.scripts.init[game.internal.scripts.index.sprites.init[game.state][i].script];
-
-                    if (sprite.type == "canvas") {
-                        sprite.scaled.width = Bagel.internal.render.scale.x(sprite.width, game.internal.renderer, game.internal.renderer.canvas) * sprite.res;
-                        sprite.scaled.height = Bagel.internal.render.scale.y(sprite.height, game.internal.renderer, game.internal.renderer.canvas) * sprite.res;
-                    }
-
-                    sprite.visible = true;
-                    script.code(game, sprite, Bagel.step);
-                }
-                game.internal.lastState = game.state;
-            }
-
-            Bagel.internal.current.sprite = null;
-            let i = 0;
-            for (i in game.internal.scripts.index.main[game.state]) {
-                let script = game.game.scripts.main[game.internal.scripts.index.main[game.state][i]];
-                script.code(game);
-            }
-            if (game.internal.scripts.index.sprites.main[game.state] != null) {
-                let i = 0;
-                while (i < game.internal.scripts.index.sprites.main[game.state].length) {
-                    let start = new Date();
-
-                    let sprite = game.internal.scripts.index.sprites.main[game.state][i].sprite;
-                    Bagel.internal.current.sprite = game.game.sprites[game.internal.idIndex[sprite.id]]; // What if it's null?
-
-                    if (sprite.type == "canvas") {
-                        if (sprite.customRes) {
-                            sprite.scaled.width = Bagel.internal.render.scale.x(sprite.width, game.internal.renderer, game.internal.renderer.canvas) * sprite.res;
-                            sprite.scaled.height = Bagel.internal.render.scale.y(sprite.height, game.internal.renderer, game.internal.renderer.canvas) * sprite.res;
-                        }
-                        else {
-                            if (sprite.canvas.width != sprite.width || sprite.canvas.height != sprite.height) {
-                                sprite.canvas.width = sprite.width
-                                sprite.canvas.height = sprite.height
-                            }
-                            sprite.scaled.width = sprite.width;
-                            sprite.scaled.height = sprite.height;
-                        }
-                    }
-
-                    let idWas = sprite.id;
-                    if (game.internal.scripts.index.sprites.main[game.state][i].isClone) {
-                        Bagel.internal.current.sprite = sprite;
-                        sprite.scripts.main[game.internal.scripts.index.sprites.main[game.state][i].script](game, sprite, Bagel.step);
-                    }
-                    else {
-                        let script = sprite.scripts.main[game.internal.scripts.index.sprites.main[game.state][i].script];
-                        script.code(game, sprite, Bagel.step);
-                    }
-
-                    if (sprite.id == idWas) { // Detect if it's been deleted
-                        sprite.debug.scriptTime = (new Date() - start) / 1000;
-                        i++;
-                    }
-                }
-
-            }
-
-            Bagel.internal.current.sprite = null;
-            Bagel.internal.current.game = null;
-
-        },
-        scaleCanvas: (game) => {
-            let width = window.innerWidth;
-            let height = window.innerHeight;
-            let ratio = game.internal.renderer.ratio;
-            let wHeight = width / ratio;
-            if (height > wHeight) {
-                height = wHeight;
-            }
-            else {
-                if (height != wHeight) { // TODO: test
-                    width = height * ratio;
-                }
-            }
-            width *= window.devicePixelRatio;
-            height *= window.devicePixelRatio;
-
-
-            let renderer = game.internal.renderer;
-            let canvas = renderer.canvas;
-            if (canvas.width != width || canvas.height != height || true) {
-                canvas.width = width;
-                canvas.height = height;
-
-                canvas.style.removeProperty("width");
-                canvas.style.setProperty("width", (width / window.devicePixelRatio) + "px", "important");
-                canvas.style.removeProperty("height");
-                canvas.style.setProperty("height", (height / window.devicePixelRatio) + "px", "important");
-
-                renderer.ctx.imageSmoothingEnabled = false; // It's reset when the canvas is resized
-            }
-        },
-        render: {
-            vars: {
-                canvas: {
-                    gameCache: {}
-                }
-            },
-            scale: {
-                x: function(x, renderer, canvas) {
-                    return (x / renderer.width) * canvas.width
-                },
-                y: function(y, renderer, canvas) {
-                    return (y / renderer.height) * canvas.height
-                },
-                width: function(width, renderer, canvas) {
-                    return (width / renderer.width) * canvas.width
-                },
-                height: function(height, renderer, canvas) {
-                    return (height / renderer.height) * canvas.height
-                }
-            },
-            renderFrame: {
-                canvas: (game, canvas, ctx, renderer) => {
-                    let newWidth = window.innerWidth;
-                    let newHeight = window.innerHeight;
-                    let ratio = game.width / game.height;
-                    if (newWidth > newHeight * ratio) {
-                        let newWidth = newHeight * ratio;
-                    }
-                    else {
-                        let newHeight = newWidth / ratio;
-                    }
-
-                    if (game.config.display.fillScreen) {
-                        if (game.internal.lastWidth != newWidth || game.internal.lastHeight != newHeight) {
-                            game.internal.lastWidth = newWidth;
-                            game.internal.lastHeight = newHeight;
-                            game.internal.renderer.canvas.width = newWidth * window.devicePixelRatio;
-                            game.internal.renderer.canvas.height = newHeight * window.devicePixelRatio;
-
-                            canvas.style.removeProperty("width");
-                            canvas.style.setProperty("width", newWidth + "px", "important");
-                            canvas.style.removeProperty("height");
-                            canvas.style.setProperty("height", newHeight + "px", "important");
-
-                            game.internal.renderer.ctx.imageSmoothingEnabled = false;
-                        }
-                    }
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                    let renderRenderers = (order) => {
-                        Bagel.internal.current.game = game;
-                        for (let i in game.internal.renderer.renderers[order]) {
-                            let start = new Date();
-
-                            let customRenderer = game.internal.renderer.renderers[order][i];
-                            if (customRenderer == null) {
-                                continue;
-                            }
-                            Bagel.internal.current.sprite = customRenderer.sprite;
-
-                            ctx.save();
-                            customRenderer.code.call(customRenderer.sprite, game, customRenderer.sprite);
-                            ctx.restore();
-
-                            customRenderer.sprite.debug.renderTime = (new Date() - start) / 1000;
-                        }
-                        Bagel.internal.current.sprite = null;
-                    }
-                    renderRenderers("low");
-
-
-                    for (let i in game.internal.renderer.layers) {
-                        let start = new Date();
-
-                        let sprite = game.game.sprites[game.internal.renderer.layers[i]];
-                        if (sprite == null) {
-                            continue;
-                        }
-
-                        if (sprite.type == "canvas" && sprite.customRes) {
-                            let x = sprite.x - (sprite.width / 2);
-                            let y = sprite.y - (sprite.height / 2);
-
-                            let scaled = {
-                                x: Bagel.internal.render.scale.x(x, renderer, canvas),
-                                y: Bagel.internal.render.scale.y(y, renderer, canvas),
-                                width: sprite.canvas.width,
-                                height: sprite.canvas.height
-                            };
-                        }
-                        else {
-                            if (sprite.type == "canvas") {
-                                let x = sprite.x - ((sprite.width / sprite.res) / 2);
-                                let y = sprite.y - ((sprite.height / sprite.res) / 2);
-                            }
-                            else {
-                                let x = sprite.x - (sprite.width / 2);
-                                let y = sprite.y - (sprite.height / 2);
-                            }
-
-
-                            let scaled = {
-                                x: Bagel.internal.render.scale.x(x, renderer, canvas),
-                                y: Bagel.internal.render.scale.y(y, renderer, canvas),
-                                width: Bagel.internal.render.scale.width(sprite.width, renderer, canvas),
-                                height: Bagel.internal.render.scale.height(sprite.height, renderer, canvas)
-                            };
-                        }
-                        if (sprite.visible) {
-                            let flip = [];
-                            if (scaled.width > 0) {
-                                flip.push(1);
-                            }
-                            else {
-                                flip.push(-1);
-                            }
-                            if (scaled.height > 0) {
-                                flip.push(1);
-                            }
-                            else {
-                                flip.push(-1);
-                            }
-                            ctx.save();
-                            ctx.scale(flip[0], flip[1]);
-
-                            let checkIsNum = (property, suffixWord, sprite) => {
-                                if (typeof sprite[property] == "number" && (! isNaN(sprite[property]))) {
-                                    sprite.internal.nullErrors[property] = false;
-                                }
-                                else {
-                                    if (! sprite.internal.nullErrors[property]) { // Don't spam the console
-                                        if (isNaN(sprite[property])) {
-                                            console.warn("Sprite " + sprite.id + "'s " + property + " " + suffixWord + " is NaN. You probably used a non-number variable when calculating a new " + property + " " + suffixWord + ".\n Bagel.js has disabled the rendering for this sprite until it's a number.");
-                                            sprite.internal.nullErrors[property] = true;
-                                        }
-                                        else {
-                                            console.warn("Sprite " + sprite.id + "'s " + property + " " + suffixWord + " is " + sprite[property] + ". It should be a number.\n Bagel.js has disabled the rendering for this sprite until it's a number.");
-                                            sprite.internal.nullErrors[property] = true;
-                                        }
-                                    }
-                                }
-                            }
-                            if (sprite.type != "renderer") {
-                                checkIsNum("x", "position", sprite);
-                                checkIsNum("y", "position", sprite);
-                                checkIsNum("width", "", sprite);
-                                checkIsNum("height", "", sprite);
-                                checkIsNum("angle", "", sprite);
-                            }
-                            // TODO: Check image
-
-                            ctx.globalAlpha = 1;
-                            if (sprite.type == "sprite") {
-                                sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
-                                if (sprite.angle == 90) { // Don't rotate if we don't need to
-                                    ctx.globalAlpha = sprite.alpha;
-                                    ctx.drawImage(game.internal.assets.assets.imgs[sprite.img].img, scaled.x * flip[0], scaled.y * flip[1], scaled.width * flip[0], scaled.height * flip[1]);
-                                }
-                                else {
-                                    ctx.save();
-
-                                    ctx.translate((scaled.x + (scaled.width / 2)) * flip[0], (scaled.y + (scaled.height / 2) * flip[1]));
-                                    ctx.rotate(Bagel.maths.degToRad(sprite.angle - 90));
-                                    ctx.globalAlpha = sprite.alpha;
-                                    ctx.drawImage(game.internal.assets.assets.imgs[sprite.img].img, -((scaled.width / 2) * flip[0]), -((scaled.height / 2) * flip[1]), scaled.width * flip[0], scaled.height * flip[1]);
-
-                                    ctx.restore();
-                                }
-                            }
-                            else {
-                                if (sprite.type == "canvas") {
-                                    ctx.drawImage(sprite.canvas, scaled.x * flip[0], scaled.y * flip[1], (scaled.width) / sprite.res, (scaled.height) / sprite.res);
-                                }
-                            }
-                            ctx.restore();
-                        }
-                        sprite.debug.renderTime = (new Date() - start) / 1000;
-                    }
-
-                    renderRenderers("high");
-
-
-                    Bagel.internal.current.game = null;
-                }
-            }
-        },
-        games: {},
-        collision: {
-            methods: {
-                spriteRect: function(sprite, expand, centre) {
-                    // Return the rectangle that this sprite occupies
-                    return {
-                        x: Math.round(sprite.x - ((sprite.width / 2) * centre)),
-                        y: Math.round(sprite.y - ((sprite.height / 2) * centre)),
-                        width: Math.round(sprite.width),
-                        height: Math.round(sprite.height)
-                    };
-                },
-                AABB: function(rect1, rect2) {
-                    if (rect1.x < rect2.x + rect2.width) {
-                        if (rect1.x + rect1.width > rect2.x) {
-                            if (rect1.y < rect2.y + rect2.height) {
-                                if (rect1.y + rect1.height > rect2.y) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                    return false;
-                }
-            }
-        },
-        hex: function(num) {
-            if (num.toString().length == 1) {
-                return "0" + num.toString(16)
-            }
-            return num.toString(16)
-        },
-        spriteTick: function(sprite, game) {
-            // Currently no processing for sprites. Was originally used for QTrees
         },
         deepClone: (entity) => {
             if (typeof entity != "object" || entity == null) { // Includes arrays
@@ -3906,6 +3213,48 @@ Bagel = {
             return newEntity;
         },
 
+        findCloneID: (sprite, game) => {
+            for (let i in sprite.cloneIDs) {
+                if (sprite.cloneIDs[i] == null) {
+                    return i;
+                }
+            }
+            return sprite.cloneIDs.length;
+        },
+        findSpriteID: (game) => {
+            for (let i in game.game.sprites) {
+                if (game.game.sprites[i] == null) {
+                    return parseInt(i);
+                }
+            }
+            return game.game.sprites.length;
+        },
+
+        hex: (num) => {
+            if (num.toString().length == 1) {
+                return "0" + num.toString(16);
+            }
+            return num.toString(16);
+        }, // TODO: move to plugin
+
+        oops: (game) => { // When something goes wrong
+            if (game == null) {
+                throw "Critical Bagel.js error, please look at the error above for more info. ^-^";
+            }
+            game.paused = true;
+            throw "Critical Bagel.js error in the game " + JSON.stringify(game.id) + ", look at the error for some help. ^-^";
+        },
+        current: {
+            sprite: null,
+            game: null,
+            asset: null,
+            assetType: null,
+            assetTypeName: null,
+            i: null,
+            where: null,
+            plugin: null
+        },
+        requestAnimationFrame: window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,
         debug: {
             add: message => {
                 Bagel.internal.debug.queue.push(message);
@@ -3936,7 +3285,8 @@ Bagel = {
             },
             queue: [],
             logList: []
-        }
+        },
+        games: {},
     },
     // == Methods ==
 
