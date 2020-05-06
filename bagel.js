@@ -415,14 +415,12 @@ Bagel = {
                                         }
                                     },
                                     angle: {
-                                        set: () => {
-                                            if (sprite.angle != value) {
-                                                // Update the cached stuff
-                                                let rad = Bagel.maths.degToRad(sprite.angle + 90);
-                                                let cached = triggerSprite.internal.cached;
-                                                cached.sin = Math.cos(rad);
-                                                cached.cos = Math.sin(rad);
-                                            }
+                                        set: (sprite, value, property, game, plugin, triggerSprite) => {
+                                            let cache = triggerSprite.internal.cache;
+                                            // Update the cached stuff
+                                            let rad = Bagel.maths.degToRad(sprite.angle + 90);
+                                            cache.cos = Math.cos(rad);
+                                            cache.sin = Math.sin(rad);
                                         },
                                         get: sprite => {
                                             sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
@@ -437,7 +435,10 @@ Bagel = {
                             init: (sprite, game, plugin) => {
                                 sprite.last = {
                                     collision: null
-                                }
+                                };
+
+                                sprite.internal.cache = {};
+                                sprite.angle = sprite.internal.properties.angle; // Trigger the setter
                             },
                             render: { // How do I render this type?
                                 ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
@@ -718,10 +719,9 @@ Bagel = {
                                 }
                             },
                             fn: (me, args, game) => {
-                                if (args.angle == null) args.angle = me.angle;
-                                let cached = me.internal.cached.;
-                                me.x += Math.cos(rad) * args.amount;
-                                me.y += Math.sin(rad) * args.amount;
+                                let cached = me.internal.cache;
+                                me.x += cached.cos * args.amount;
+                                me.y += cached.sin * args.amount;
                             }
                         },
 
@@ -2678,7 +2678,8 @@ Bagel = {
                             syntax: handler.internal.cloneSyntax
                         }, {
                             args: true,
-                            missing: true // Missing arguments don't matter, they're dealt with in a minute
+                            missing: true, // Missing arguments don't matter, they're dealt with in a minute
+                            useless: true // "type" isn't included in the syntax
                         }); // Check any existing properties supplied by the clone function
 
                         let clone = Bagel.internal.deepClone;
