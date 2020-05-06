@@ -43,7 +43,7 @@ CREDITS
 Click, click release and mouse touch from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 Before clone check improvement: ~12FPS
-After: 
+After:
 */
 
 Bagel = {
@@ -413,6 +413,20 @@ Bagel = {
 
                                             sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
                                         }
+                                    },
+                                    angle: {
+                                        set: () => {
+                                            if (sprite.angle != value) {
+                                                // Update the cached stuff
+                                                let rad = Bagel.maths.degToRad(sprite.angle + 90);
+                                                let cached = triggerSprite.internal.cached;
+                                                cached.sin = Math.cos(rad);
+                                                cached.cos = Math.sin(rad);
+                                            }
+                                        },
+                                        get: sprite => {
+                                            sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
+                                        }
                                     }
                                 }
                             },
@@ -432,7 +446,6 @@ Bagel = {
                                     if (imgs[sprite.img] == null) return; // No asset or it's still loading and wasn't preloaded
                                     let img = imgs[sprite.img].img;
 
-                                    sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
                                     ctx.globalAlpha = sprite.alpha;
 
                                     let flipX = sprite.width >= 0? 1 : -1;
@@ -705,10 +718,8 @@ Bagel = {
                                 }
                             },
                             fn: (me, args, game) => {
-                                if (args.angle == null) {
-                                    args.angle = me.angle;
-                                }
-                                let rad = Bagel.maths.degToRad(me.angle + 90);
+                                if (args.angle == null) args.angle = me.angle;
+                                let cached = me.internal.cached.;
                                 me.x += Math.cos(rad) * args.amount;
                                 me.y += Math.sin(rad) * args.amount;
                             }
@@ -1577,7 +1588,7 @@ Bagel = {
                                 description: "Can be used to store variables for the game."
                             }
                         }
-                    });
+                    }, {args: true});
 
                     if (Bagel.internal.games[game.id] != null) {
                         console.error("Oh no! You used an ID for your game that is already being used. Try and think of something else.\nYou used " + JSON.stringify(game.id) + " in \"GameJSON.htmlElementID\".");
@@ -1881,7 +1892,7 @@ Bagel = {
                                         ob: args,
                                         syntax: method.args,
                                         where: "game " + game.id + "'s " + JSON.stringify(methodName) + " method"
-                                    });
+                                    }, {args: true});
                                     let output = method.fn(game, args, current.plugin); // Passed the argument checks
 
                                     current.game = gameWas;
@@ -1912,7 +1923,7 @@ Bagel = {
                                         ob: newArgs,
                                         syntax: method.args,
                                         where: "game " + game.id + "'s " + JSON.stringify(methodName) + " method"
-                                    });
+                                    }, {args: true});
                                     let output = method.fn(game, newArgs, method.internal.plugin); // Passed the argument checks
 
                                     current.game = gameWas;
@@ -2466,7 +2477,7 @@ Bagel = {
                             }
                         },
                         where: "plugin " + plugin.info.id
-                    });
+                    }, {args: true});
 
                     current.plugin = pluginWas;
                     current.game = gameWas;
@@ -2659,19 +2670,29 @@ Bagel = {
 
 
                     if (parent) { // Clone
-                        let clone = Bagel.internal.deepClone;
+                        // TODO: is this any faster?
+                        sprite.type = parent.type; // Their types must be the same
+                        sprite = Bagel.check({
+                            ob: sprite,
+                            where: where,
+                            syntax: handler.internal.cloneSyntax
+                        }, {
+                            args: true,
+                            missing: true // Missing arguments don't matter, they're dealt with in a minute
+                        }); // Check any existing properties supplied by the clone function
 
+                        let clone = Bagel.internal.deepClone;
                         // Assign the parent's properties to the clone
-                        for (let i in handler.cloneArgs) {
+                        for (let i in handler.cloneArgs) { // TODO: make sure .clones has already been checked
                             let argJSON = handler.cloneArgs[i];
 
                             if (argJSON.mode == "replace") {
                                 if (! sprite.hasOwnProperty(i)) {
-                                    if (! parent.clones.hasOwnProperty(i)) {
-                                        sprite[i] = clone(parent[i]);
+                                    if (parent.clones.hasOwnProperty(i)) {
+                                        sprite[i] = clone(parent.clones[i]);
                                     }
                                     else {
-                                        sprite[i] = clone(parent.clones[i]);
+                                        sprite[i] = clone(parent[i]);
                                     }
                                 }
                             }
@@ -2694,6 +2715,7 @@ Bagel = {
                                 }
                             }
                         }
+                        return sprite;
                     }
                     // TODO: run the other checks
                     let current = Bagel.internal.current;
@@ -2712,7 +2734,7 @@ Bagel = {
                             ...(parent? handler.internal.cloneSyntax : handler.args),
                             ...typeSyntax
                         }
-                    });
+                    }, {args: true});
 
 
                     return sprite;
@@ -2794,7 +2816,7 @@ Bagel = {
                                             ob: args,
                                             syntax: method.args,
                                             where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
-                                        });
+                                        }, {args: true});
                                         // Passed the argument checks
 
                                         let current = Bagel.internal.current;
@@ -2832,7 +2854,7 @@ Bagel = {
                                             ob: newArgs,
                                             syntax: method.args,
                                             where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
-                                        });
+                                        }, {args: true});
                                         // Passed the argument checks
 
                                         let current = Bagel.internal.current;
@@ -3293,7 +3315,8 @@ Bagel = {
 
     check: (args, disableChecks, where, logObject) => {
         // TODO: is where needed?
-        if (! (disableChecks || args.prev)) { // TODO: allow subcheck, check etc. arguments
+        if (! disableChecks) disableChecks = {};
+        if (! (args.prev || disableChecks.args)) { // TODO: allow subcheck, check etc. arguments?
             args = Bagel.check({
                 ob: args,
                 where: where? where : "the check function. (Bagel.check)",
@@ -3333,13 +3356,17 @@ Bagel = {
                         description: "The game object. Optional if this is being run in a script."
                     }
                 }
-            }, true, null, true);
+            }, {
+                args: true
+            }, null, true);
         }
+        if (disableChecks.missing && disableChecks.types && disableChecks.useless) return args.ob; // No checks to do
         if (! args.hasOwnProperty("game")) {
             args.game = Bagel.internal.current.game;
         }
 
         let output = Bagel.internal.debug;
+        let arrayString = ["array", "string"];
 
         let useless = [];
         let missing = [];
@@ -3347,48 +3374,57 @@ Bagel = {
 
         let extraChecks = [];
 
-        for (let argID in {...args.ob, ...args.syntax}) {
+        let combined;
+        if (disableChecks.missing) {
+            combined = args.ob;
+        }
+        else {
+            combined = {...args.ob, ...args.syntax};
+        }
+        for (let argID in combined) {
             let syntax = args.syntax[argID];
             let arg = args.ob[argID];
 
             if (syntax == null) {
-                useless.push(argID);
+                if (! disableChecks.useless) {
+                    useless.push(argID);
+                }
                 continue;
             }
-            if (syntax == "ignore") {
+            if (syntax == "ignore") { // TODO: is this used? Is it needed?
                 continue;
             }
 
             let defaulted = false;
-            if (syntax.required) {
-                if (! args.ob.hasOwnProperty(argID)) {
+            if (! args.ob.hasOwnProperty(argID)) {
+                if (syntax.required) {
                     missing.push(argID);
                 }
-            }
-            else {
-                if (! args.ob.hasOwnProperty(argID)) {
+                else {
                     args.ob[argID] = syntax.default;
                     arg = args.ob[argID];
                     defaulted = true;
                 }
             }
-            if ((! defaulted) && missing.length == 0) {
-                if (syntax.types == null) {
-                    console.error("The syntax for " + args.where + "." + argID + " is missing the \"types\" argument.");
-                    console.log("In " + args.where + ".");
-                    console.log("Object:");
-                    console.log(args.ob);
-                    Bagel.internal.oops(args.game);
-                }
-                if (! ["array", "string"].includes(Bagel.internal.getTypeOf(syntax.types))) {
-                    console.error("The syntax for " + args.where + "." + argID + " has the wrong data type for the \"types\" argument. You used " + Bagel.internal.an(Bagel.internal.getTypeOf(syntax.types)) + ".");
-                    console.log("In " + args.where + ".");
-                    console.log("Object:");
-                    console.log(args.ob);
-                    Bagel.internal.oops(args.game);
-                }
-                if ((! syntax.types.includes(Bagel.internal.getTypeOf(arg))) && syntax.types != "any") {
-                    wrongTypes.push(argID);
+            if (! disableChecks.types) {
+                if ((! defaulted) && missing.length == 0) {
+                    if (syntax.types == null) {
+                        console.error("The syntax for " + args.where + "." + argID + " is missing the \"types\" argument.");
+                        console.log("In " + args.where + ".");
+                        console.log("Object:");
+                        console.log(args.ob);
+                        Bagel.internal.oops(args.game);
+                    }
+                    if (! arrayString.includes(Bagel.internal.getTypeOf(syntax.types))) {
+                        console.error("The syntax for " + args.where + "." + argID + " has the wrong data type for the \"types\" argument. You used " + Bagel.internal.an(Bagel.internal.getTypeOf(syntax.types)) + ".");
+                        console.log("In " + args.where + ".");
+                        console.log("Object:");
+                        console.log(args.ob);
+                        Bagel.internal.oops(args.game);
+                    }
+                    if ((! syntax.types.includes(Bagel.internal.getTypeOf(arg))) && syntax.types != "any") {
+                        wrongTypes.push(argID);
+                    }
                 }
             }
 
