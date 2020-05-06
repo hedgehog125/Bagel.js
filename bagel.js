@@ -1,5 +1,4 @@
 /*
-
 TODO:
 .visible handling in touching
 Categories in games and Bagel
@@ -13,6 +12,7 @@ PERFORMANCE
 Prescale images on canvases?
 Disable alpha?
 Clear the canvas more efficiently?
+Optimise .move
 
 Automatic clone recycling
 WebGL renderer
@@ -41,6 +41,9 @@ README
 
 CREDITS
 Click, click release and mouse touch from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
+
+Before clone check improvement: ~12FPS
+After: 
 */
 
 Bagel = {
@@ -1759,9 +1762,7 @@ Bagel = {
                             game.config.display.renderer = "webgl";
                         }
                     }
-                    else {
-
-                    }
+                    game.config.display.renderer = "ctx"; // TODO: tmp.
                     if (game.config.display.renderer == "webgl") {
                         renderer.ctx = renderer.canvas.getContext("webgl") || renderer.canvas.getContext("experimental-webgl");
                     }
