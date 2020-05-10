@@ -1,12 +1,17 @@
 /*
 TODO:
-.visible handling in touching
+Remove categories and use objects instead
+Does having more than 2 catergories work?
+Categories are the wrong way round. sprite.layer isn't defined
+Bagel methods <=======================================================
+Remove FPS option in syntax for games (GameJSON.config.fps?)
 Categories in games and Bagel
-Bagel methods
 Prevent overwriting in sprites, games and Bagel by methods
 Reserved ids for sprites and other stuff. Games?
 Plugin argument in custom functions
 Reserved ids for plugins
+Move maths to plugin
+.clones checking? Does it already exist?
 
 PERFORMANCE
 Prescale images on canvases?
@@ -484,216 +489,252 @@ Bagel = {
                 sprites: [],
 
                 methods: {
-                    bagel: {},
+                    bagel: {
+                        maths: {
+                            category: {
+                                radToDeg: {
+                                    fn: {
+                                        normal: true,
+                                        fn: rad => (rad * 180) / Math.PI
+                                    }
+                                },
+                                degToRad: {
+                                    fn: {
+                                        category: "maths",
+                                        normal: true,
+                                        fn: deg => deg * (Math.PI / 180)
+                                    }
+                                },
+                                get: {
+                                    category: {
+                                        direction: {
+                                            fn: {
+                                                normal: true,
+                                                fn: (x1, y1, x2, y2) => Bagel.maths.radToDeg(Math.atan2(y2 - y1, x2 - x1)) - 90 // gist.github.com/conorbuck/2606166
+                                            }
+                                        },
+                                        distance: {
+                                            fn: {
+                                                normal: true,
+                                                fn: (x1, y1, x2, y2) => Math.sqrt(Math.pow(Math.abs(x2 - x1), 2) + Math.pow(Math.abs(y2 - y1), 2)) // a^2 + b^2 = c^2
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
                     game: {
                         playSound: {
-                            obArg: false,
-                            args: {
-                                id: {
-                                    required: true,
-                                    types: ["string"],
-                                    description: "The ID of the sound to play."
+                            fn: {
+                                obArg: false,
+                                args: {
+                                    id: {
+                                        required: true,
+                                        types: ["string"],
+                                        description: "The ID of the sound to play."
+                                    },
+                                    loop: {
+                                        required: false,
+                                        default: false,
+                                        types: ["boolean"],
+                                        description: "If the audio should loop or not."
+                                    },
+                                    startTime: {
+                                        required: false,
+                                        default: 0,
+                                        types: ["number"],
+                                        description: "The starting time for the audio in seconds."
+                                    }
                                 },
-                                loop: {
-                                    required: false,
-                                    default: false,
-                                    types: ["boolean"],
-                                    description: "If the audio should loop or not."
-                                },
-                                startTime: {
-                                    required: false,
-                                    default: 0,
-                                    types: ["number"],
-                                    description: "The starting time for the audio in seconds."
-                                }
-                            },
-                            fn: (game, args, plugin) => {
-                                let snd = Bagel.get.asset.snd(args.id, game);
+                                fn: (game, args, plugin) => {
+                                    let snd = Bagel.get.asset.snd(args.id, game);
 
-                                snd.currentTime = args.startTime;
-                                snd.loop = args.loop;
-                                if (plugin.vars.audio.autoPlay) { // Wait for an unmute instead of treating every input as one
-                                    let promise = snd.play();
-                                    if (promise != null) {
-                                        promise.then(() => { // Autoplay worked
-                                            plugin.vars.audio.autoPlay = true;
-                                        }).catch(() => { // Nope. Prompt the user
-                                            plugin.vars.audio.autoPlay = false;
-                                            if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
-                                                    // Create one instead
-                                                    // TODO: how does it handle state changes?
-                                                    let where = "plugin Internal's function \"game.playSound\"";
-                                                    game.add.asset.img({
-                                                        id: ".Internal.unmuteButtonMuted",
-                                                        src: "../assets/imgs/muted.png"
-                                                    }, where); // Load its image
-                                                    game.add.asset.img({
-                                                        id: ".Internal.unmuteButton",
-                                                        src: "../assets/imgs/unmuted.png"
-                                                    }, where); // Load its image
+                                    snd.currentTime = args.startTime;
+                                    snd.loop = args.loop;
+                                    if (plugin.vars.audio.autoPlay) { // Wait for an unmute instead of treating every input as one
+                                        let promise = snd.play();
+                                        if (promise != null) {
+                                            promise.then(() => { // Autoplay worked
+                                                plugin.vars.audio.autoPlay = true;
+                                            }).catch(() => { // Nope. Prompt the user
+                                                plugin.vars.audio.autoPlay = false;
+                                                if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
+                                                    if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
+                                                        // Create one instead
+                                                        // TODO: how does it handle state changes?
+                                                        let where = "plugin Internal's function \"game.playSound\"";
+                                                        game.add.asset.img({
+                                                            id: ".Internal.unmuteButtonMuted",
+                                                            src: "../assets/imgs/muted.png"
+                                                        }, where); // Load its image
+                                                        game.add.asset.img({
+                                                            id: ".Internal.unmuteButton",
+                                                            src: "../assets/imgs/unmuted.png"
+                                                        }, where); // Load its image
 
-                                                    game.add.asset.snd({
-                                                        id: ".Internal.unmuteButtonClick",
-                                                        src: "../assets/snds/clickDown.mp3"
-                                                    }, where)
-                                                    game.add.asset.snd({
-                                                        id: ".Internal.unmuteButtonClickUp",
-                                                        src: "../assets/snds/clickUp.mp3"
-                                                    }, where)
-                                                    game.add.asset.snd({
-                                                        id: ".Internal.unmuteButtonMouseTouch",
-                                                        src: "../assets/snds/mouseTouch.mp3"
-                                                    }, where)
+                                                        game.add.asset.snd({
+                                                            id: ".Internal.unmuteButtonClick",
+                                                            src: "../assets/snds/clickDown.mp3"
+                                                        }, where)
+                                                        game.add.asset.snd({
+                                                            id: ".Internal.unmuteButtonClickUp",
+                                                            src: "../assets/snds/clickUp.mp3"
+                                                        }, where)
+                                                        game.add.asset.snd({
+                                                            id: ".Internal.unmuteButtonMouseTouch",
+                                                            src: "../assets/snds/mouseTouch.mp3"
+                                                        }, where)
 
-                                                    let size = Math.min(game.width, game.height) / 10;
-                                                    game.add.sprite({
-                                                        id: ".Internal.unmute", // We can use this as we're that plugin
-                                                        type: "sprite",
-                                                        img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
-                                                        visible: false,
-                                                        scripts: {
-                                                            steps: {
-                                                                appearAnimation: me => {
-                                                                    if (me.vars.delay < 30) {
-                                                                        me.vars.delay++;
-                                                                    }
-                                                                    else {
-                                                                        me.visible = true;
-                                                                        if (me.width != me.vars.size) {
-                                                                            me.width *= 1.4;
-
-                                                                            if (me.width >= me.vars.size) {
-                                                                                me.width = me.vars.size;
-                                                                                me.vars.appearAnimation = false;
-                                                                            }
-                                                                            me.height = me.width;
-                                                                        }
-                                                                    }
-                                                                },
-                                                                deleteAnimation: me => {
-                                                                    me.width /= 1.4;
-                                                                    me.height = me.width;
-                                                                    if (me.width < 1) {
-                                                                        me.delete(); // Bye
-                                                                    }
-                                                                },
-                                                                expandAnimation: me => {
-                                                                    me.width *= 1.025;
-                                                                    if (me.width > me.vars.expandedSize) {
-                                                                        me.width = me.vars.expandedSize;
-                                                                    }
-                                                                    me.height = me.width;
-                                                                },
-                                                                shrinkAnimation: me => {
-                                                                    if (me.width != me.vars.size) {
-                                                                        me.width /= 1.025;
-                                                                        if (me.width < me.vars.size) {
-                                                                            me.width = me.vars.size;
-                                                                        }
-                                                                        me.height = me.width;
-                                                                    }
-                                                                    if (me.vars.plugin.vars.audio.autoPlay) { // Unmuted
-                                                                        me.vars.delete = true;
-                                                                    }
-                                                                },
-                                                                play: me => {
-                                                                    let vars = me.vars.plugin.vars;
-                                                                    for (let i in vars.audio.queue) {
-                                                                        let snd = Bagel.get.asset.snd(vars.audio.queue[i], game);
-                                                                        snd.play().then().catch(); // Play it
-                                                                    }
-                                                                    vars.audio.autoPlay = true;
-                                                                    vars.audio.queue = []; // Clear the queue
-                                                                    me.img = ".Internal.unmuteButton"; // Change to the unmuted image
-                                                                },
-                                                                pause: me => {
-                                                                    let vars = me.vars.plugin.vars;
-                                                                    for (let id in game.internal.assets.assets.snds) {
-                                                                        let snd = game.internal.assets.assets.snds[id].snd;
-                                                                        if (! snd.paused) {
-                                                                            if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                                                snd.pause();
-                                                                                vars.audio.queue.push(id);
-                                                                            }
-                                                                            else {
-                                                                                snd.stop();
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                    vars.audio.autoPlay = false;
-                                                                    me.img = ".Internal.unmuteButtonMuted"; // Change to the unmuted image
-                                                                }
-                                                            },
-                                                            main: [
-                                                                {
-                                                                    code: (me, game, step) => {
-                                                                        me.layer.bringToFront();
-                                                                        if (me.vars.appearAnimation) {
-                                                                            step("appearAnimation");
+                                                        let size = Math.min(game.width, game.height) / 10;
+                                                        game.add.sprite({
+                                                            id: ".Internal.unmute", // We can use this as we're that plugin
+                                                            type: "sprite",
+                                                            img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
+                                                            visible: false,
+                                                            scripts: {
+                                                                steps: {
+                                                                    appearAnimation: me => {
+                                                                        if (me.vars.delay < 30) {
+                                                                            me.vars.delay++;
                                                                         }
                                                                         else {
-                                                                            if (! game.input.mouse.down) {
-                                                                                if (me.vars.clicked) {
-                                                                                    game.playSound(".Internal.unmuteButtonClickUp");
-                                                                                }
-                                                                                me.vars.clicked = false;
-                                                                            }
+                                                                            me.visible = true;
+                                                                            if (me.width != me.vars.size) {
+                                                                                me.width *= 1.4;
 
-                                                                            let vars = me.vars.plugin.vars;
-                                                                            if (me.vars.delete) {
-                                                                                step("deleteAnimation");
-                                                                            }
-                                                                            else {
-                                                                                if (me.touching.mouseCircles()) {
-                                                                                    if (! me.vars.touching) {
-                                                                                        game.playSound(".Internal.unmuteButtonMouseTouch");
-                                                                                        me.vars.touching = true;
-                                                                                    }
-                                                                                    if (me.width != me.vars.expandedSize) {
-                                                                                        step("expandAnimation");
-                                                                                    }
-                                                                                    if (game.input.mouse.down && (! me.vars.clicked)) {
-                                                                                        game.playSound(".Internal.unmuteButtonClick");
-                                                                                        if (vars.audio.autoPlay) {
-                                                                                            step("pause");
-                                                                                        }
-                                                                                        else {
-                                                                                            step("play");
-                                                                                        }
-                                                                                        me.vars.clicked = true;
-                                                                                    }
+                                                                                if (me.width >= me.vars.size) {
+                                                                                    me.width = me.vars.size;
+                                                                                    me.vars.appearAnimation = false;
                                                                                 }
-                                                                                else {
-                                                                                    me.vars.touching = false;
-                                                                                    step("shrinkAnimation");
-                                                                                }
+                                                                                me.height = me.width;
                                                                             }
                                                                         }
                                                                     },
-                                                                    stateToRun: game.state // Runs immediately. TODO: how can this keep running on state change?
-                                                                }
-                                                            ]
-                                                        },
-                                                        vars: {
-                                                            plugin: plugin,
-                                                            size: size,
-                                                            expandedSize: size * 1.1,
-                                                            delay: 0,
-                                                            clicked: false,
-                                                            delete: false,
-                                                            touching: false,
-                                                            appearAnimation: true
-                                                        },
-                                                        x: size,
-                                                        y: game.height - size,
-                                                        width: 1,
-                                                        height: 1,
-                                                    }, "plugin Internal, function \"game.playSound\""); // TODO: use the defaults to allow skipping of checking
+                                                                    deleteAnimation: me => {
+                                                                        me.width /= 1.4;
+                                                                        me.height = me.width;
+                                                                        if (me.width < 1) {
+                                                                            me.delete(); // Bye
+                                                                        }
+                                                                    },
+                                                                    expandAnimation: me => {
+                                                                        me.width *= 1.025;
+                                                                        if (me.width > me.vars.expandedSize) {
+                                                                            me.width = me.vars.expandedSize;
+                                                                        }
+                                                                        me.height = me.width;
+                                                                    },
+                                                                    shrinkAnimation: me => {
+                                                                        if (me.width != me.vars.size) {
+                                                                            me.width /= 1.025;
+                                                                            if (me.width < me.vars.size) {
+                                                                                me.width = me.vars.size;
+                                                                            }
+                                                                            me.height = me.width;
+                                                                        }
+                                                                        if (me.vars.plugin.vars.audio.autoPlay) { // Unmuted
+                                                                            me.vars.delete = true;
+                                                                        }
+                                                                    },
+                                                                    play: me => {
+                                                                        let vars = me.vars.plugin.vars;
+                                                                        for (let i in vars.audio.queue) {
+                                                                            let snd = Bagel.get.asset.snd(vars.audio.queue[i], game);
+                                                                            snd.play().then().catch(); // Play it
+                                                                        }
+                                                                        vars.audio.autoPlay = true;
+                                                                        vars.audio.queue = []; // Clear the queue
+                                                                        me.img = ".Internal.unmuteButton"; // Change to the unmuted image
+                                                                    },
+                                                                    pause: me => {
+                                                                        let vars = me.vars.plugin.vars;
+                                                                        for (let id in game.internal.assets.assets.snds) {
+                                                                            let snd = game.internal.assets.assets.snds[id].snd;
+                                                                            if (! snd.paused) {
+                                                                                if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
+                                                                                    snd.pause();
+                                                                                    vars.audio.queue.push(id);
+                                                                                }
+                                                                                else {
+                                                                                    snd.stop();
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        vars.audio.autoPlay = false;
+                                                                        me.img = ".Internal.unmuteButtonMuted"; // Change to the unmuted image
+                                                                    }
+                                                                },
+                                                                main: [
+                                                                    {
+                                                                        code: (me, game, step) => {
+                                                                            me.layer.bringToFront();
+                                                                            if (me.vars.appearAnimation) {
+                                                                                step("appearAnimation");
+                                                                            }
+                                                                            else {
+                                                                                if (! game.input.mouse.down) {
+                                                                                    if (me.vars.clicked) {
+                                                                                        game.playSound(".Internal.unmuteButtonClickUp");
+                                                                                    }
+                                                                                    me.vars.clicked = false;
+                                                                                }
+
+                                                                                let vars = me.vars.plugin.vars;
+                                                                                if (me.vars.delete) {
+                                                                                    step("deleteAnimation");
+                                                                                }
+                                                                                else {
+                                                                                    if (me.touching.mouseCircles()) {
+                                                                                        if (! me.vars.touching) {
+                                                                                            game.playSound(".Internal.unmuteButtonMouseTouch");
+                                                                                            me.vars.touching = true;
+                                                                                        }
+                                                                                        if (me.width != me.vars.expandedSize) {
+                                                                                            step("expandAnimation");
+                                                                                        }
+                                                                                        if (game.input.mouse.down && (! me.vars.clicked)) {
+                                                                                            game.playSound(".Internal.unmuteButtonClick");
+                                                                                            if (vars.audio.autoPlay) {
+                                                                                                step("pause");
+                                                                                            }
+                                                                                            else {
+                                                                                                step("play");
+                                                                                            }
+                                                                                            me.vars.clicked = true;
+                                                                                        }
+                                                                                    }
+                                                                                    else {
+                                                                                        me.vars.touching = false;
+                                                                                        step("shrinkAnimation");
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        stateToRun: game.state // Runs immediately. TODO: how can this keep running on state change?
+                                                                    }
+                                                                ]
+                                                            },
+                                                            vars: {
+                                                                plugin: plugin,
+                                                                size: size,
+                                                                expandedSize: size * 1.1,
+                                                                delay: 0,
+                                                                clicked: false,
+                                                                delete: false,
+                                                                touching: false,
+                                                                appearAnimation: true
+                                                            },
+                                                            x: size,
+                                                            y: game.height - size,
+                                                            width: 1,
+                                                            height: 1,
+                                                        }, "plugin Internal, function \"game.playSound\""); // TODO: use the defaults to allow skipping of checking
+                                                    }
+                                                    plugin.vars.audio.queue.push(args.id);
                                                 }
-                                                plugin.vars.audio.queue.push(args.id);
-                                            }
-                                        });
+                                            });
+                                        }
                                     }
                                 }
                             }
@@ -701,349 +742,173 @@ Bagel = {
                     },
                     sprite: {
                         move: {
-                            appliesTo: [
-                                "sprite",
-                                "canvas"
-                            ],
-                            obArg: false,
-                            args: {
-                                amount: {
-                                    required: true,
-                                    types: ["number"],
-                                    description: "The number of in game pixels (independent of the rendered canvas width and height) to move the sprite.",
-                                },
-                                angle: {
-                                    required: false,
-                                    types: ["number"],
-                                    description: "The angle in degrees for the sprite to move in. 0° -> Straight up. -180/180° -> Straight down. 90° -> Right (default of sprites). Defaults to the value of sprite.angle."
-                                }
-                            },
-                            fn: (me, args, game) => {
-                                let cached = me.internal.cache;
-                                me.x += cached.cos * args.amount;
-                                me.y += cached.sin * args.amount;
-                            }
-                        },
-
-                        bringToFront: {
-                            category: "layer",
-                            appliesTo: [
-                                "sprite",
-                                "canvas"
-                            ],
-                            obArg: false,
-                            args: {},
-                            fn: (sprite, args, game) => {
-                                if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
-                                    return;
-                                }
-                                let layers = game.internal.renderer.layers;
-                                let originalIndex = layers.indexOf(sprite.idIndex);
-
-                                if (layers[layers.length - 1] == sprite.idIndex) {
-                                    return;
-                                }
-
-                                let oldSprite = layers[layers.length - 1];
-                                layers[layers.length - 1] = sprite.idIndex;
-                                layers[originalIndex] = null; // This can now be used by another sprite
-
-                                let i = layers.length - 2;
-                                while (i >= 0) {
-                                    if (layers[i] == null) {
-                                        layers[i] = oldSprite;
-                                        return;
-                                    }
-                                    let oldSprite2 = layers[i];
-                                    layers[i] = oldSprite;
-                                    oldSprite = oldSprite2;
-                                    i--;
-                                }
-                            }
-                        },
-                        bringForwards: {
-                            category: "layer",
-                            appliesTo: [
-                                "sprite",
-                                "canvas",
-                                "renderer"
-                            ],
-                            obArg: false,
-                            args: {},
-                            fn: (sprite, args, game) => {
-                                if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
-                                    return;
-                                }
-                                let layers = game.internal.renderer.layers;
-                                let originalIndex = layers.indexOf(sprite.idIndex);
-
-                                if (layers[layers.length - 1] == sprite.idIndex) { // Already rendered last
-                                    return;
-                                }
-
-                                let oldSprite = layers[originalIndex + 1];
-                                layers[originalIndex + 1] = sprite.idIndex;
-                                layers[originalIndex] = oldSprite; // Swap them
-                            }
-                        },
-                        sendToBack: {
-                            category: "layer",
-                            appliesTo: [
-                                "sprite",
-                                "canvas",
-                                "renderer"
-                            ],
-                            obArg: false,
-                            args: {},
-                            fn: (sprite, args, game) => {
-                                if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
-                                    return;
-                                }
-                                let layers = game.internal.renderer.layers;
-                                let originalIndex = layers.indexOf(sprite.idIndex);
-
-                                if (layers[0] == sprite.idIndex) { // Already rendered first
-                                    return;
-                                }
-
-                                let oldSprite = layers[0];
-                                layers[0] = sprite.idIndex;
-                                layers[originalIndex] = null; // This can now be used by another sprite
-
-                                let i = 1;
-                                while (i < layers.length) {
-                                    if (layers[i] == null) {
-                                        layers[i] = oldSprite;
-                                        return;
-                                    }
-                                    let oldSprite2 = layers[i];
-                                    layers[i] = oldSprite;
-                                    oldSprite = oldSprite2;
-                                    i++;
-                                }
-                            }
-                        },
-                        sendBackwards: {
-                            category: "layer",
-                            appliesTo: [
-                                "sprite",
-                                "canvas",
-                                "renderer"
-                            ],
-                            obArg: false,
-                            args: {},
-                            fn: (sprite, args, game) => {
-                                if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
-                                    return;
-                                }
-                                let layers = game.internal.renderer.layers;
-                                let originalIndex = layers.indexOf(sprite.idIndex);
-
-                                if (layers[0] == sprite.idIndex) { // Already rendered first
-                                    return;
-                                }
-
-                                let oldSprite = layers[originalIndex - 1];
-                                layers[originalIndex - 1] = sprite.idIndex;
-                                layers[originalIndex] = oldSprite; // Swap them
-                            }
-                        },
-
-                        mouse: {
-                            category: "touching",
-                            appliesTo: [
-                                "sprite",
-                                "canvas"
-                            ],
-                            obArg: true,
-                            args: {
-                                box: {
-                                    required: false,
-                                    types: ["object"],
-                                    subcheck: {
-                                        x: {
-                                            required: true,
-                                            types: ["number"],
-                                            description: "The x position of the middle of the bounding box."
-                                        },
-                                        y: {
-                                            required: true,
-                                            types: ["number"],
-                                            description: "The y position of the middle of the bounding box."
-                                        },
-                                        width: {
-                                            required: true,
-                                            types: ["number"],
-                                            description: "The width of the bounding box."
-                                        },
-                                        height: {
-                                            required: true,
-                                            types: ["number"],
-                                            description: "The height of the bounding box."
-                                        }
+                            fn: {
+                                appliesTo: [
+                                    "sprite",
+                                    "canvas"
+                                ],
+                                obArg: false,
+                                args: {
+                                    amount: {
+                                        required: true,
+                                        types: ["number"],
+                                        description: "The number of in game pixels (independent of the rendered canvas width and height) to move the sprite.",
                                     },
-                                    description: "The bounding box to be used. If unspecified, the sprite's width, height, x and y coordinates will be used to make one."
+                                    angle: {
+                                        required: false,
+                                        types: ["number"],
+                                        description: "The angle in degrees for the sprite to move in. 0° -> Straight up. -180/180° -> Straight down. 90° -> Right (default of sprites). Defaults to the value of sprite.angle."
+                                    }
                                 },
-                                mouseSize: {
-                                    required: false,
-                                    default: 0,
-                                    types: ["number"],
-                                    description: "The size of the bounding box for the mouse. Defaults to one pixel."
-                                },
-                                mode: {
-                                    required: false,
-                                    default: "touching",
-                                    check: value => {
-                                        if (! ["touching", "overlap"].includes(value)) {
-                                            return "Huh, looks like you used an invalid option for the \"mode\" argument. It can only be \"touching\" or \"overlap\" and you put " + JSON.stringify(value) + ".";
-                                        }
-                                    },
-                                    description: "The touching mode. Defaults to \"touching\" but can also be \"overlap\"."
+                                fn: (me, args, game) => {
+                                    let cached = me.internal.cache;
+                                    me.x += cached.cos * args.amount;
+                                    me.y += cached.sin * args.amount;
                                 }
-                            },
-                            fn: (me, args, game) => {
-                                if (args.box == null) {
-                                    // Make a bounding box
-                                    args.box = {
-                                        x: me.x - (me.width / 2),
-                                        y: me.y - (me.height / 2),
-                                        width: me.width,
-                                        height: me.height
-                                    };
-                                }
-                                else {
-                                    args.box.x -= (me.width / 2);
-                                    args.box.y -= (me.height / 2);
-                                }
-                                if (args.mode == "touching") { // Expand it slightly
-                                    args.box.width += 2;
-                                    args.box.height += 2;
-                                    args.box.x--;
-                                    args.box.y--;
-                                }
-                                let halfInputSize = args.mouseSize / 2;
+                            }
+                        },
 
-                                let inputs;
-                                if (Bagel.device.is.touchscreen) {
-                                    inputs = game.input.touches;
-                                }
-                                else {
-                                    inputs = [{
-                                        x: game.input.mouse.x,
-                                        y: game.input.mouse.y
-                                    }];
-                                }
+                        layer: {
+                            category: {
+                                bringToFront: {
+                                    fn: {
+                                        appliesTo: [
+                                            "sprite",
+                                            "canvas"
+                                        ],
+                                        obArg: false,
+                                        args: {},
+                                        fn: (sprite, args, game) => {
+                                            if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
+                                                return;
+                                            }
+                                            let layers = game.internal.renderer.layers;
+                                            let originalIndex = layers.indexOf(sprite.idIndex);
 
-                                let rect = args.box;
-                                for (let i in inputs) {
-                                    let input = inputs[i];
-                                    if (input.x - halfInputSize < rect.x + rect.width) {
-                                        if (input.x + halfInputSize > rect.x) {
-                                            if (input.y - halfInputSize < rect.y + rect.height) {
-                                                if (input.y + halfInputSize > rect.y) {
-                                                    me.last.collision = {
-                                                        x: input.x,
-                                                        y: input.y,
-                                                        type: "mouse"
-                                                    };
-                                                    return true;
+                                            if (layers[layers.length - 1] == sprite.idIndex) {
+                                                return;
+                                            }
+
+                                            let oldSprite = layers[layers.length - 1];
+                                            layers[layers.length - 1] = sprite.idIndex;
+                                            layers[originalIndex] = null; // This can now be used by another sprite
+
+                                            let i = layers.length - 2;
+                                            while (i >= 0) {
+                                                if (layers[i] == null) {
+                                                    layers[i] = oldSprite;
+                                                    return;
                                                 }
+                                                let oldSprite2 = layers[i];
+                                                layers[i] = oldSprite;
+                                                oldSprite = oldSprite2;
+                                                i--;
                                             }
                                         }
                                     }
-                                }
-                                return false;
-                            }
-                        },
-                        mouseCircles: {
-                            category: "touching",
-                            appliesTo: [
-                                "sprite",
-                                "canvas"
-                            ],
-                            obArg: true,
-                            args: {
-                                radius: {
-                                    required: false,
-                                    types: ["number"],
-                                    description: "The radius of the bounding box. If unspecified, the sprite's width and height will be used to make one."
                                 },
-                                mouseRadius: {
-                                    required: false,
-                                    default: 1,
-                                    types: ["number"],
-                                    description: "The radius of the bounding box for the mouse. Defaults to one pixel."
-                                },
-                                mode: {
-                                    required: false,
-                                    default: "overlap",
-                                    check: value => {
-                                        if (! ["touching", "overlap"].includes(value)) {
-                                            return "Huh, looks like you used an invalid option for the \"mode\" argument. It can only be \"touching\" or \"overlap\" and you put " + JSON.stringify(value) + ".";
+                                bringForwards: {
+                                    fn: {
+                                        appliesTo: [
+                                            "sprite",
+                                            "canvas",
+                                            "renderer"
+                                        ],
+                                        obArg: false,
+                                        args: {},
+                                        fn: (sprite, args, game) => {
+                                            if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
+                                                return;
+                                            }
+                                            let layers = game.internal.renderer.layers;
+                                            let originalIndex = layers.indexOf(sprite.idIndex);
+
+                                            if (layers[layers.length - 1] == sprite.idIndex) { // Already rendered last
+                                                return;
+                                            }
+
+                                            let oldSprite = layers[originalIndex + 1];
+                                            layers[originalIndex + 1] = sprite.idIndex;
+                                            layers[originalIndex] = oldSprite; // Swap them
                                         }
-                                    },
-                                    description: "The touching mode. Defaults to \"overlap\" but can also be \"touching\"."
-                                }
-                            },
-                            fn: (me, args, game) => {
-                                let box = {
-                                    x: me.x,
-                                    y: me.y
-                                };
-                                if (args.radius == null) {
-                                    // Make a bounding box
-                                    box.radius = Math.max(me.width, me.height) / 2;
-                                }
-                                else {
-                                    box.radius = args.radius;
-                                }
-                                if (args.mode == "touching") { // Expand it slightly
-                                    box.radius++;
-                                }
+                                    }
+                                },
+                                sendToBack: {
+                                    fn: {
+                                        appliesTo: [
+                                            "sprite",
+                                            "canvas",
+                                            "renderer"
+                                        ],
+                                        obArg: false,
+                                        args: {},
+                                        fn: (sprite, args, game) => {
+                                            if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
+                                                return;
+                                            }
+                                            let layers = game.internal.renderer.layers;
+                                            let originalIndex = layers.indexOf(sprite.idIndex);
 
-                                let inputs;
-                                if (Bagel.device.is.touchscreen) {
-                                    inputs = game.input.touches;
-                                }
-                                else {
-                                    inputs = [{
-                                        x: game.input.mouse.x,
-                                        y: game.input.mouse.y
-                                    }];
-                                }
+                                            if (layers[0] == sprite.idIndex) { // Already rendered first
+                                                return;
+                                            }
 
-                                let minDistance = args.mouseRadius + box.radius;
-                                for (let i in inputs) {
-                                    let input = inputs[i];
-                                    if (Math.sqrt(Math.pow(Math.abs(box.x - input.x), 2) + Math.pow(Math.abs(box.y - input.y), 2)) <= minDistance) {
-                                        me.last.collision = {
-                                            x: input.x,
-                                            y: input.y,
-                                            type: "mouse"
-                                        };
-                                        return true;
+                                            let oldSprite = layers[0];
+                                            layers[0] = sprite.idIndex;
+                                            layers[originalIndex] = null; // This can now be used by another sprite
+
+                                            let i = 1;
+                                            while (i < layers.length) {
+                                                if (layers[i] == null) {
+                                                    layers[i] = oldSprite;
+                                                    return;
+                                                }
+                                                let oldSprite2 = layers[i];
+                                                layers[i] = oldSprite;
+                                                oldSprite = oldSprite2;
+                                                i++;
+                                            }
+                                        }
+                                    }
+                                },
+                                sendBackwards: {
+                                    fn: {
+                                        appliesTo: [
+                                            "sprite",
+                                            "canvas",
+                                            "renderer"
+                                        ],
+                                        obArg: false,
+                                        args: {},
+                                        fn: (sprite, args, game) => {
+                                            if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
+                                                return;
+                                            }
+                                            let layers = game.internal.renderer.layers;
+                                            let originalIndex = layers.indexOf(sprite.idIndex);
+
+                                            if (layers[0] == sprite.idIndex) { // Already rendered first
+                                                return;
+                                            }
+
+                                            let oldSprite = layers[originalIndex - 1];
+                                            layers[originalIndex - 1] = sprite.idIndex;
+                                            layers[originalIndex] = oldSprite; // Swap them
+                                        }
                                     }
                                 }
-                                return false;
                             }
                         },
-                        sprite: {
-                            category: "touching",
-                            appliesTo: [
-                                "sprite",
-                                "canvas"
-                            ],
-                            obArg: false,
-                            args: {
-                                sprite: {
-                                    required: true,
-                                    types: ["string"],
-                                    description: "The ID of the sprite to check against for a collision."
-                                },
-                                options: {
-                                    required: false,
-                                    default: {},
-                                    subcheck: {
+
+                        touching: {
+                            category: {
+                                mouse: {
+                                    appliesTo: [
+                                        "sprite",
+                                        "canvas"
+                                    ],
+                                    obArg: true,
+                                    args: {
                                         box: {
                                             required: false,
                                             types: ["object"],
@@ -1071,6 +936,12 @@ Bagel = {
                                             },
                                             description: "The bounding box to be used. If unspecified, the sprite's width, height, x and y coordinates will be used to make one."
                                         },
+                                        mouseSize: {
+                                            required: false,
+                                            default: 0,
+                                            types: ["number"],
+                                            description: "The size of the bounding box for the mouse. Defaults to one pixel."
+                                        },
                                         mode: {
                                             required: false,
                                             default: "touching",
@@ -1080,63 +951,273 @@ Bagel = {
                                                 }
                                             },
                                             description: "The touching mode. Defaults to \"touching\" but can also be \"overlap\"."
-                                        },
-                                        includeClones: {
-                                            required: false,
-                                            default: true,
-                                            types: ["boolean"],
-                                            description: "If this collision check includes clones or not."
                                         }
                                     },
-                                    types: ["object"],
-                                    description: "A few other options for this function."
-                                }
-                            },
-                            fn: (me, args, game) => {
-                                if (args.options.box == null) {
-                                    // Make a bounding box
-                                    args.options.box = {
-                                        x: me.x - (me.width / 2),
-                                        y: me.y - (me.height / 2),
-                                        width: me.width,
-                                        height: me.height
-                                    };
-                                }
-                                else {
-                                    args.options.box.x -= (me.width / 2);
-                                    args.options.box.y -= (me.height / 2);
-                                }
-                                let box = args.options.box;
-                                if (args.mode == "touching") { // Expand it slightly
-                                    box.width += 2;
-                                    box.height += 2;
-                                    box.x--;
-                                    box.y--;
-                                }
+                                    fn: (me, args, game) => {
+                                        if (args.box == null) {
+                                            // Make a bounding box
+                                            args.box = {
+                                                x: me.x - (me.width / 2),
+                                                y: me.y - (me.height / 2),
+                                                width: me.width,
+                                                height: me.height
+                                            };
+                                        }
+                                        else {
+                                            args.box.x -= (me.width / 2);
+                                            args.box.y -= (me.height / 2);
+                                        }
+                                        if (args.mode == "touching") { // Expand it slightly
+                                            args.box.width += 2;
+                                            args.box.height += 2;
+                                            args.box.x--;
+                                            args.box.y--;
+                                        }
+                                        let halfInputSize = args.mouseSize / 2;
 
-                                let sprites = [args.sprite];
-                                let parent = Bagel.get.sprite(args.sprite, game);
-                                if (args.includeClones) {
-                                    sprites = [...sprites, ...parent.cloneIDs];
-                                }
+                                        let inputs;
+                                        if (Bagel.device.is.touchscreen) {
+                                            inputs = game.input.touches;
+                                        }
+                                        else {
+                                            inputs = [{
+                                                x: game.input.mouse.x,
+                                                y: game.input.mouse.y
+                                            }];
+                                        }
 
-                                for (let i in sprites) {
-                                    let sprite = sprites[i];
-                                    if (box.x < sprite.x + sprite.width) {
-                                        if (box.x + box.width > sprite.x) {
-                                            if (box.y < sprite.y + sprite.height) {
-                                                if (box.y + box.height > sprite.y) {
-                                                    me.last.collision = {
-                                                        sprite: sprite,
-                                                        type: "sprite"
-                                                    };
-                                                    return true;
+                                        let rect = args.box;
+                                        for (let i in inputs) {
+                                            let input = inputs[i];
+                                            if (input.x - halfInputSize < rect.x + rect.width) {
+                                                if (input.x + halfInputSize > rect.x) {
+                                                    if (input.y - halfInputSize < rect.y + rect.height) {
+                                                        if (input.y + halfInputSize > rect.y) {
+                                                            me.last.collision = {
+                                                                x: input.x,
+                                                                y: input.y,
+                                                                type: "mouse"
+                                                            };
+                                                            return true;
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
+                                        return false;
+                                    }
+                                },
+                                mouseCircles: {
+                                    appliesTo: [
+                                        "sprite",
+                                        "canvas"
+                                    ],
+                                    obArg: true,
+                                    args: {
+                                        radius: {
+                                            required: false,
+                                            types: ["number"],
+                                            description: "The radius of the bounding box. If unspecified, the sprite's width and height will be used to make one."
+                                        },
+                                        mouseRadius: {
+                                            required: false,
+                                            default: 1,
+                                            types: ["number"],
+                                            description: "The radius of the bounding box for the mouse. Defaults to one pixel."
+                                        },
+                                        mode: {
+                                            required: false,
+                                            default: "overlap",
+                                            check: value => {
+                                                if (! ["touching", "overlap"].includes(value)) {
+                                                    return "Huh, looks like you used an invalid option for the \"mode\" argument. It can only be \"touching\" or \"overlap\" and you put " + JSON.stringify(value) + ".";
+                                                }
+                                            },
+                                            description: "The touching mode. Defaults to \"overlap\" but can also be \"touching\"."
+                                        }
+                                    },
+                                    fn: (me, args, game) => {
+                                        let box = {
+                                            x: me.x,
+                                            y: me.y
+                                        };
+                                        if (args.radius == null) {
+                                            // Make a bounding box
+                                            box.radius = Math.max(me.width, me.height) / 2;
+                                        }
+                                        else {
+                                            box.radius = args.radius;
+                                        }
+                                        if (args.mode == "touching") { // Expand it slightly
+                                            box.radius++;
+                                        }
+
+                                        let inputs;
+                                        if (Bagel.device.is.touchscreen) {
+                                            inputs = game.input.touches;
+                                        }
+                                        else {
+                                            inputs = [{
+                                                x: game.input.mouse.x,
+                                                y: game.input.mouse.y
+                                            }];
+                                        }
+
+                                        let minDistance = args.mouseRadius + box.radius;
+                                        for (let i in inputs) {
+                                            let input = inputs[i];
+                                            if (Math.sqrt(Math.pow(Math.abs(box.x - input.x), 2) + Math.pow(Math.abs(box.y - input.y), 2)) <= minDistance) {
+                                                me.last.collision = {
+                                                    x: input.x,
+                                                    y: input.y,
+                                                    type: "mouse"
+                                                };
+                                                return true;
+                                            }
+                                        }
+                                        return false;
+                                    }
+                                },
+                                sprite: {
+                                    appliesTo: [
+                                        "sprite",
+                                        "canvas"
+                                    ],
+                                    obArg: false,
+                                    args: {
+                                        sprite: {
+                                            required: true,
+                                            types: ["string"],
+                                            description: "The ID of the sprite to check against for a collision."
+                                        },
+                                        options: {
+                                            required: false,
+                                            default: {},
+                                            subcheck: {
+                                                box: {
+                                                    required: false,
+                                                    types: ["object"],
+                                                    subcheck: {
+                                                        x: {
+                                                            required: true,
+                                                            types: ["number"],
+                                                            description: "The x position of the middle of the bounding box."
+                                                        },
+                                                        y: {
+                                                            required: true,
+                                                            types: ["number"],
+                                                            description: "The y position of the middle of the bounding box."
+                                                        },
+                                                        width: {
+                                                            required: true,
+                                                            types: ["number"],
+                                                            description: "The width of the bounding box."
+                                                        },
+                                                        height: {
+                                                            required: true,
+                                                            types: ["number"],
+                                                            description: "The height of the bounding box."
+                                                        }
+                                                    },
+                                                    description: "The bounding box to be used. If unspecified, the sprite's width, height, x and y coordinates will be used to make one."
+                                                },
+                                                mode: {
+                                                    required: false,
+                                                    default: "overlap",
+                                                    types: ["string"],
+                                                    check: value => {
+                                                        if (! ["touching", "overlap"].includes(value)) {
+                                                            return "Huh, looks like you used an invalid option for the \"mode\" argument. It can only be \"touching\" or \"overlap\" and you put " + JSON.stringify(value) + ".";
+                                                        }
+                                                    },
+                                                    description: "The touching mode. Defaults to \"overlap\" but can also be \"touching\"."
+                                                },
+                                                include: {
+                                                    required: false,
+                                                    default: {},
+                                                    types: ["object"],
+                                                    subcheck: {
+                                                        clones: {
+                                                            required: false,
+                                                            default: true,
+                                                            types: ["boolean"],
+                                                            description: "If this collision check includes clones or not."
+                                                        },
+                                                        invisibles: {
+                                                            required: false,
+                                                            default: false,
+                                                            types: ["boolean"],
+                                                            description: "If this collision check includes invisible sprites or not."
+                                                        }
+                                                    },
+                                                    description: "A few options for whether or not some sprites should be included in the checks."
+                                                }
+                                            },
+                                            types: ["object"],
+                                            description: "A few other options for this function."
+                                        },
+                                        check: {
+                                            required: false,
+                                            types: ["function"],
+                                            description: "A function that does an additional check before a collision is reported. It's given the sprite that's being checked against, the current sprite and the game. (in that order)"
+                                        }
+                                    },
+                                    fn: (me, args, game) => {
+                                        if (args.options.box == null) {
+                                            // Make a bounding box
+                                            args.options.box = {
+                                                x: me.x - (me.width / 2),
+                                                y: me.y - (me.height / 2),
+                                                width: me.width,
+                                                height: me.height
+                                            };
+                                        }
+                                        else {
+                                            args.options.box.x -= (me.width / 2);
+                                            args.options.box.y -= (me.height / 2);
+                                        }
+                                        let box = args.options.box;
+                                        if (args.options.mode == "touching") { // Expand it slightly
+                                            box.width += 2;
+                                            box.height += 2;
+                                            box.x--;
+                                            box.y--;
+                                        }
+
+                                        let sprites = [args.sprite];
+                                        let parent = Bagel.get.sprite(args.sprite, game);
+                                        if (args.options.includeClones) {
+                                            sprites = [...sprites, ...parent.cloneIDs];
+                                        }
+
+                                        let passed = args.check == null;
+                                        for (let i in sprites) {
+                                            let sprite = sprites[i];
+                                            if (! args.options.include.invisibles) {
+                                                if (! sprite.visible) continue;
+                                            }
+                                            if (box.x < sprite.x + sprite.width) {
+                                                if (box.x + box.width > sprite.x) {
+                                                    if (box.y < sprite.y + sprite.height) {
+                                                        if (box.y + box.height > sprite.y) {
+                                                            if (args.check) {
+                                                                passed = args.check(sprite, me, game);
+                                                            }
+                                                            if (passed) {
+                                                                me.last.collision = {
+                                                                    sprite: sprite,
+                                                                    type: "sprite"
+                                                                };
+                                                                return true;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        return false;
                                     }
                                 }
-                                return false;
                             }
                         }
                     }
@@ -1158,7 +1239,7 @@ Bagel = {
             let subFunctions = Bagel.internal.subFunctions.loadPlugin;
             plugin = Bagel.internal.deepClone(plugin); // Create a copy of the plugin
             let current = Bagel.internal.current;
-            let pluginWas = current.plugin;
+            Bagel.internal.saveCurrent();
             current.plugin = plugin;
 
             plugin = subFunctions.check(game, plugin);
@@ -1169,19 +1250,12 @@ Bagel = {
             merge.types.sprites(game, plugin);
 
             merge.methods(game, plugin);
-            current.plugin = pluginWas;
+            Bagel.internal.loadCurrent();
         },
         loadAsset: (asset, game, type, where, i) => {
             let current = Bagel.internal.current;
 
-            let was = {
-                asset: current.asset,
-                assetType: current.assetType,
-                i: current.i,
-                game: current.game,
-                where: current.where,
-                plugin: current.plugin
-            };
+            Bagel.internal.saveCurrent();
             current.asset = asset;
             current.assetType = type;
             current.i = i;
@@ -1206,12 +1280,7 @@ Bagel = {
             let error = assetLoader.check(asset, game, Bagel.internal.check, Bagel.internal.standardChecks.asset, plugin, i);
 
             if (error) {
-                current.asset = was.asset;
-                current.assetType = was.assetType;
-                current.i = was.i;
-                current.where = was.where;
-                current.game = was.game;
-                current.plugin = was.plugin;
+                Bagel.internal.loadCurrent();
 
                 console.error(error);
                 console.log("In plugin " + JSON.stringify(plugin.info.id) + ".");
@@ -1229,14 +1298,8 @@ Bagel = {
             })(asset, game); // This is called by the init function once the asset has loaded
             let assetOb = assetLoader.init(asset, ready, game, assetLoader.internal.plugin, i);
 
-            current.asset = was.asset;
-            current.assetType = was.assetType;
-            current.i = was.i;
-            current.where = was.where;
-            current.game = was.game;
-            current.plugin = was.plugin;
-
             game.internal.assets.loading++;
+            Bagel.internal.loadCurrent();
         },
         createSprite: (sprite, game, parent, where, noCheck, idIndex) => {
             let subFunctions = Bagel.internal.subFunctions.createSprite;
@@ -1244,11 +1307,7 @@ Bagel = {
             let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
 
             let current = Bagel.internal.current;
-            let was = {
-                sprite: current.sprite,
-                game: current.game,
-                plugin: current.plugin
-            };
+            Bagel.internal.saveCurrent();
             current.sprite = sprite;
             current.game = game;
             current.plugin = handler.internal.plugin;
@@ -1268,7 +1327,7 @@ Bagel = {
             let register = subFunctions.register;
             register.scripts("init", sprite, game, parent);
             register.scripts("main", sprite, game, parent);
-            register.methods(sprite, game, parent);
+            register.methods(sprite, game);
             register.listeners(sprite, game, parent);
 
             // TODO: Function for making all the very core stuff
@@ -1337,10 +1396,7 @@ Bagel = {
             subFunctions.extraChecks(sprite, game, where, idIndex);
             subFunctions.init(sprite, game);
 
-            current.sprite = was.sprite;
-            current.game = was.game;
-            current.plugin = was.plugin;
-
+            Bagel.internal.loadCurrent();
             return sprite;
         },
         tick: () => {
@@ -1369,7 +1425,7 @@ Bagel = {
             }
             Bagel.internal.current.game = null;
             let total = new Date() - totalStart;
-            setTimeout(subFunctions.tick, (1000 / Bagel.config.fps) - total);
+            subFunctions.tick();
         },
 
         subFunctions: {
@@ -1803,8 +1859,8 @@ Bagel = {
                                 if (game.state == game.internal.lastState) {
                                     // The init scripts need running because the sprite was after the state changed
                                     let current = Bagel.internal.current;
-                                    let spriteWas = current.sprite;
-                                    let gameWas = current.game;
+                                    Bagel.internal.saveCurrent();
+
                                     current.sprite = sprite;
                                     current.game = game;
                                     for (let i in sprite.scripts.init) {
@@ -1813,8 +1869,7 @@ Bagel = {
                                             script.code(sprite, game, Bagel.step);
                                         }
                                     }
-                                    current.sprite = spriteWas;
-                                    current.game = gameWas;
+                                    Bagel.internal.loadCurrent();
                                 }
                             },
                             asset: {}
@@ -1858,10 +1913,12 @@ Bagel = {
                     }
                 },
                 methods: game => {
+                    console.log("A")
                     let methods = game.internal.combinedPlugins.methods.game;
 
                     for (let methodName in methods) {
                         let method = methods[methodName];
+                        // TODO: categories
 
                         if (game.hasOwnProperty(methodName)) {
                             if (! method.overwrite) {
@@ -1883,8 +1940,7 @@ Bagel = {
                                         Bagel.internal.oops(game);
                                     }
 
-                                    let gameWas = current.game;
-                                    let pluginWas = current.plugin;
+                                    Bagel.internal.saveCurrent();
                                     current.game = game;
                                     current.plugin = method.internal.plugin;
 
@@ -1895,8 +1951,7 @@ Bagel = {
                                     }, {args: true});
                                     let output = method.fn(game, args, current.plugin); // Passed the argument checks
 
-                                    current.game = gameWas;
-                                    current.plugin = pluginWas;
+                                    Bagel.internal.loadCurrent();
                                     return output;
                                 };
                             }
@@ -1914,8 +1969,7 @@ Bagel = {
                                     }
 
                                     let current = Bagel.internal.current;
-                                    let gameWas = current.game;
-                                    let pluginWas = current.plugin;
+                                    Bagel.internal.saveCurrent();
                                     current.game = game;
                                     current.plugin = method.internal.plugin;
 
@@ -1926,8 +1980,7 @@ Bagel = {
                                     }, {args: true});
                                     let output = method.fn(game, newArgs, method.internal.plugin); // Passed the argument checks
 
-                                    current.game = gameWas;
-                                    current.plugin = pluginWas;
+                                    Bagel.internal.loadCurrent();
                                     return output;
                                 };
                             }
@@ -1938,8 +1991,7 @@ Bagel = {
             loadPlugin: {
                 check: (game, plugin) => {
                     let current = Bagel.internal.current;
-                    let pluginWas = current.plugin;
-                    let gameWas = current.game;
+                    Bagel.internal.saveCurrent();
                     current.plugin = plugin;
                     current.game = game;
 
@@ -2479,11 +2531,93 @@ Bagel = {
                         where: "plugin " + plugin.info.id
                     }, {args: true});
 
-                    current.plugin = pluginWas;
-                    current.game = gameWas;
+                    Bagel.internal.loadCurrent();
                     return plugin;
                 },
                 merge: {
+                    bagelCategoryMethods: (handler, position, prev, i, calls) => {
+                        if (Array.isArray(handler)) { // TODO!
+                            for (let c in handler) {
+                                if (position[c] == null) position[c] = {};
+                                Bagel.internal.subFunctions.loadPlugin.merge.bagelCategoryMethods(handler[c], position[c], handler, c, calls + 1);
+                            }
+                        }
+                        else {
+                            // TODO: Can functions overwrite values?
+                            let merge = false;
+                            if (position[i] == null) {
+                                merge = true;
+                            }
+                            else {
+                                if (method.overwrite) {
+                                    merge = true;
+                                }
+                                else {
+                                    console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(i) + " bagel method without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older method, add this to the method JSON: \"overwrite: true\".");
+                                }
+                            }
+                            if (merge) {
+                                ((method, position, methodName) => {
+                                    if (method.obArg) {
+                                        position[methodName] = args => {
+                                            if (args == null) args = {};
+                                            if (Bagel.internal.getTypeOf(args) != "object") {
+                                                console.error("Huh, looks like you used " + Bagel.internal.an(Bagel.internal.getTypeOf(args)) + " instead of an object.");
+                                                Bagel.internal.oops(game);
+                                            }
+
+                                            args = Bagel.check({
+                                                ob: args,
+                                                syntax: method.args,
+                                                where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
+                                            }, {args: true});
+                                            // Passed the argument checks
+
+                                            let current = Bagel.internal.current;
+                                            Bagel.internal.saveCurrent();
+                                            current.plugin = method.internal.plugin;
+
+                                            let output = method.fn(args, current.plugin);
+
+                                            Bagel.internal.loadCurrent();
+                                            return output;
+                                        };
+                                    }
+                                    else {
+                                        position[methodName] = (...args) => {
+                                            let keys = Object.keys(method.args);
+                                            let newArgs = {};
+
+                                            // Convert the array to an object using the keys
+                                            for (let i in args) {
+                                                if (keys[i] == null) {
+                                                    keys[i] = "Your " + Bagel.internal.th(parseInt(i)) + " argument";
+                                                }
+                                                newArgs[keys[i]] = args[i];
+                                            }
+
+                                            newArgs = Bagel.check({
+                                                ob: newArgs,
+                                                syntax: method.args,
+                                                where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
+                                            }, {args: true});
+                                            // Passed the argument checks
+
+                                            let current = Bagel.internal.current;
+                                            Bagel.internal.saveCurrent();
+                                            current.sprite = sprite;
+                                            current.game = game;
+                                            current.plugin = method.internal.plugin;
+                                            let output = method.fn(newArgs, current.plugin);
+
+                                            Bagel.internal.loadCurrent();
+                                            return output;
+                                        };
+                                    }
+                                })(handler, position, i);
+                            }
+                        }
+                    },
                     types: {
                         assets: (game, plugin) => {
                             let types = plugin.plugin.types.assets;
@@ -2521,12 +2655,8 @@ Bagel = {
                                         Bagel.get.asset[typeJSON.get.name] = (id, game, check) => {
                                             let current = Bagel.internal.current;
 
-                                            let was = {
-                                                assetType: current.assetType,
-                                                assetTypeName: current.assetTypeName,
-                                                game: current.game,
-                                                plugin: current.plugin
-                                            };
+                                            Bagel.internal.saveCurrent();
+
                                             current.assetType = newType;
                                             current.assetTypeName = typeJSON.get.name;
                                             current.game = game == null? current.game : game;
@@ -2541,15 +2671,11 @@ Bagel = {
                                                 newType
                                             );
 
-                                            current.assetType = was.assetType;
-                                            current.assetTypeName = was.assetTypeName;
-                                            current.game = was.game;
-                                            current.plugin = was.plugin;
-
                                             if (typeof output == "string") { // Error
                                                 console.error(output);
                                                 Bagel.internal.oops(current.game);
                                             }
+                                            Bagel.internal.loadCurrent();
                                             return output;
                                         };
                                         boundGame.add.asset[typeJSON.get.name] = (asset, where) => {
@@ -2600,8 +2726,8 @@ Bagel = {
                     methods: (game, plugin) => {
                         let combined = game.internal.combinedPlugins;
 
-                        let types = ["bagel", "game", "sprite"];
-                        for (i in types) {
+                        let types = ["game", "sprite"];
+                        for (let i in types) {
                             let type = types[i];
                             let methods = plugin.plugin.methods[type];
 
@@ -2612,36 +2738,39 @@ Bagel = {
                                     let spriteType = appliesTo[i];
                                     let merge = false;
 
-                                    let combinedMethods = combined.methods[type];
-                                    if (spriteType != null) {
-                                        if (combinedMethods[spriteType] == null) {
-                                            combinedMethods[spriteType] = {};
+                                    let position;
+                                    if (spriteType) {
+                                        if (combined.methods[type][spriteType] == null) combined.methods[type][spriteType] = {};
+                                        position = combined.methods[type][spriteType];
+                                    }
+                                    else {
+                                        position = combined.methods[type];
+                                    }
+                                    let categories = "";
+                                    if (method.category != "") {
+                                        categories = method.category.split(".").reverse();
+                                        for (i in categories) {
+                                            let category = categories[i];
+                                            if (position[category] == null) {
+                                                position[category] = {};
+                                            }
+                                            position = position[category];
                                         }
                                     }
 
-                                    if (spriteType == null) {
-                                        if (combinedMethods[methodName] == null) {
-                                            merge = true;
-                                        }
-                                        else {
-                                            if (method.overwrite) {
-                                                merge = true;
-                                            }
-                                            else {
-                                                console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(methodName) + " " + type + " method without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older method, add this to the new method JSON: \"overwrite: true\".");
-                                            }
-                                        }
+                                    if (position[methodName] == null) {
+                                        merge = true;
                                     }
                                     else {
-                                        if (combinedMethods[spriteType][methodName] == null) {
+                                        if (method.overwrite) {
                                             merge = true;
                                         }
                                         else {
-                                            if (method.overwrite) {
-                                                merge = true;
+                                            if (spriteType) {
+                                                console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(methodName) + " method for the " + spriteType + " type without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older method, add this to the method JSON: \"overwrite: true\".");
                                             }
                                             else {
-                                                console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(methodName) + " method for the " + spriteType + " type without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older method, add this to the new method JSON: \"overwrite: true\".");
+                                                console.warn("Oops. We've got a conflict. Plugin " + JSON.stringify(plugin.id) + " tried to overwrite the " + JSON.stringify(methodName) + " " + type + " method without having the correct tag. The overwrite has been blocked.\nIf you want to overwrite the older method, add this to the method JSON: \"overwrite: true\".");
                                             }
                                         }
                                     }
@@ -2649,16 +2778,18 @@ Bagel = {
                                     if (merge) {
                                         // TODO: What locals are needed?
                                         method.internal = {
-                                            plugin: plugin
+                                            plugin: plugin,
+                                            categories: categories
                                         };
-                                        if (spriteType == null) {
-                                            combinedMethods[methodName] = method;
-                                        }
-                                        else {
-                                            combinedMethods[spriteType][methodName] = method;
-                                        }
+                                        position[methodName] = method;
                                     }
                                 }
+                            }
+                        }
+                        let handler = game.internal.combinedPlugins.methods.bagel;
+                        if (handler) {
+                            for (let i in handler) {
+                                Bagel.internal.subFunctions.loadPlugin.merge.bagelCategoryMethods(handler[i], Bagel, handler, i, 0);
                             }
                         }
                     }
@@ -2784,28 +2915,12 @@ Bagel = {
                             });
                         }
                     },
-                    methods: (sprite, game, parent) => {
-                        let handler = game.internal.combinedPlugins.methods.sprite[sprite.type];
-                        if (handler == null) return;
-
-                        for (let methodName in handler) {
-                            let method = handler[methodName];
+                    methodsCategory: (handler, sprite, position, game, i) => {
+                        if (handler.internal) {
                             // TODO: Can functions overwrite values?
 
-                            let position = sprite;
-                            if (method.category != "") {
-                                let categories = method.category.split(".");
-                                for (i in categories) {
-                                    let category = categories[i];
-                                    if (position[category] == null) {
-                                        position[category] = {};
-                                    }
-                                    position = position[category];
-                                }
-                            }
-
-                            ((method, sprite, game, position) => {
-                                if (method.obArg) {
+                            ((handler, sprite, game, position, methodName) => {
+                                if (handler.obArg) {
                                     position[methodName] = args => {
                                         if (args == null) args = {};
                                         if (Bagel.internal.getTypeOf(args) != "object") {
@@ -2815,32 +2930,26 @@ Bagel = {
 
                                         args = Bagel.check({
                                             ob: args,
-                                            syntax: method.args,
+                                            syntax: handler.args,
                                             where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
                                         }, {args: true});
                                         // Passed the argument checks
 
                                         let current = Bagel.internal.current;
-                                        let was = {
-                                            sprite: current.sprite,
-                                            game: current.game,
-                                            plugin: current.plugin
-                                        };
+                                        Bagel.internal.saveCurrent();
                                         current.sprite = sprite;
                                         current.game = game;
-                                        current.plugin = method.internal.plugin;
+                                        current.plugin = handler.internal.plugin;
 
-                                        let output = method.fn(sprite, args, game, current.plugin);
+                                        let output = handler.fn(sprite, args, game, current.plugin);
 
-                                        current.sprite = was.sprite;
-                                        current.game = was.game;
-                                        current.plugin = was.plugin;
+                                        Bagel.internal.loadCurrent();
                                         return output;
                                     };
                                 }
                                 else {
                                     position[methodName] = (...args) => {
-                                        let keys = Object.keys(method.args);
+                                        let keys = Object.keys(handler.args);
                                         let newArgs = {};
 
                                         // Convert the array to an object using the keys
@@ -2853,29 +2962,36 @@ Bagel = {
 
                                         newArgs = Bagel.check({
                                             ob: newArgs,
-                                            syntax: method.args,
+                                            syntax: handler.args,
                                             where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
                                         }, {args: true});
                                         // Passed the argument checks
 
                                         let current = Bagel.internal.current;
-                                        let was = {
-                                            sprite: current.sprite,
-                                            game: current.game,
-                                            plugin: current.plugin
-                                        };
+                                        Bagel.internal.saveCurrent();
                                         current.sprite = sprite;
                                         current.game = game;
-                                        current.plugin = method.internal.plugin;
-                                        let output = method.fn(sprite, newArgs, game, current.plugin);
+                                        current.plugin = handler.internal.plugin;
+                                        let output = handler.fn(sprite, newArgs, game, current.plugin);
 
-                                        current.sprite = was.sprite;
-                                        current.game = was.game;
-                                        current.plugin = was.plugin;
+                                        Bagel.internal.loadCurrent();
                                         return output;
                                     };
                                 }
-                            })(method, sprite, game, position);
+                            })(handler, sprite, game, position, i);
+                        }
+                        else {
+                            if (position[i] == null) position[i] = {};
+                            for (let c in handler) {
+                                Bagel.internal.subFunctions.createSprite.register.methodsCategory(handler[c], sprite, position[i], game, c);
+                            }
+                        }
+                    },
+                    methods: (sprite, game) => {
+                        let handler = game.internal.combinedPlugins.methods.sprite[sprite.type];
+                        if (handler == null) return;
+                        for (let i in handler) {
+                            Bagel.internal.subFunctions.createSprite.register.methodsCategory(handler[i], sprite, sprite, game, i);
                         }
                     },
                     listeners: (sprite, game, parent) => {
@@ -2895,25 +3011,18 @@ Bagel = {
                                     get: () => {
                                         if (handlers.get != null) {
                                             let current = Bagel.internal.current;
-                                            let was = {
-                                                sprite: current.sprite,
-                                                game: current.game,
-                                                plugin: current.plugin
-                                            };
+                                            Bagel.internal.saveCurrent();
                                             current.sprite = sprite;
                                             current.game = game;
                                             current.plugin = plugin;
 
                                             let error = handlers.get(sprite.internal.properties, property, game, plugin, sprite);
 
-                                            current.sprite = was.sprite;
-                                            current.game = was.game;
-                                            current.plugin = was.plugin;
-
                                             if (error) {
                                                 console.error(error);
                                                 Bagel.internal.oops(game);
                                             }
+                                            Bagel.internal.loadCurrent();
                                         }
                                         return sprite.internal.properties[property];
                                     },
@@ -2921,25 +3030,18 @@ Bagel = {
                                         sprite.internal.properties[property] = value;
                                         if (handlers.set != null) {
                                             let current = Bagel.internal.current;
-                                            let was = {
-                                                sprite: current.sprite,
-                                                game: current.game,
-                                                plugin: current.plugin
-                                            };
+                                            Bagel.internal.saveCurrent();
                                             current.sprite = sprite;
                                             current.game = game;
                                             current.plugin = plugin;
 
                                             let error = handlers.set(sprite.internal.properties, value, property, game, plugin, sprite);
 
-                                            current.sprite = was.sprite;
-                                            current.game = was.game;
-                                            current.plugin = was.plugin;
-
                                             if (error) {
                                                 console.error(error);
                                                 Bagel.internal.oops(game);
                                             }
+                                            Bagel.internal.loadCurrent();
                                         }
                                     }
                                 });
@@ -3245,7 +3347,7 @@ Bagel = {
             }
             return sprite.cloneIDs.length;
         },
-        findSpriteID: (game) => {
+        findSpriteID: game => {
             for (let i in game.game.sprites) {
                 if (game.game.sprites[i] == null) {
                     return parseInt(i);
@@ -3268,6 +3370,7 @@ Bagel = {
             game.paused = true;
             throw "Critical Bagel.js error in the game " + JSON.stringify(game.id) + ", look at the error for some help. ^-^";
         },
+
         current: {
             sprite: null,
             game: null,
@@ -3278,6 +3381,16 @@ Bagel = {
             where: null,
             plugin: null
         },
+        saveCurrent: () => {
+            let internal = Bagel.internal;
+            internal.currentStack.push({...internal.current}); // Add current values to the stack
+        },
+        loadCurrent: () => {
+            let internal = Bagel.internal;
+            internal.current = internal.currentStack.pop(); // Load the last state
+        },
+        currentStack: [],
+
         requestAnimationFrame: window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,
         debug: {
             add: message => {
@@ -3613,13 +3726,7 @@ Bagel = {
             return game.game.sprites[game.internal.idIndex[id]];
         }
     },
-    maths: {
-            radToDeg: (rad) => (rad * 180) / Math.PI,
-            degToRad: (deg) => deg * (Math.PI / 180),
-            getDirection: (x1, y1, x2, y2) => Bagel.maths.radToDeg(Math.atan2(y2 - y1, x2 - x1)) - 90, // gist.github.com/conorbuck/2606166
-            getDistance: (x1, y1, x2, y2) => Math.sqrt(Math.pow(Math.abs(x2 - x1), 2) + Math.pow(Math.abs(y2 - y1), 2)) // a2 + b2 = c2
-        },
-    step: (id) => {
+    step: id => {
             // TODO: Error if it's outside of a game or sprite. Error if no script
 
             let game = Bagel.internal.current.game;
