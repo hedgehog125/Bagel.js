@@ -1,34 +1,25 @@
 /*
 TODO:
-current.plugin3? How should the current plugins be managed? A stack?
-Update all plugin instead messages
-Plugin conventions
-Do all the clone descriptions say clone and not sprite? What about default syntax stuff?
-Tidy up code for methods, comments?
-Reserved ids for plugins
-.clones checking? Does it already exist?
 Loading screen. Ability to change loading screen
+Plugin conventions
+.clones checking? Does it already exist?
 Allow loading of other plugins
-Value argument in getters
 Update "step" function to work in different places. Steps should also be in more places
+Pause music on state change? Or stop?
 
 PERFORMANCE
 Prescale images on canvases?
 Disable alpha?
-Clear the canvas more efficiently?
-Optimise .move
-
 Automatic clone recycling
 WebGL renderer
 More efficient clone checking
 
-
+PWA creation
 Tidy up unused properties and code. Don't forget renderers
 Review internal stuff, what's used, what's not needed and what needs rewriting
 Plugins should be able to make existing methods apply to their sprites
 Completely rewrite "tick" function. Needs tidying a bit more
 Steps in other places. Especially listeners
-Delete clones on state change
 Avoid constantly declaring anonymous functions, declare them and then access them to save resources.
 Review cloneArgs[x].syntax, does it have all the check function arguments?
 When is the sprite description used?
@@ -37,10 +28,12 @@ Handling of two plugins with the same ids
 Does the overwrite argument work?
 Plugins should be able to register game, sprite and bagel values
 README
+Review closures
 
 
 TESTING
 Reserved ids
+All game scripts
 
 CREDITS
 Click, click release and mouse touch from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
@@ -57,7 +50,6 @@ Bagel = {
 
         Bagel.internal.saveCurrent();
         current.game = game;
-        current.plugin2 = current.plugin;
         game = subFunctions.check(game);
 
         subFunctions.misc(game);
@@ -223,16 +215,6 @@ Bagel = {
                                     ],
                                     description: "The height for the sprite. Defaults to the height of the image. You can also set it to a multiple of the image height by setting it to \"1x\", \"2x\", etc."
                                 },
-                                scripts: {
-                                    required: false,
-                                    default: {
-                                        init: [],
-                                        main: [],
-                                        steps: {}
-                                    },
-                                    types: ["object"],
-                                    description: "The sprite's scripts."
-                                },
                                 visible: {
                                     required: false,
                                     default: true,
@@ -302,33 +284,6 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
-                                scripts: {
-                                    syntax: {
-                                        subcheck: {
-                                            init: {
-                                                required: false,
-                                                default: [],
-                                                types: ["array"],
-                                                check: (item) => {
-                                                    if (typeof item != "function") {
-                                                        return "Oops. Looks like you used the wrong type, you used " + Bagel.internal.an(Bagel.internal.getTypeOf(item)) + " instead of a function.";
-                                                    }
-                                                },
-                                                checkEach: true,
-                                                description: "An array of functions to run when this clone is initialised."
-                                            },
-                                            main: {
-                                                required: false,
-                                                default: [],
-                                                types: ["array"],
-                                                description: "An array of functions to run on every frame for this clone."
-                                            }
-                                        },
-                                        description: "The clones's scripts.",
-                                        default: {}
-                                    },
-                                    mode: "ignore"
-                                },
                                 visible: {
                                     syntax: {
                                         description: "Determines if the clone is visible or not."
@@ -351,9 +306,7 @@ Bagel = {
                             listeners: {
                                 steps: {},
                                 fns: {
-                                    xy: (sprite, property, game, plugin, triggerSprite) => {
-                                        let value = sprite[property];
-
+                                    xy: (sprite, value, property, game, plugin, triggerSprite) => {
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
@@ -363,9 +316,7 @@ Bagel = {
                                             sprite[property] = value(sprite, game); // Avoid the setter
                                         }
                                     },
-                                    dimensions: (sprite, property, game, plugin, triggerSprite) => {
-                                        let value = sprite[property];
-
+                                    dimensions: (sprite, value, property, game, plugin, triggerSprite) => {
                                         if (typeof value == "string") {
                                             if (value.includes("x")) {
                                                 let scale = parseFloat(value.split("x")[0]);
@@ -393,8 +344,8 @@ Bagel = {
                                             triggerSprite.width = value + "x";
                                             triggerSprite.height = value + "x";
                                         },
-                                        get: (sprite, property, game, plugin) => {
-                                            let img = Bagel.get.asset.img(sprite.img);
+                                        get: (sprite, value, property, game, plugin) => {
+                                            let img = Bagel.get.asset.img(value);
                                             let scaleX = sprite.width / img.width;
                                             let scaleY = sprite.height / img.height;
 
@@ -501,6 +452,18 @@ Bagel = {
                                             }
                                         }
                                     }
+                                },
+                                hex: {
+                                    fn: {
+                                        normal: true,
+                                        fn: num => {
+                                            num = num.toString(16);
+                                            if (num.length == 1) {
+                                                return "0" + num;
+                                            }
+                                            return num;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -536,124 +499,123 @@ Bagel = {
                                     if (plugin.vars.audio.autoPlay) { // Wait for an unmute instead of treating every input as one
                                         let promise = snd.play();
                                         if (promise != null) {
-                                            promise.then(() => { // Autoplay worked
-                                                plugin.vars.audio.autoPlay = true;
-                                            }).catch(() => { // Nope. Prompt the user
-                                                let current = Bagel.internal.current;
-                                                Bagel.internal.saveCurrent();
-                                                current.plugin = plugin;
-                                                // TODO: does this work with multiple plugins???
+                                            (plugin => {
+                                                promise.then(() => { // Autoplay worked
+                                                    plugin.vars.audio.autoPlay = true;
+                                                }).catch(() => { // Nope. Prompt the user
+                                                    let current = Bagel.internal.current;
+                                                    Bagel.internal.saveCurrent();
+                                                    current.plugin = plugin;
 
-                                                plugin.vars.audio.autoPlay = false;
-                                                if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                    if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
-                                                        // Create one instead
-                                                        // TODO: how does it handle state changes?
-                                                        let where = "plugin Internal's function \"game.playSound\"";
-                                                        game.add.asset.img({
-                                                            id: ".Internal.unmuteButtonMuted",
-                                                            src: "../assets/imgs/muted.png"
-                                                        }, where); // Load its image
-                                                        game.add.asset.img({
-                                                            id: ".Internal.unmuteButton",
-                                                            src: "../assets/imgs/unmuted.png"
-                                                        }, where); // Load its image
+                                                    plugin.vars.audio.autoPlay = false;
+                                                    if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
+                                                        if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
+                                                            // Create one instead
+                                                            // TODO: how does it handle state changes?
+                                                            let where = "plugin Internal's function \"game.playSound\"";
+                                                            game.add.asset.img({
+                                                                id: ".Internal.unmuteButtonMuted",
+                                                                src: "../assets/imgs/muted.png"
+                                                            }, where); // Load its image
+                                                            game.add.asset.img({
+                                                                id: ".Internal.unmuteButton",
+                                                                src: "../assets/imgs/unmuted.png"
+                                                            }, where); // Load its image
 
-                                                        game.add.asset.snd({
-                                                            id: ".Internal.unmuteButtonClick",
-                                                            src: "../assets/snds/clickDown.mp3"
-                                                        }, where);
-                                                        game.add.asset.snd({
-                                                            id: ".Internal.unmuteButtonClickUp",
-                                                            src: "../assets/snds/clickUp.mp3"
-                                                        }, where);
-                                                        game.add.asset.snd({
-                                                            id: ".Internal.unmuteButtonMouseTouch",
-                                                            src: "../assets/snds/mouseTouch.mp3"
-                                                        }, where);
+                                                            game.add.asset.snd({
+                                                                id: ".Internal.unmuteButtonClick",
+                                                                src: "../assets/snds/clickDown.mp3"
+                                                            }, where);
+                                                            game.add.asset.snd({
+                                                                id: ".Internal.unmuteButtonClickUp",
+                                                                src: "../assets/snds/clickUp.mp3"
+                                                            }, where);
+                                                            game.add.asset.snd({
+                                                                id: ".Internal.unmuteButtonMouseTouch",
+                                                                src: "../assets/snds/mouseTouch.mp3"
+                                                            }, where);
 
-                                                        let size = Math.min(game.width, game.height) / 10;
-                                                        game.add.sprite({
-                                                            id: ".Internal.unmute", // We can use this as we're that plugin
-                                                            type: "sprite",
-                                                            img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
-                                                            visible: false,
-                                                            scripts: {
-                                                                steps: {
-                                                                    appearAnimation: me => {
-                                                                        if (me.vars.delay < 30) {
-                                                                            me.vars.delay++;
-                                                                        }
-                                                                        else {
-                                                                            me.visible = true;
+                                                            let size = Math.min(game.width, game.height) / 10;
+                                                            game.add.sprite({
+                                                                id: ".Internal.unmute", // We can use this as we're that plugin
+                                                                type: "sprite",
+                                                                img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
+                                                                visible: false,
+                                                                scripts: {
+                                                                    steps: {
+                                                                        appearAnimation: me => {
+                                                                            if (me.vars.delay < 30) {
+                                                                                me.vars.delay++;
+                                                                            }
+                                                                            else {
+                                                                                me.visible = true;
+                                                                                if (me.width != me.vars.size) {
+                                                                                    me.width *= 1.4;
+
+                                                                                    if (me.width >= me.vars.size) {
+                                                                                        me.width = me.vars.size;
+                                                                                        me.vars.appearAnimation = false;
+                                                                                    }
+                                                                                    me.height = me.width;
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        deleteAnimation: me => {
+                                                                            me.width /= 1.4;
+                                                                            me.height = me.width;
+                                                                            if (me.width < 1) {
+                                                                                me.delete(); // Bye
+                                                                            }
+                                                                        },
+                                                                        expandAnimation: me => {
+                                                                            me.width *= 1.025;
+                                                                            if (me.width > me.vars.expandedSize) {
+                                                                                me.width = me.vars.expandedSize;
+                                                                            }
+                                                                            me.height = me.width;
+                                                                        },
+                                                                        shrinkAnimation: me => {
                                                                             if (me.width != me.vars.size) {
-                                                                                me.width *= 1.4;
-
-                                                                                if (me.width >= me.vars.size) {
+                                                                                me.width /= 1.025;
+                                                                                if (me.width < me.vars.size) {
                                                                                     me.width = me.vars.size;
-                                                                                    me.vars.appearAnimation = false;
                                                                                 }
                                                                                 me.height = me.width;
                                                                             }
-                                                                        }
-                                                                    },
-                                                                    deleteAnimation: me => {
-                                                                        me.width /= 1.4;
-                                                                        me.height = me.width;
-                                                                        if (me.width < 1) {
-                                                                            me.delete(); // Bye
-                                                                        }
-                                                                    },
-                                                                    expandAnimation: me => {
-                                                                        me.width *= 1.025;
-                                                                        if (me.width > me.vars.expandedSize) {
-                                                                            me.width = me.vars.expandedSize;
-                                                                        }
-                                                                        me.height = me.width;
-                                                                    },
-                                                                    shrinkAnimation: me => {
-                                                                        if (me.width != me.vars.size) {
-                                                                            me.width /= 1.025;
-                                                                            if (me.width < me.vars.size) {
-                                                                                me.width = me.vars.size;
+                                                                            if (me.vars.plugin.vars.audio.autoPlay) { // Unmuted
+                                                                                me.vars.delete = true;
                                                                             }
-                                                                            me.height = me.width;
-                                                                        }
-                                                                        if (me.vars.plugin.vars.audio.autoPlay) { // Unmuted
-                                                                            me.vars.delete = true;
-                                                                        }
-                                                                    },
-                                                                    play: me => {
-                                                                        let vars = me.vars.plugin.vars;
-                                                                        for (let i in vars.audio.queue) {
-                                                                            let snd = Bagel.get.asset.snd(vars.audio.queue[i], game);
-                                                                            snd.play().then().catch(); // Play it
-                                                                        }
-                                                                        vars.audio.autoPlay = true;
-                                                                        vars.audio.queue = []; // Clear the queue
-                                                                        me.img = ".Internal.unmuteButton"; // Change to the unmuted image
-                                                                    },
-                                                                    pause: me => {
-                                                                        let vars = me.vars.plugin.vars;
-                                                                        for (let id in game.internal.assets.assets.snds) {
-                                                                            let snd = game.internal.assets.assets.snds[id].snd;
-                                                                            if (! snd.paused) {
-                                                                                snd.pause();
-                                                                                if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                                                    vars.audio.queue.push(id);
-                                                                                }
-                                                                                else {
-                                                                                    snd.currentTime = 0;
+                                                                        },
+                                                                        play: me => {
+                                                                            let vars = me.vars.plugin.vars;
+                                                                            for (let i in vars.audio.queue) {
+                                                                                let snd = Bagel.get.asset.snd(vars.audio.queue[i], game);
+                                                                                snd.play().then().catch(); // Play it
+                                                                            }
+                                                                            vars.audio.autoPlay = true;
+                                                                            vars.audio.queue = []; // Clear the queue
+                                                                            me.img = ".Internal.unmuteButton"; // Change to the unmuted image
+                                                                        },
+                                                                        pause: me => {
+                                                                            let vars = me.vars.plugin.vars;
+                                                                            for (let id in game.internal.assets.assets.snds) {
+                                                                                let snd = game.internal.assets.assets.snds[id].snd;
+                                                                                if (! snd.paused) {
+                                                                                    snd.pause();
+                                                                                    if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
+                                                                                        vars.audio.queue.push(id);
+                                                                                    }
+                                                                                    else {
+                                                                                        snd.currentTime = 0;
+                                                                                    }
                                                                                 }
                                                                             }
+                                                                            vars.audio.autoPlay = false;
+                                                                            me.img = ".Internal.unmuteButtonMuted"; // Change to the unmuted image
                                                                         }
-                                                                        vars.audio.autoPlay = false;
-                                                                        me.img = ".Internal.unmuteButtonMuted"; // Change to the unmuted image
-                                                                    }
-                                                                },
-                                                                main: [
-                                                                    {
-                                                                        code: (me, game, step) => {
+                                                                    },
+                                                                    all: [
+                                                                        (me, game, step) => {
                                                                             me.layer.bringToFront();
                                                                             if (me.vars.appearAnimation) {
                                                                                 step("appearAnimation");
@@ -696,31 +658,30 @@ Bagel = {
                                                                                     }
                                                                                 }
                                                                             }
-                                                                        },
-                                                                        stateToRun: game.state // Runs immediately. TODO: how can this keep running on state change?
-                                                                    }
-                                                                ]
-                                                            },
-                                                            vars: {
-                                                                plugin: plugin,
-                                                                size: size,
-                                                                expandedSize: size * 1.1,
-                                                                delay: 0,
-                                                                clicked: false,
-                                                                delete: false,
-                                                                touching: false,
-                                                                appearAnimation: true
-                                                            },
-                                                            x: size,
-                                                            y: game.height - size,
-                                                            width: 1,
-                                                            height: 1,
-                                                        }, "plugin Internal, function \"game.playSound\" (via Game.add.sprite)"); // TODO: use the defaults to allow skipping of checking
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                vars: {
+                                                                    plugin: plugin,
+                                                                    size: size,
+                                                                    expandedSize: size * 1.1,
+                                                                    delay: 0,
+                                                                    clicked: false,
+                                                                    delete: false,
+                                                                    touching: false,
+                                                                    appearAnimation: true
+                                                                },
+                                                                x: size,
+                                                                y: game.height - size,
+                                                                width: 1,
+                                                                height: 1,
+                                                            }, "plugin Internal, function \"game.playSound\" (via Game.add.sprite)"); // TODO: use the defaults to allow skipping of checking
+                                                        }
+                                                        plugin.vars.audio.queue.push(args.id);
                                                     }
-                                                    plugin.vars.audio.queue.push(args.id);
-                                                }
-                                                Bagel.internal.loadCurrent();
-                                            });
+                                                    Bagel.internal.loadCurrent();
+                                                });
+                                            })(plugin);
                                         }
                                     }
                                 }
@@ -1254,7 +1215,6 @@ Bagel = {
             current.i = i;
             current.where = where;
             current.game = game;
-            current.plugin2 = current.plugin;
 
             let assetLoader = game.internal.combinedPlugins.types.assets[type];
             let plugin = assetLoader.internal.plugin;
@@ -1270,7 +1230,7 @@ Bagel = {
                 ob: asset,
                 where: where,
                 syntax: assetLoader.args
-            }, Bagel.internal.checks.disableArgCheck); // TODO
+            }, Bagel.internal.checks.disableArgCheck);
             let error = assetLoader.check(asset, game, Bagel.internal.check, Bagel.internal.standardChecks.asset, plugin, i);
 
             if (error) {
@@ -1281,7 +1241,7 @@ Bagel = {
                 Bagel.internal.oops(game);
             }
 
-            let ready = ((assetJSON, game) => (asset) => {
+            let ready = ((assetJSON, game) => asset => {
                 let assets = game.internal.assets;
                 assets.assets[type][assetJSON.id] = asset;
                 assets.loaded++;
@@ -1315,13 +1275,15 @@ Bagel = {
             sprite.internal = {
                 scripts: {
                     init: [],
-                    main: []
+                    main: [],
+                    all: []
                 }
             };
 
             let register = subFunctions.register;
             register.scripts("init", sprite, game, parent);
             register.scripts("main", sprite, game, parent);
+            register.scripts("all", sprite, game, parent);
             register.methods(sprite, game);
             register.listeners(sprite, game, parent);
 
@@ -1376,14 +1338,13 @@ Bagel = {
                     return clone;
                 };
                 sprite.delete = () => {
-                    // TODO: check if the required properties are present?
-                    // TODO: make it work for non-clones
                     let game = me.game;
                     let remove = Bagel.internal.subFunctions.delete;
 
                     remove.layers(me, game);
                     remove.scripts("init", me, game);
                     remove.scripts("main", me, game);
+                    remove.scripts("all", me, game);
                     remove.misc(me, game);
                 };
             })(sprite);
@@ -1459,9 +1420,11 @@ Bagel = {
                             index: {
                                 init: {},
                                 main: {},
+                                all: [],
                                 sprites: {
                                     init: {},
-                                    main: {}
+                                    main: {},
+                                    all: []
                                 }
                             }
                         },
@@ -2122,7 +2085,7 @@ Bagel = {
                                                                             "function",
                                                                             "string"
                                                                         ],
-                                                                        description: "A function that's run after the property is changed. Can also be the name of a function defined in SpriteJSON.listeners.fns." // TODO: function arguments
+                                                                        description: "A function that's run after the property is changed. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin and triggerSprite."
                                                                     },
                                                                     get: {
                                                                         required: false,
@@ -2139,7 +2102,7 @@ Bagel = {
                                                                             "function",
                                                                             "string"
                                                                         ],
-                                                                        description: "A function that's run before the value is sent back to the code that requested it. Can also be the name of a function defined in SpriteJSON.listeners.fns." // TODO: arguments
+                                                                        description: "A function that's run before the value is sent back to the code that requested it. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin and triggerSprite."
                                                                     }
                                                                 },
                                                                 arrayLike: true,
@@ -2517,13 +2480,17 @@ Bagel = {
                                     merge = true;
                                 }
                                 if (merge) {
-                                    let syntax = {...Bagel.internal.checks.sprite}; // Add in the default checks
+                                    let syntax = {...Bagel.internal.checks.sprite.clones.syntax}; // Add in the default checks
                                     for (i in typeJSON.cloneArgs) { // TODO: What about missing arguments that are in the parent?
                                         syntax[i] = typeJSON.cloneArgs[i].syntax;
                                     }
                                     typeJSON.args = {
                                         ...typeJSON.args,
-                                        ...Bagel.internal.checks.sprite
+                                        ...Bagel.internal.checks.sprite.sprite
+                                    };
+                                    typeJSON.cloneArgs = {
+                                        ...typeJSON.cloneArgs,
+                                        ...Bagel.internal.checks.sprite.clones.args
                                     };
                                     typeJSON.internal = {
                                         plugin: plugin,
@@ -2703,7 +2670,7 @@ Bagel = {
                         }, {
                             args: true,
                             missing: true, // Missing arguments don't matter, they're dealt with in a minute
-                            useless: true // "type" isn't included in the syntax
+                            //useless: true // "type" isn't included in the syntax
                         }); // Check any existing properties supplied by the clone function
 
                         let clone = Bagel.internal.deepClone;
@@ -2751,17 +2718,20 @@ Bagel = {
                         syntax: parent? handler.internal.cloneSyntax : handler.args
                     }, Bagel.internal.checks.disableArgCheck);
 
+                    let prefix = sprite.id.split(".")[1];
                     if (sprite.id[0] == ".") { // Reserved
                         if (currentPluginID == null) {
                             console.error("This is awkward... IDs starting with a dot are only for plugins. You tried to use the id "
                                 + JSON.stringify(sprite.id)
                                 + ". In "
                                 + where
-                                + ".\nIf it's important that it has this name, you could write a plugin instead ;)");
+                                + ".\nf it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
+                                + JSON.stringify(prefix)
+                                + " ;)");
                             Bagel.internal.oops(game);
                         }
                         else {
-                            if (sprite.id.split(".")[1] != currentPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
+                            if (prefix != currentPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
                                 console.error("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + pluginID) + " and you tried to use the id " + JSON.stringify(sprite.id) + ". In "
                                 + where
                                 + ".\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".");
@@ -2801,20 +2771,37 @@ Bagel = {
                                 state = game.state;
                             }
                             else {
-                                state = scripts[i].stateToRun;
+                                if (type == "all") {
+                                    state = null;
+                                }
+                                else {
+                                    state = scripts[i].stateToRun;
+                                }
                             }
 
-                            if (index[state] == null) index[state] = [];
+                            if (type == "all") {
+                                index.push({
+                                    script: i,
+                                    sprite: sprite,
+                                    isClone: sprite.isClone
+                                });
+                                sprite.internal.scripts[type].push({
+                                    id: index.length - 1
+                                });
+                            }
+                            else {
+                                if (index[state] == null) index[state] = [];
 
-                            index[state].push({
-                                script: i,
-                                sprite: sprite,
-                                isClone: sprite.isClone
-                            });
-                            sprite.internal.scripts[type].push({
-                                id: index[state].length - 1,
-                                state: state
-                            });
+                                index[state].push({
+                                    script: i,
+                                    sprite: sprite,
+                                    isClone: sprite.isClone
+                                });
+                                sprite.internal.scripts[type].push({
+                                    id: index[state].length - 1,
+                                    state: state
+                                });
+                            }
                         }
                     },
                     subMethods: (method, methodName, sprite, position, game) => {
@@ -2929,7 +2916,7 @@ Bagel = {
                                             current.game = game;
                                             current.plugin = plugin;
 
-                                            let error = handlers.get(sprite.internal.properties, property, game, plugin, sprite);
+                                            let error = handlers.get(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite);
 
                                             if (error) {
                                                 console.error(error);
@@ -2967,10 +2954,20 @@ Bagel = {
                 scripts: (type, sprites, game) => { // TODO: does this work with non-sprite scripts?
                     let scripts;
                     if (sprites) {
-                        scripts = game.internal.scripts.index.sprites[type][game.state];
+                        if (type == "all") {
+                            scripts = game.internal.scripts.index.sprites[type];
+                        }
+                        else {
+                            scripts = game.internal.scripts.index.sprites[type][game.state];
+                        }
                     }
                     else {
-                        scripts = game.internal.scripts.index[type][game.state];
+                        if (type == "all") {
+                            scripts = game.internal.scripts.index[type];
+                        }
+                        else {
+                            scripts = game.internal.scripts.index[type][game.state];
+                        }
                     }
                     if (scripts == null) { // No scripts
                         return;
@@ -2982,19 +2979,47 @@ Bagel = {
                         if (sprites) {
                             let sprite = scriptInfo.sprite;
                             Bagel.internal.current.sprite = sprite;
-                            let script = sprite.scripts[type][scriptInfo.script];
+                            if (type == "init") sprite.visible = true; // The sprite's active
 
-                            if (sprite.isClone) {
-                                script(sprite, game, Bagel.step);
+                            let code;
+                            if (type == "all" || sprite.isClone) {
+                                code = sprite.scripts[type][scriptInfo.script];
                             }
                             else {
-                                script.code(sprite, game, Bagel.step);
+                                code = sprite.scripts[type][scriptInfo.script].code;
                             }
+                            code(sprite, game, Bagel.step);
                         }
                         else {
-                            let code = game.game.scripts[type][scriptInfo.script].code;
+                            let code;
+                            if (type == "all") {
+                                code = game.game.scripts[type][scriptInfo.script];
+                            }
+                            else {
+                                code = game.game.scripts[type][scriptInfo.script].code;
+                            }
                             code(game, Bagel.step);
                         }
+                    }
+                },
+                hideSprites: game => {
+                    let sprites = game.game.sprites;
+                    let i = 0;
+                    while (i < sprites.length) {
+                        let sprite = sprites[i];
+                        if (sprite == null) {
+                            i++;
+                            continue;
+                        }
+                        if (sprite.isClone) {
+                            sprite.delete();
+                        }
+                        else {
+                            if (sprite.scripts.all.length == 0) { // Don't hide it if it has "all" scripts
+                                sprite.visible = false;
+                            }
+                        }
+                        i++;
                     }
                 },
                 render: {
@@ -3039,7 +3064,8 @@ Bagel = {
 
                     if (! game.paused) {
                         if (game.state != game.internal.lastState) {
-                            // TODO: delete clones
+                            subFunctions.hideSprites(game);
+
                             subFunctions.scripts("init", true, game);
                             subFunctions.scripts("init", false, game);
                             game.internal.lastState = game.state;
@@ -3047,6 +3073,8 @@ Bagel = {
 
                         subFunctions.scripts("main", true, game);
                         subFunctions.scripts("main", false, game);
+                        subFunctions.scripts("all", true, game);
+                        subFunctions.scripts("all", false, game);
                         subFunctions.render[game.config.display.renderer](game);
                         // TODO: prevent changing in runtime?
                     }
@@ -3093,29 +3121,49 @@ Bagel = {
                     renderer.layers = renderer.layers.filter((item, index) => index != layerIndex);
                 },
                 scripts: (type, me, game) => {
-                    let scriptIndex = game.internal.scripts.index.sprites[type];
                     let scripts = me.internal.scripts[type];
+                    if (Object.keys(scripts).length == 0) return; // No scripts to remove
+                    let scriptIndex = game.internal.scripts.index.sprites[type];
                     for (let i in scripts) {
                         let script = scripts[i];
-                        scriptIndex[script.state][script.id] = null; // Mark them as null so we know which ones to remove in a minute
+                        if (type == "all") {
+                            scriptIndex[script.id] = null; // Mark them as null so we know which ones to remove in a minute
+                        }
+                        else {
+                            scriptIndex[script.state][script.id] = null; // Mark them as null so we know which ones to remove in a minute
+                        }
                     }
 
                     // Remove the nulls
+                    let newScripts = [];
                     for (i in scriptIndex) {
                         let removed = 0;
-                        let newScripts = [];
-                        for (let c in scriptIndex[i]) {
-                            let script = scriptIndex[i][c];
+                        if (type != "all") newScripts = [];
+                        let loop = type == "all"? "a" : scriptIndex[i];
+                        for (let c in loop) {
+                            let script;
+                            if (type == "all") {
+                                script = scriptIndex[i];
+                            }
+                            else {
+                                script = loop[c];
+                            }
                             if (script == null) { // This will be removed
                                 removed++;
                             }
                             else {
-                                script.sprite.internal.scripts[type][script.script].id -= removed; // The id will have changed for anything after a deleted script
+                                if (type == "all") {
+                                    script.sprite.internal.scripts[script.script].id -= removed; // The id will have changed for anything after a deleted script
+                                }
+                                else {
+                                    script.sprite.internal.scripts[type][script.script].id -= removed; // The id will have changed for anything after a deleted script
+                                }
                                 newScripts.push(script); // If it's not null, it can stay
                             }
                         }
-                        scriptIndex[i] = newScripts;
+                        if (type != "all") scriptIndex[i] = newScripts;
                     }
+                    if (type == "all") game.internal.scripts.index.sprites[type] = newScripts;
                 },
                 misc: (me, game) => {
                     game.game.sprites[me.idIndex] = null;
@@ -3147,13 +3195,16 @@ Bagel = {
                     let asset = current.asset;
                     let type = current.assetType;
                     let where = current.where;
-                    let currentPluginID = current.plugin2 == null? null : current.plugin2.info.id;
+                    let currentStack = Bagel.internal.currentStack;
+                    let lastPluginID = currentStack.length == 0? null : currentStack[currentStack.length - 1].plugin;
+                    if (lastPluginID) lastPluginID = lastPluginID.info.id;
+
                     id = id == null? "id" : id;
                     isInternal = isInternal == null? "isInternal" : isInternal;
 
                     let prefix = asset[id].split(".")[1];
                     if (asset[id][0] == ".") { // Reserved
-                        if (currentPluginID == null) {
+                        if (lastPluginID == null) {
                             return "This is awkward... IDs starting with a dot are only for plugins. In "
                             + where
                             + ".\nIf it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
@@ -3161,8 +3212,8 @@ Bagel = {
                             + " ;)";
                         }
                         else {
-                            if (prefix != currentPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
-                                return "Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + pluginID) + " and you tried to use the id " + JSON.stringify(asset[id]) + ". In "
+                            if (prefix != lastPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
+                                return "Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + lastPluginID) + " and you tried to use the id " + JSON.stringify(asset[id]) + ". In "
                                 + where
                                 + ".\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".";
                             }
@@ -3199,16 +3250,23 @@ Bagel = {
                             return "Oh no! You used an id for your game that is already being used. Try and think of something else.\nYou used " + JSON.stringify(value) + " in \"GameJSON.id\".";
                         }
                         let current = Bagel.internal.current;
+                        let prefix = value.split(".")[1];
+                        let currentStack = Bagel.internal.currentStack;
+                        let lastPluginID = currentStack.length == 0? null : currentStack[currentStack.length - 1].plugin;
+                        if (lastPluginID) lastPluginID = lastPluginID.info.id;
+
                         if (value[0] == ".") { // Reserved
-                            if (current.plugin2 == null) {
+                            if (lastPluginID == null) {
                                 console.error("This is awkward... IDs starting with a dot are only for plugins. You tried to use the id "
                                 + JSON.stringify(value)
-                                + ". In GameJSON.id.\nIf it's important that it has this name, you could write a plugin instead ;)");
+                                + ". In GameJSON.id.\nIf it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
+                                + JSON.stringify(prefix)
+                                + " ;)");
                                 Bagel.internal.oops();
                             }
                             else {
-                                if (value.split(".")[1] != current.plugin2.info.id) { // Plugins are allowed to use ids starting with a dot and then their id
-                                    console.error("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + current.plugin2.info.id) + " and you tried to use the id " + JSON.stringify(value)
+                                if (prefix != lastPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
+                                    console.error("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + lastPluginID) + " and you tried to use the id " + JSON.stringify(value)
                                     + "In GameJSON.id.\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".");
                                     Bagel.internal.oops();
                                 }
@@ -3250,10 +3308,7 @@ Bagel = {
                         },
                         scripts: {
                             required: false,
-                            default: {
-                                init: [],
-                                main: []
-                            },
+                            default: {},
                             subcheck: {
                                 init: {
                                     required: false,
@@ -3292,6 +3347,19 @@ Bagel = {
                                     },
                                     types: ["array"],
                                     description: "Main scripts. They run every frame where the states match."
+                                },
+                                all: {
+                                    required: false,
+                                    default: [],
+                                    arrayLike: true,
+                                    check: value => {
+                                        if (typeof value != "function") {
+                                            return "Huh. This should be a function but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                        }
+                                    },
+                                    checkEach: true,
+                                    types: ["array"],
+                                    description: "\"All\" scripts. They run every frame regardless of game state."
                                 }
                             },
                             types: ["object"],
@@ -3364,16 +3432,137 @@ Bagel = {
                 }
             },
             sprite: {
-                type: {
-                    required: true,
-                    types: ["string"],
-                    description: "The type of sprite."
+                sprite: {
+                    type: {
+                        required: true,
+                        types: ["string"],
+                        description: "The type of sprite."
+                    },
+                    clones: {
+                        required: false,
+                        default: {},
+                        types: ["object"],
+                        description: "The default data for a clone of this sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                    },
+                    scripts: {
+                        required: false,
+                        default: {},
+                        subcheck: {
+                            init: {
+                                required: false,
+                                default: [],
+                                types: ["array"],
+                                description: "Contains init scripts. They run when the game state first changes to the script's state."
+                            },
+                            main: {
+                                required: false,
+                                default: [],
+                                types: ["array"],
+                                description: "Contains main scripts. They run for every frame where the script's state and the game's state match."
+                            },
+                            all: {
+                                required: false,
+                                default: [],
+                                types: ["array"],
+                                description: "Contains \"all\" scripts. They run on every frame and aren't affected by the game state."
+                            },
+                            steps: {
+                                required: false,
+                                default: {},
+                                types: ["object"],
+                                description: "Contains steps: mini scripts that can be called from scripts. The key is the id and the value is the function."
+                            }
+                        },
+                        types: ["object"],
+                        description: "The sprite's scripts."
+                    }
                 },
                 clones: {
-                    required: false,
-                    default: {},
-                    types: ["object"],
-                    description: "The default data for a clone of this sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                    syntax: {
+                        type: {
+                            required: true,
+                            types: ["string"],
+                            description: "The type of clone."
+                        },
+                        clones: {
+                            required: false,
+                            default: {},
+                            types: ["object"],
+                            description: "The default data for a clone of this clone.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                        },
+                        scripts: {
+                            required: false,
+                            default: {},
+                            subcheck: {
+                                init: {
+                                    required: false,
+                                    default: [],
+                                    types: ["array"],
+                                    check: (item) => {
+                                        if (typeof item != "function") {
+                                            return "Oops. Looks like you used the wrong type, you used " + Bagel.internal.an(Bagel.internal.getTypeOf(item)) + " instead of a function.";
+                                        }
+                                    },
+                                    checkEach: true,
+                                    description: "An array of functions to run when this clone is initialised."
+                                },
+                                main: {
+                                    required: false,
+                                    default: [],
+                                    types: ["array"],
+                                    description: "An array of functions to run on every frame for this clone."
+                                }
+                            },
+                            types: ["object"],
+                            description: "The clones's scripts."
+                        }
+                    },
+                    args: {
+                        type: {
+                            syntax: {
+                                required: true,
+                                types: ["string"],
+                                description: "The type of clone."
+                            },
+                            mode: "replace"
+                        },
+                        clones: {
+                            syntax: {
+                                required: false,
+                                default: {},
+                                types: ["object"],
+                                description: "The default data for a clone of this clone.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
+                            },
+                            mode: "ignore"
+                        },
+                        scripts: {
+                            syntax: {
+                                subcheck: {
+                                    init: {
+                                        required: false,
+                                        default: [],
+                                        types: ["array"],
+                                        check: (item) => {
+                                            if (typeof item != "function") {
+                                                return "Oops. Looks like you used the wrong type, you used " + Bagel.internal.an(Bagel.internal.getTypeOf(item)) + " instead of a function.";
+                                            }
+                                        },
+                                        checkEach: true,
+                                        description: "An array of functions to run when this clone is initialised."
+                                    },
+                                    main: {
+                                        required: false,
+                                        default: [],
+                                        types: ["array"],
+                                        description: "An array of functions to run on every frame for this clone."
+                                    }
+                                },
+                                description: "The clones's scripts.",
+                                default: {}
+                            },
+                            mode: "ignore"
+                        }
+                    }
                 }
             },
             disableArgCheck: {args: true}
@@ -3461,13 +3650,6 @@ Bagel = {
             return game.game.sprites.length;
         },
 
-        hex: (num) => {
-            if (num.toString().length == 1) {
-                return "0" + num.toString(16);
-            }
-            return num.toString(16);
-        }, // TODO: move to plugin
-
         oops: (game) => { // When something goes wrong
             if (game == null) {
                 throw "Critical Bagel.js error, please look at the error above for more info. ^-^";
@@ -3484,8 +3666,7 @@ Bagel = {
             assetTypeName: null,
             i: null,
             where: null,
-            plugin: null,
-            plugin2: null
+            plugin: null
         },
         saveCurrent: () => {
             let internal = Bagel.internal;
@@ -3630,15 +3811,15 @@ Bagel = {
                     if (syntax.types == null) {
                         console.error("The syntax for " + args.where + "." + argID + " is missing the \"types\" argument.");
                         console.log("In " + args.where + ".");
-                        console.log("Object:");
-                        console.log(args.ob);
+                        console.log("Syntax:");
+                        console.log(syntax);
                         Bagel.internal.oops(args.game);
                     }
                     if (! arrayString.includes(Bagel.internal.getTypeOf(syntax.types))) {
                         console.error("The syntax for " + args.where + "." + argID + " has the wrong data type for the \"types\" argument. You used " + Bagel.internal.an(Bagel.internal.getTypeOf(syntax.types)) + ".");
                         console.log("In " + args.where + ".");
-                        console.log("Object:");
-                        console.log(args.ob);
+                        console.log("Syntax:");
+                        console.log(syntax);
                         Bagel.internal.oops(args.game);
                     }
                     if ((! syntax.types.includes(Bagel.internal.getTypeOf(arg))) && syntax.types != "any") {
