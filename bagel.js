@@ -1,11 +1,13 @@
 /*
 TODO:
-Loading screen. Ability to change loading screen
-Plugin conventions
+Dynamic loading
+PWA creation
 .clones checking? Does it already exist?
 Allow loading of other plugins
 Update "step" function to work in different places. Steps should also be in more places
 Pause music on state change? Or stop?
+ctx.save and restore. How's it used in the renderer? Is it efficient?
+Continue retrying when assets don't load?
 
 PERFORMANCE
 Prescale images on canvases?
@@ -14,32 +16,33 @@ Automatic clone recycling
 WebGL renderer
 More efficient clone checking
 
-PWA creation
-Tidy up unused properties and code. Don't forget renderers
-Review internal stuff, what's used, what's not needed and what needs rewriting
-Plugins should be able to make existing methods apply to their sprites
-Completely rewrite "tick" function. Needs tidying a bit more
-Steps in other places. Especially listeners
-Avoid constantly declaring anonymous functions, declare them and then access them to save resources.
-Review cloneArgs[x].syntax, does it have all the check function arguments?
+PLUGINS
+Sprites
+Plugin assets
+Are sprites and assets needed for them?
+Scripts
+Asset conventions
+Allow applying existing methods to their sprites?
 When is the sprite description used?
-Finish the TODO descriptions
 Handling of two plugins with the same ids
-Does the overwrite argument work?
-Plugins should be able to register game, sprite and bagel values
+Values? Also sprite values? Init functions instead?
+
+General tidy up
+Steps in other places. Especially listeners
+Finish the TODO descriptions
 README
-Review closures
+Plugin conventions
 
 
 TESTING
 Reserved ids
-All game scripts
+"All" game scripts
+Review closures
+Sounds not loading??? Sometimes...?
+Does the overwrite argument work?
 
 CREDITS
 Click, click release and mouse touch from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
-
-Before clone check improvement: ~12FPS
-After:
 */
 
 Bagel = {
@@ -55,20 +58,14 @@ Bagel = {
         subFunctions.misc(game);
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
-        subFunctions.inputs(game, game.internal.renderer.canvas.addEventListener);
+        subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
         subFunctions.plugins(game);
         subFunctions.assets(game);
         subFunctions.methods(game);
         subFunctions.initScripts(game);
-
-        // Sprites
-        for (let i in game.game.sprites) { // TODO: Temporary
-            let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "GameJSON.game.sprites item " + i, false, parseInt(i));
-        }
-
-        if (game.game.scripts.preload != null) {
-            game.game.scripts.preload(game);
-        }
+        subFunctions.initSprites(game);
+        subFunctions.preload(game);
+        subFunctions.loadingScreen(game);
 
         Bagel.internal.games[game.id] = game;
         Bagel.internal.loadCurrent();
@@ -105,12 +102,14 @@ Bagel = {
                             },
                             init: (asset, ready, game, plugin, index) => {
                                 let img = new Image();
-                                img.onload = () => {
-                                    ready({
-                                        img: img,
-                                        JSON: asset
-                                    });
-                                }
+                                (img => {
+                                    img.onload = () => {
+                                        ready({
+                                            img: img,
+                                            JSON: asset
+                                        });
+                                    }
+                                })(img);
                                 img.src = asset.src;
                             },
                             get: {
@@ -140,12 +139,15 @@ Bagel = {
                             init: (asset, ready, game, plugin, index) => {
                                 let snd = new Audio();
                                 snd.preload = "metadata";
-                                snd.onloadeddata = () => {
-                                    ready({
-                                        snd: snd,
-                                        JSON: asset
-                                    }); // Sounds are ready instantly
-                                };
+                                (snd => {
+                                    snd.onloadeddata = () => {
+                                        ready({
+                                            snd: snd,
+                                            JSON: asset
+                                        });
+                                    };
+                                })(snd);
+                                snd.load();
                                 snd.src = asset.src;
                             },
                             get: {
@@ -156,18 +158,6 @@ Bagel = {
                     sprites: {
                         sprite: {
                             args: {
-                                id: {
-                                    required: true,
-                                    types: ["string"],
-                                    description: "The id for the sprite to be targeted by."
-                                },
-                                vars: {
-                                    required: false,
-                                    default: {},
-                                    types: ["object"],
-                                    description: "An object you can use to store data for the sprite."
-                                },
-
                                 x: {
                                     required: false,
                                     default: "centred",
@@ -176,7 +166,7 @@ Bagel = {
                                         "string",
                                         "function"
                                     ],
-                                    description: "The X position for the sprite to start at. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n(game, me) => game.width - 50"
+                                    description: "The x position for the sprite. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                 },
                                 y: {
                                     required: false,
@@ -186,7 +176,7 @@ Bagel = {
                                         "string",
                                         "function"
                                     ],
-                                    description: "The Y position for the sprite to start at. Can also be set to \"centred\" to centre it along the Y axis, or set to a function that returns a position when the game loads. e.g:\n(game, me) => game.height - 50"
+                                    description: "The y position for the sprite. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                 },
                                 img: {
                                     required: false,
@@ -221,15 +211,13 @@ Bagel = {
                                     types: [
                                         "boolean"
                                     ],
-                                    description: "Determines if the sprite is visible or not."
+                                    description: "If the sprite is visible or not."
                                 },
                                 alpha: {
                                     required: false,
                                     default: 1,
-                                    types: [
-                                        "number"
-                                    ],
-                                    description: "The alpha of the sprite. 1 = Fully visible. 0 = Invisible."
+                                    types: ["number"],
+                                    description: "The alpha of the sprite. 1 is fully visible, 0.5 is partially and 0's invisible."
                                 },
                                 angle: {
                                     required: false,
@@ -241,28 +229,15 @@ Bagel = {
                                 }
                             },
                             cloneArgs: {
-                                id: {
-                                    syntax: {
-                                        description: "The id for the clone to be targeted by. Defaults to the parent's name followed by a hashtag and then the lowest number starting from 0 that hasn't already been used."
-                                    },
-                                    mode: "replace"
-                                },
-                                vars: {
-                                    syntax: {
-                                        description: "An object you can use to store data for the clone."
-                                    },
-                                    mode: "merge"
-                                },
-
                                 x: {
                                     syntax: {
-                                        description: "The X position for the clone to start at. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n(me, game) => game.width - 50"
+                                        description: "The x position for the clone. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                     },
                                     mode: "replace"
                                 },
                                 y: {
                                     syntax: {
-                                        description: "The Y position for the clone to start at. Can also be set to \"centred\" to centre it along the Y axis, or set to a function that returns a position when the game loads. e.g:\n(me, game) => game.height - 50"
+                                        description: "The y position for the clone. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                     },
                                     mode: "replace"
                                 },
@@ -292,7 +267,7 @@ Bagel = {
                                 },
                                 alpha: {
                                     syntax: {
-                                        description: "The alpha of the sprite. 1 = Fully visible. 0 = Invisible."
+                                        description: "The alpha of the clone. 1 is fully visible, 0.5 is partially and 0's invisible."
                                     },
                                     mode: "replace"
                                 },
@@ -304,7 +279,6 @@ Bagel = {
                                 }
                             },
                             listeners: {
-                                steps: {},
                                 fns: {
                                     xy: (sprite, value, property, game, plugin, triggerSprite) => {
                                         if (typeof value == "string") {
@@ -323,6 +297,9 @@ Bagel = {
 
                                                 sprite[property] = Bagel.get.asset.img(triggerSprite.img)[property] * scale;
                                             }
+                                        }
+                                        if (typeof value == "function") {
+                                            sprite[property] = value(sprite, game); // Avoid the setter
                                         }
                                     }
                                 },
@@ -412,8 +389,186 @@ Bagel = {
                                     }
                                     ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
                                     ctx.globalAlpha = 1;
+                                }
+                            }
+                        },
+                        canvas: {
+                            args: {
+                                x: {
+                                    required: false,
+                                    default: "centred",
+                                    types: [
+                                        "number",
+                                        "string",
+                                        "function"
+                                    ],
+                                    description: "The x position for the canvas. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                 },
-                                // webgl: (sprite, ctx, canvas, game, plugin)...
+                                y: {
+                                    required: false,
+                                    default: "centred",
+                                    types: [
+                                        "number",
+                                        "string",
+                                        "function"
+                                    ],
+                                    description: "The y position for the canvas. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                },
+                                width: {
+                                    required: true,
+                                    types: [
+                                        "number",
+                                        "function"
+                                    ],
+                                    description: "The width for the canvas. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width * 0.2\""
+                                },
+                                height: {
+                                    required: true,
+                                    types: [
+                                        "number",
+                                        "function"
+                                    ],
+                                    description: "The height for the canvas. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height * 0.2\""
+                                },
+                                visible: {
+                                    required: false,
+                                    default: true,
+                                    types: ["boolean"],
+                                    description: "If the canvas is visible or not."
+                                },
+                                alpha: {
+                                    required: false,
+                                    default: 1,
+                                    types: ["number"],
+                                    description: "The alpha of the canvas. 1 is fully visible, 0.5 is partially and 0's invisible."
+                                },
+                                fullRes: {
+                                    required: false,
+                                    default: false,
+                                    types: ["boolean"],
+                                    description: "If true, the canvas width and height will be automatically changed to ensure it's rendered at the full resolution."
+                                },
+                                render: {
+                                    required: false,
+                                    types: ["function"],
+                                    description: "Renders each frame for the canvas. The arguments provided are: \"sprite\", \"game\", \"ctx\" and \"canvas\"."
+                                }
+                            },
+                            cloneArgs: {
+                                x: {
+                                    syntax: {
+                                        description: "The x position for the clone. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                    },
+                                    mode: "replace"
+                                },
+                                y: {
+                                    syntax: {
+                                        description: "The y position for the clone. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                    },
+                                    mode: "replace"
+                                },
+                                width: {
+                                    syntax: {
+                                        description: "The width for the clone. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width * 0.2\""
+                                    },
+                                    mode: "replace"
+                                },
+                                height: {
+                                    syntax: {
+                                        description: "The height for the clone. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height * 0.2\""
+                                    },
+                                    mode: "replace"
+                                },
+                                visible: {
+                                    syntax: {
+                                        description: "If the clone is visible or not."
+                                    },
+                                    mode: "replace"
+                                },
+                                alpha: {
+                                    syntax: {
+                                        description: "The alpha of the clone. 1 is fully visible, 0.5 is partially and 0's invisible."
+                                    },
+                                    mode: "replace"
+                                },
+                                fullRes: {
+                                    mode: "replace"
+                                },
+                                render: {
+                                    syntax: {
+                                        description: "Renders each frame for the clone. The arguments provided are: \"sprite\", \"game\", \"ctx\" and \"canvas\"."
+                                    },
+                                    mode: "replace"
+                                }
+                            },
+                            listeners: {
+                                fns: {
+                                    xy: (sprite, value, property, game, plugin, triggerSprite) => {
+                                        if (typeof value == "string") {
+                                            if (value == "centred") {
+                                                sprite[property] = game[property == "x"? "width" : "height"] / 2;
+                                            }
+                                        }
+                                        if (typeof value == "function") {
+                                            sprite[property] = value(sprite, game); // Avoid the setter
+                                        }
+                                    },
+                                    dimensions: (sprite, value, property, game, plugin, triggerSprite) => {
+                                        if (typeof value == "function") {
+                                            sprite[property] = value(sprite, game); // Avoid the setter
+                                        }
+                                    }
+                                },
+                                property: {
+                                    x: {
+                                        get: "xy"
+                                    },
+                                    y: {
+                                        get: "xy"
+                                    },
+                                    width: {
+                                        get: "dimensions"
+                                    },
+                                    height: {
+                                        get: "dimensions"
+                                    }
+                                }
+                            },
+                            description: "A \"2d\" canvas sprite. Anything rendered onto the canvas gets rendered onto the main canvas.",
+                            init: (sprite, game) => {
+                                let canvas = document.createElement("canvas");
+                                let ctx = canvas.getContext("2d");
+
+                                let scaleX = game.internal.renderer.canvas.width / game.width;
+                                let scaleY = game.internal.renderer.canvas.height / game.height;
+                                canvas.width = sprite.width * window.devicePixelRatio;
+                                canvas.height = sprite.height * window.devicePixelRatio;
+                                if (sprite.fullRes) {
+                                    canvas.width *= scaleX;
+                                    canvas.height *= scaleY;
+                                }
+                                sprite.canvas = canvas;
+                                sprite.ctx = ctx;
+                            },
+                            render: {
+                                ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
+                                    if (sprite.fullRes) {
+                                        sprite.canvas.width = sprite.width * window.devicePixelRatio * scaleX;
+                                        sprite.canvas.height = sprite.height * window.devicePixelRatio * scaleY;
+                                    }
+                                    let current = Bagel.internal.current;
+                                    Bagel.internal.saveCurrent();
+                                    current.plugin = null;
+                                    current.sprite = sprite;
+                                    if (sprite.render) sprite.render(sprite, game, sprite.ctx, sprite.canvas);
+                                    Bagel.internal.loadCurrent();
+
+                                    ctx.globalAlpha = sprite.alpha;
+                                    ctx.scale(scaleX, scaleY);
+                                    ctx.drawImage(sprite.canvas, sprite.x - (sprite.width / 2), sprite.y - (sprite.height / 2), sprite.width, sprite.height);
+                                    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
+                                    ctx.globalAlpha = 1;
+                                }
                             }
                         }
                     }
@@ -691,10 +846,7 @@ Bagel = {
                     sprite: {
                         move: {
                             fn: {
-                                appliesTo: [
-                                    "sprite",
-                                    "canvas"
-                                ],
+                                appliesTo: ["sprite"],
                                 obArg: false,
                                 args: {
                                     amount: {
@@ -1247,7 +1399,9 @@ Bagel = {
                 assets.loaded++;
                 assets.loading--;
                 if (assets.loading == 0) {
-                    game.loaded = true;
+                    if (game.config.loading.skip) {
+                        game.loaded = true;
+                    }
                 }
             })(asset, game); // This is called by the init function once the asset has loaded
             let assetOb = assetLoader.init(asset, ready, game, assetLoader.internal.plugin, i);
@@ -1368,7 +1522,7 @@ Bagel = {
                     subFunctions.loaded(game);
                 }
                 else {
-                    // TODO: Loading logic
+                    subFunctions.loading(game);
                 }
 
                 game.internal.FPSFrames++;
@@ -1403,10 +1557,6 @@ Bagel = {
                             height: game.height,
                             lastRender: new Date(),
                             layers: [],
-                            renderers: {
-                                high: [],
-                                low: []
-                            },
                             canvas: document.createElement("canvas"),
                             ratio: game.width / game.height
                         },
@@ -1414,8 +1564,6 @@ Bagel = {
                         idIndex: {},
                         FPSFrames: 0,
                         lastFPSUpdate: new Date(),
-                        loadedDelay: 0,
-                        soundsToPlay: [],
                         scripts: {
                             index: {
                                 init: {},
@@ -1461,7 +1609,7 @@ Bagel = {
 
                     return game;
                 },
-                inputs: (game, addEventListener) => {
+                listeners: (game, addEventListener) => {
                     game.input = {
                         touches: [],
                         mouse: {
@@ -1577,7 +1725,7 @@ Bagel = {
                             mouse.down = true;
                             context.preventDefault();
                         }, false);
-                        addEventListener("touchend", (ctx) => {
+                        addEventListener("touchend", ctx => {
                             Bagel.device.is.touchscreen = true;
 
                             game.input.touches = [];
@@ -1586,37 +1734,29 @@ Bagel = {
                             game.input.mouse.down = false;
                             context.preventDefault();
                         }, false);
-                        document.addEventListener("keydown", (ctx) => {
+                        document.addEventListener("keydown", ctx => {
                             for (let i in Bagel.internal.games) {
                                 let game = Bagel.internal.games[i];
                                 game.input.keys.keys[ctx.keyCode] = true;
                             }
                         }, false);
-                        document.addEventListener("keyup", (ctx) => {
+                        document.addEventListener("keyup", ctx => {
                             for (let i in Bagel.internal.games) {
                                 let game = Bagel.internal.games[i];
                                 game.input.keys.keys[ctx.keyCode] = false;
                             }
                         }, false);
 
-                        document.addEventListener("readystatechange", () => {
-                            if (document.readyState == "complete") { // Wait for the document to load
-                                for (let i in Bagel.internal.games) {
-                                    let game = Bagel.internal.games[i];
-                                    if (game.config.display.htmlElementID == null) {
-                                        if (document.body != null) {
-                                            document.body.appendChild(game.internal.renderer.canvas);
-                                        }
-                                        else {
-                                            document.appendChild(game.internal.renderer.canvas);
-                                        }
-                                    }
-                                    else {
-                                        document.getElementById(game.config.display.htmlElementID).appendChild(game.internal.renderer.canvas);
-                                    }
+                        if (document.readyState == "complete") {
+                            Bagel.internal.subFunctions.init.documentReady(game);
+                        }
+                        else {
+                            document.addEventListener("readystatechange", () => {
+                                if (document.readyState == "complete") { // Wait for the document to load
+                                    Bagel.internal.subFunctions.init.documentReady(game);
                                 }
-                            }
-                        });
+                            });
+                        }
                     })(game);
                 },
                 misc: game => {
@@ -1682,6 +1822,12 @@ Bagel = {
                                 }
                             },
                             asset: {}
+                        };
+                        game.delete = () => {
+                            if (game.config.display.dom) {
+                                game.internal.renderer.canvas.remove();
+                            }
+                            delete Bagel.internal.games[game.id];
                         };
                     })(game);
                 },
@@ -1819,6 +1965,63 @@ Bagel = {
                             })(method, game, methodName, position);
                         }
                     }
+                },
+                initSprites: game => {
+                    for (let i in game.game.sprites) {
+                        let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "GameJSON.game.sprites item " + i, false, parseInt(i));
+                    }
+                },
+                preload: game => {
+                    if (game.game.scripts.preload != null) {
+                        game.game.scripts.preload(game);
+                    }
+                },
+                loadingScreen: game => {
+                    if (! game.config.loading.skip) {
+                        Bagel.internal.saveCurrent();
+                        Bagel.internal.current.plugin = Bagel.internal.plugin; // TODO: is it a problem if it's not the game's version?
+
+                        let loadingScreen = Bagel.internal.deepClone(game.config.loading.animation); // TODO: does it need cloning first?
+                        loadingScreen.id = ".Internal.loadingScreen." + game.id;
+                        loadingScreen.width = game.width;
+                        loadingScreen.height = game.height;
+                        loadingScreen.config = {
+                            loading: {
+                                skip: true
+                            },
+                            display: {
+                                dom: false
+                            }
+                        };
+                        if (loadingScreen.vars == null) {
+                            loadingScreen.vars = {};
+                        }
+                        loadingScreen.vars.loading = {
+                            progress: 0,
+                            loaded: 0,
+                            loading: game.internal.assets.loading,
+                            done: false
+                        };
+
+                        loadingScreen = Bagel.init(loadingScreen);
+                        game.internal.loadingScreen = loadingScreen;
+                        Bagel.internal.loadCurrent();
+                    }
+                },
+                documentReady: game => {
+                    if (game.config.display.dom) {
+                        if (game.config.display.htmlElementID) {
+                            document.getElementById(game.config.display.htmlElementID).appendChild(game.internal.renderer.canvas);
+                        }
+                        else {
+                            if (document.body != null) {
+                                document.body.appendChild(game.internal.renderer.canvas);
+                            }
+                            else {
+                                document.appendChild(game.internal.renderer.canvas);
+                            }
+                        }
+                    }
                 }
             },
             loadPlugin: {
@@ -1830,556 +2033,7 @@ Bagel = {
 
                     plugin = Bagel.check({
                         ob: plugin,
-                        syntax: {
-                            info: {
-                                required: true,
-                                types: ["object"],
-                                subcheck: {
-                                    id: {
-                                        required: true,
-                                        types: ["string"],
-                                        description: "The unique id for the plugin."
-                                    },
-                                    description: {
-                                        required: true,
-                                        types: ["string"],
-                                        description: "A brief description of what the plugin is and what it does."
-                                    }
-                                },
-                                description: "Contains some information about the plugin."
-                            },
-                            plugin: {
-                                required: false,
-                                subcheck: {
-                                    types: {
-                                        required: false,
-                                        default: {},
-                                        subcheck: {
-                                            assets: {
-                                                required: false,
-                                                default: {},
-                                                arrayLike: true,
-                                                subcheck: {
-                                                    args: Bagel.internal.checks.args,
-                                                    description: {
-                                                        required: true,
-                                                        types: ["string"],
-                                                        description: "The description of this asset type, make this short and clear to help people when they use the wrong syntax."
-                                                    },
-                                                    check: {
-                                                        required: true,
-                                                        types: ["function"],
-                                                        description: [
-                                                            "Your check function for this asset type. ",
-                                                            "A good check function will avoid a standard JavaScript error when the user inputs something wrong (e.g a can't read property X of null error).",
-                                                            "\nFortunately, Bagel.js helps you out in a few ways:\n",
-                                                            "  You can use the check function provided (while the check function is being run) to easily check an object to make sure it has the desired properties as well as setting defaults. (works in the same way as the \"args\" argument.)\n",
-                                                            "  You should also make use of the \"args\" argument as you can easily choose which data types you want to allow for each arguments as well as setting defaults and required arguments.\n",
-                                                            "  \"standardChecks\" has, well... some standard checks. If you want to make sure an id isn't used twice use \"standardChecks.id(<whichever argument is used for the id (defaults to \"id\")>)\". ",
-                                                            "  You might also want to use the \"isInternal\" check with the arguments working the same as the previous but also having a second argument for the isInternal argument. This might be useful if you want to reserve some IDs for plugins as it'll block any IDs starting with a dot and without the asset having \"isInternal\" set to true.\n",
-                                                            "  You probably want to use it like this:\n",
-                                                            "    let error = standardChecks.id();\nif (error) return error;",
-                                                            "  And if you find any problems with the user input, just use the return statement in the check function (e.g return \"Error\";) and Bagel.js will stop what it's doing, throw the error you specified and pause the game.\n",
-                                                            "Some tips on making custom errors though:\n",
-                                                            "  Always specifiy where the error is! Bagel.js will say which game it's in but, you know more than it about the error. You should specify which type they were making, the index of the problematic error and ideally how to fix it.\n",
-                                                            "  Also, try to include information about the inputs the user provided. For example, if they used a duplicate ID, say what that id was in the error itself.\n",
-                                                            "  Lastly, be nice to the programmer. Treat them like a user. It's helpful to know that you can just put in something you know's wrong and get a helpful mini-tutorial.\n",
-                                                            "\nOne more thing: the arguments for the function is structured like this:",
-                                                            "(asset, game, check, standardChecks, plugin, index) => {\n};\n",
-                                                            "Where standardChecks contains functions and check is a function that checks objects.",
-                                                            "\n\nGood luck! :P"
-                                                        ].join("")
-                                                    },
-                                                    init: {
-                                                        required: true,
-                                                        types: ["function"],
-                                                        description: [
-                                                            "Where you make the asset object. When it's ready, simply use the \"ready\" function to tell Bagel.js that the asset's loaded.",
-                                                            "Here's an example:",
-                                                            "(asset, ready, game, plugin, index) => {",
-                                                            "    let img = new Image();",
-                                                            "    img.onload = () => {",
-                                                            "        ready({;",
-                                                            "            img: img,",
-                                                            "            JSON: asset",
-                                                            "        });",
-                                                            "    };",
-                                                            "};"
-                                                        ].join("\n")
-                                                    },
-                                                    get: {
-                                                        required: true,
-                                                        subcheck: {
-                                                            name: {
-                                                                required: true,
-                                                                types: ["string"],
-                                                                description: "The name of the function. Usually the singular version of the asset type. e.g: the type \"imgs\" would have the name \"img\" so the function would be \"Game.get.asset.img\". Defaults to the name of type."
-                                                            },
-                                                            handler: {
-                                                                required: false,
-                                                                default: (id, check, defaultFind, game, plugin, type) => defaultFind(id, check),
-                                                                types: [
-                                                                    "function",
-                                                                    "undefined"
-                                                                ],
-                                                                description: "The handler function for the \"get\" method. Defaults to using defaultFind.\nThe function should return the asset specified by the arguments. Or an error in the form of a string."
-                                                            }
-                                                        },
-                                                        types: ["object"],
-                                                        description: [
-                                                            "Contains the name of the function and the function that gets the asset. e.g {",
-                                                            "    name: \"img\"",
-                                                            "}"
-                                                        ].join("\n")
-                                                    }
-                                                },
-                                                types: ["object"],
-                                                description: "Contains the new asset types, the key is the name of type. (should be plural)"
-                                            },
-                                            sprites: {
-                                                required: false,
-                                                default: {},
-                                                arrayLike: true,
-                                                subcheck: {
-                                                    description: {
-                                                        required: true,
-                                                        types: ["string"],
-                                                        description: "A short explaination of what this sprite type does."
-                                                    },
-                                                    args: { // TODO: Should this be checked?
-                                                        required: true,
-                                                        types: ["object"],
-                                                        description: "Same as the \"syntax\" argument for the check function. These checks are only run on original sprites, not clones."
-                                                    },
-                                                    cloneArgs: {
-                                                        required: true,
-                                                        types: ["object"],
-                                                        arrayLike: true,
-                                                        subcheck: {
-                                                            syntax: {
-                                                                required: false,
-                                                                default: {},
-                                                                subcheck: {
-                                                                    description: {
-                                                                        required: false,
-                                                                        check: (item, ob, index, game, prev) => {
-                                                                            if (item == null) {
-                                                                                ob[index] = prev.prev.ob.args[prev.prevName].description;
-                                                                            }
-                                                                        },
-                                                                        types: ["string"],
-                                                                        description: "A brief description of what this property does. You might want to change this to mention clones instead of sprites."
-                                                                    },
-                                                                    types: {
-                                                                        required: false,
-                                                                        check: (item, ob, index, game, prev) => {
-                                                                            if (item == null) {
-                                                                                ob[index] = prev.prev.ob.args[prev.prevName].types;
-                                                                            }
-                                                                        },
-                                                                        types: ["array"],
-                                                                        description: "The different data types this property accepts. e.g string, array, object etc."
-                                                                    },
-                                                                    required: {
-                                                                        required: false,
-                                                                        check: (value, ob, index, game, prev) => {
-                                                                            // TODO: Not working <==============
-                                                                            // It can't adopt the property from the parent because it doesn't exist yet.
-                                                                            // TODO: error when parent doesn't have the property <=======
-                                                                            if (value == null) {
-                                                                                ob[index] = prev.prev.ob.args[prev.prevName].required;
-                                                                            }
-                                                                        },
-                                                                        types: ["boolean"],
-                                                                        description: "If the argument is required or not. Most of the time, it should be optional."
-                                                                    },
-                                                                    check: {
-                                                                        required: false,
-                                                                        check: (item, ob, index, game, prev) => {
-                                                                            if (item == null) {
-                                                                                ob[index] = prev.prev.ob.args[prev.prevName].check;
-                                                                            }
-                                                                        },
-                                                                        types: ["function"],
-                                                                        description: "The check function."
-                                                                    },
-                                                                    subcheck: {
-                                                                        required: false,
-                                                                        check: (item, ob, index, game, prev) => {
-                                                                            if (item == null) {
-                                                                                ob[index] = prev.prev.ob.args[prev.prevName].subcheck;
-                                                                            }
-                                                                        },
-                                                                        types: ["object"],
-                                                                        description: "The subcheck. Same as a \"syntax\" argument."
-                                                                    },
-                                                                    default: {
-                                                                        required: false,
-                                                                        check: (item, ob, index, game, prev) => {
-                                                                            if (item == null) {
-                                                                                ob[index] = prev.prev.ob.args[prev.prevName].default;
-                                                                            }
-                                                                        },
-                                                                        types: "any",
-                                                                        description: "The default value for when \"ignore\" mode is used and no value is found for a property."
-                                                                    }
-                                                                },
-                                                                types: ["object"],
-                                                                description: "The syntax for clones of this sprite type. Any unspecified arguments will default to the values specified in the \"args\" argument for normal sprites."
-                                                            },
-                                                            mode: {
-                                                                required: false,
-                                                                default: "replace",
-                                                                check: (value) => {
-                                                                    if (! [
-                                                                        "replace",
-                                                                        "merge",
-                                                                        "ignore"
-                                                                    ].includes(value)) {
-                                                                        return "Huh, looks like you used an invalid option for this. It can only be \"replace\", \"merge\" or \"ignore\".";
-                                                                    }
-                                                                },
-                                                                types: ["string"],
-                                                                description: [
-                                                                    "The adoption method for this property. Either:",
-                                                                    "  • \"replace\" -> The value is given based on the order of preference (from high to low): the \"clone\" function inputs, the \"clones\" attribute in the parent and the parent sprite's properties.",
-                                                                    "  • \"merge\" -> Only for objects and arrays. They are merged together, in the event of a conflict, the order of preference applies.",
-                                                                    "  • \"ignore\" -> Ignores the parent's properties. However, properties will still be taken from the parent's \"clones\" argument and the \"clone\" function using the order of preference. The property will be set to the default from either the parent or the clone's arguments if no value is assigned."
-                                                                ].join("\n")
-                                                            }
-                                                        },
-                                                        description: "Same as the \"syntax\" argument for the check function. These checks are only run on clones, not original sprites. Unspecified properties will mean that the property doesn't exist for clones."
-                                                    },
-                                                    listeners: {
-                                                        required: false,
-                                                        default: {},
-                                                        subcheck: {
-                                                            steps: { // TODO: How should these be checked?
-                                                                required: false,
-                                                                default: {},
-                                                                types: ["object"],
-                                                                description: "Short functions that do a task. Can be called from any of the other functions using \"Bagel.step(<step id>)\"."
-                                                            },
-                                                            fns: {
-                                                                required: false,
-                                                                default: {},
-                                                                types: ["object"],
-                                                                description: "Functions that can replace the functions in listeners. The key is the id for it. The id can be used in place of this function in listeners."
-                                                            },
-                                                            property: {
-                                                                required: false,
-                                                                default: {},
-                                                                subcheck: {
-                                                                    set: {
-                                                                        required: false,
-                                                                        default: null,
-                                                                        check: (fn, listeners, property, game, prev) => {
-                                                                            if (typeof fn == "string") {
-                                                                                if (! prev.ob.fns.hasOwnProperty(fn)) {
-                                                                                    return "Huh, looks like you used an invalid id for a function. You used " + JSON.stringify(fn) + ".";
-                                                                                }
-                                                                                listeners[property] = prev.ob.fns[fn];
-                                                                            }
-                                                                        },
-                                                                        types: [
-                                                                            "function",
-                                                                            "string"
-                                                                        ],
-                                                                        description: "A function that's run after the property is changed. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin and triggerSprite."
-                                                                    },
-                                                                    get: {
-                                                                        required: false,
-                                                                        default: null,
-                                                                        check: (fn, listeners, property, game, prev) => {
-                                                                            if (typeof fn == "string") {
-                                                                                if (! prev.ob.fns.hasOwnProperty(fn)) {
-                                                                                    return "Hmm, looks like you used an invalid id for a function. You used " + JSON.stringify(fn) + ".";
-                                                                                }
-                                                                                listeners[property] = prev.ob.fns[fn];
-                                                                            }
-                                                                        },
-                                                                        types: [
-                                                                            "function",
-                                                                            "string"
-                                                                        ],
-                                                                        description: "A function that's run before the value is sent back to the code that requested it. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin and triggerSprite."
-                                                                    }
-                                                                },
-                                                                arrayLike: true,
-                                                                types: ["object"],
-                                                                description: "Contains the \"set\" and \"get\" listener functions."
-                                                            }
-                                                        },
-                                                        types: ["object"],
-                                                        description: "Functions that can run when certain conditions are met."
-                                                    },
-                                                    check: {
-                                                        required: false,
-                                                        default: null,
-                                                        types: ["function"],
-                                                        description: "A function that does extra checks. Use return <error message> in the function to create an error. These are the arguments given: sprite, game, check, index, where"
-                                                    },
-                                                    init: {
-                                                        required: false,
-                                                        default: null,
-                                                        types: ["function"],
-                                                        description: "Initialises the sprite. Is a function. Can be used to define attributes. These are the arguments given: sprite, game and plugin."
-                                                    },
-                                                    render: {
-                                                        required: false,
-                                                        default: {},
-                                                        subcheck: {
-                                                            ctx: {
-                                                                required: false,
-                                                                default: null,
-                                                                types: ["function"],
-                                                                description: "The ctx render function. Runs every frame."
-                                                            },
-                                                            webgl: {
-                                                                required: false,
-                                                                default: {},
-                                                                subcheck: {
-                                                                    shaders: {
-                                                                        required: false,
-                                                                        default: {},
-                                                                        subcheck: {
-                                                                            vertex: { // TODO: check?
-                                                                                required: false,
-                                                                                default: [],
-                                                                                types: ["array"],
-                                                                                description: "An array of vertex shaders to run from first to last."
-                                                                            },
-                                                                            fragment: { // TODO: check?
-                                                                                required: false,
-                                                                                default: [],
-                                                                                types: ["array"],
-                                                                                description: "An array of fragment shaders to run from first to last."
-                                                                            }
-                                                                        },
-                                                                        types: ["object"],
-                                                                        description: "Contains the \"vertex\" and \"fragment\" shaders."
-                                                                    },
-                                                                    render: {
-                                                                        required: false,
-                                                                        default: {},
-                                                                        types: ["function"],
-                                                                        description: "Does extra processing before the sprite is renderer." // TODO: arguments
-                                                                    }
-                                                                },
-                                                                types: ["object"],
-                                                                description: "The webgl renderer. Runs every frame. Contains \"shaders\" and an optional \"render\" function which allows for extra processing before the vertex and fragment shaders are run."
-                                                            }
-                                                        },
-                                                        types: ["object"],
-                                                        description: "The render functions for this sprite type. Ideally should have both a webgl renderer and a fallback ctx renderer."
-                                                    }
-                                                },
-                                                types: ["object"],
-                                                description: "Contains the new sprite types, the key is the name of type. (should be singular)"
-                                            }
-                                        },
-                                        types: ["object"],
-                                        description: "Creates new types. (assets, sprites)"
-                                    },
-                                    assets: { // TODO: check
-                                        required: false,
-                                        default: {},
-                                        types: ["object"],
-                                        description: "Which assets to load for the plugin."
-                                    },
-                                    methods: {
-                                        required: false,
-                                        default: {},
-                                        subcheck: {
-                                            bagel: { // TODO: check
-                                                required: false,
-                                                default: {},
-                                                arrayLike: true,
-                                                subcheck: {
-                                                    fn: {
-                                                        required: false,
-                                                        subcheck: {
-                                                            args: { // TODO: check?
-                                                                required: true,
-                                                                types: ["object"],
-                                                                description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
-                                                            },
-                                                            fn: {
-                                                                required: true,
-                                                                types: ["function"],
-                                                                description: "The method itself. The arguments are the arguments (an object) and the plugin."
-                                                            },
-                                                            obArg: {
-                                                                required: true,
-                                                                types: ["boolean"],
-                                                                description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
-                                                            },
-                                                            category: {
-                                                                required: false,
-                                                                default: "",
-                                                                types: ["string"],
-                                                                description: "If specified, an object will be created in \"Bagel\" and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
-                                                            }
-                                                        },
-                                                        types: ["object"],
-                                                        description: "The method itself."
-                                                    },
-                                                    category: {
-                                                        required: false,
-                                                        types: ["object"],
-                                                        description: "Contains categories where the key is the name of the category and their contents have the same syntax as here. Note: These aren't checked."
-                                                    }
-                                                },
-                                                types: ["object"],
-                                                description: "Contains framework functions. (Bagel.<function>...) The key is the name and the value is the function."
-                                            },
-                                            game: { // TODO: check
-                                                required: false,
-                                                default: {},
-                                                arrayLike: true,
-                                                /*
-                                                subcheck: {
-                                                    args: { // TODO: check?
-                                                        required: true,
-                                                        types: ["object"],
-                                                        description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
-                                                    },
-                                                    fn: {
-                                                        required: true,
-                                                        types: ["function"],
-                                                        description: "The method itself. The arguments are the game, the arguments (an object) and the plugin."
-                                                    },
-                                                    obArg: {
-                                                        required: true,
-                                                        types: ["boolean"],
-                                                        description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
-                                                    },
-                                                    category: {
-                                                        required: false,
-                                                        default: "",
-                                                        types: ["string"],
-                                                        description: "If specified, an object will be created in the game and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
-                                                    }
-                                                },
-                                                */
-                                                types: ["object"],
-                                                description: "Contains game functions. (Game.<function>...) The key is the name and the value is the function."
-                                            },
-                                            sprite: { // TODO: check
-                                                required: false,
-                                                default: {},
-                                                /*
-                                                arrayLike: true,
-                                                subcheck: {
-                                                    appliesTo: {
-                                                        required: true,
-                                                        types: ["array"],
-                                                        description: "The sprite types that this method is added to."
-                                                    },
-                                                    args: { // TODO: check?
-                                                        required: true,
-                                                        types: ["object"],
-                                                        description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
-                                                    },
-                                                    fn: {
-                                                        required: true,
-                                                        types: ["function"],
-                                                        description: "The method itself. The arguments are the sprite, the arguments (an object), the game and the plugin."
-                                                    },
-                                                    obArg: {
-                                                        required: true,
-                                                        types: ["boolean"],
-                                                        description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
-                                                    },
-                                                    category: {
-                                                        required: false,
-                                                        default: "",
-                                                        types: ["string"],
-                                                        description: "If specified, an object will be created in the sprites that this method applies to and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
-                                                    }
-                                                },
-                                                */
-                                                types: ["object"],
-                                                description: "Contains sprite functions. (me.<function>...) The key is the name and the value is the function."
-                                            }
-                                        },
-                                        types: ["object"],
-                                        description: "Contains the 3 different method types: \"bagel\", \"game\" and \"sprite\"."
-                                    },
-                                    scripts: {
-                                        required: false,
-                                        default: {},
-                                        subcheck: {
-                                            preload: {
-                                                required: false,
-                                                default: [],
-                                                check: fn => {
-                                                    if (typeof fn != "function") {
-                                                        return "Hmm. Looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
-                                                    }
-                                                },
-                                                checkEach: true,
-                                                types: ["array"],
-                                                description: "Preload functions. They run before the plugin is checked or initialised."
-                                            },
-                                            init: {
-                                                required: false,
-                                                default: [],
-                                                check: fn => {
-                                                    if (typeof fn != "function") {
-                                                        return ":/ Looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
-                                                    }
-                                                },
-                                                checkEach: true,
-                                                types: ["array"],
-                                                description: "Init functions. They run once the plugin's been checked and mostly initialised. This function finishes it by doing stuff specific to this plugin."
-                                            },
-                                            main: {
-                                                required: false,
-                                                default: [],
-                                                check: fn => {
-                                                    if (typeof fn != "function") {
-                                                        return "Hmm, looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
-                                                    }
-                                                },
-                                                checkEach: true,
-                                                types: ["array"],
-                                                description: "Main functions. They run on every frame before the rendering."
-                                            },
-                                            steps: {
-                                                required: false,
-                                                default: {},
-                                                check: fn => {
-                                                    if (typeof fn != "function") {
-                                                        return "Huh, looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
-                                                    }
-                                                },
-                                                checkEach: true,
-                                                types: ["object"],
-                                                description: "Mini functions. They can help make your code clearer by spitting functions into the individual steps. Can use them with \"Bagel.step\" or the step function provided with the script."
-                                            }
-                                        },
-                                        types: ["object"],
-                                        description: "Contains the plugin's scripts. \"preload\", \"init\" and \"main\". Steps can also be used."
-                                    },
-                                    sprites: { // TODO: check
-                                        required: false,
-                                        default: [],
-                                        subcheck: {}, // TODO
-                                        types: ["array"],
-                                        description: "Contains the plugin's sprites. Works the same way as Game.game.sprites. These will be created in every game where the plugin's active."
-                                    }
-                                },
-                                types: ["object"],
-                                description: "Contains most of the plugin stuff. e.g the new types it adds, methods and defaults."
-                            },
-                            vars: {
-                                required: false,
-                                default: {},
-                                types: ["object"],
-                                description: "An object you can use to store data for the sprite."
-                            }
-                        },
+                        syntax: Bagel.internal.checks.plugin,
                         where: "plugin " + plugin.info.id
                     }, Bagel.internal.checks.disableArgCheck);
 
@@ -2744,9 +2398,12 @@ Bagel = {
                     return sprite;
                 },
                 extraChecks: (sprite, game, where, idIndex) => {
+                    let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+                    if (handler.check == null) {
+                        return;
+                    }
                     let current = Bagel.internal.current;
 
-                    let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
                     let error = handler.check(sprite, game, Bagel.check, current.plugin, idIndex, where);
                     if (error) {
                         console.error(error);
@@ -2952,6 +2609,7 @@ Bagel = {
             },
             tick: {
                 scripts: (type, sprites, game) => { // TODO: does this work with non-sprite scripts?
+                    if (Bagel.internal.games[game.id] == null) return;
                     let scripts;
                     if (sprites) {
                         if (type == "all") {
@@ -3075,8 +2733,30 @@ Bagel = {
                         subFunctions.scripts("main", false, game);
                         subFunctions.scripts("all", true, game);
                         subFunctions.scripts("all", false, game);
+                        if (Bagel.internal.games[game.id] == null) return;
                         subFunctions.render[game.config.display.renderer](game);
-                        // TODO: prevent changing in runtime?
+                    }
+                },
+                loading: game => {
+                    if (! game.config.loading.skip) {
+                        let renderer = game.internal.renderer;
+                        let canvas = renderer.canvas;
+                        let ctx = renderer.ctx;
+                        let loadingScreen = game.internal.loadingScreen;
+                        let assets = game.internal.assets;
+                        let loading = loadingScreen.vars.loading;
+
+                        loading.progress = (assets.loaded / (assets.loading + assets.loaded)) * 100;
+                        loading.loaded = assets.loaded;
+                        loading.loading = assets.loading;
+
+
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(loadingScreen.internal.renderer.canvas, 0, 0, canvas.width, canvas.height);
+                        if (loadingScreen.vars.loading.done) {
+                            game.loaded = true;
+                            loadingScreen.delete();
+                        }
                     }
                 },
                 tick: () => {
@@ -3223,24 +2903,6 @@ Bagel = {
             }
         },
         checks: {
-            args: {
-                required: true,
-                types: ["object"],
-                description: [
-                    "The required and optional arguments for the sprite. Is an object where the key is the argument name. e.g {",
-                    "    x: {",
-                    "        required: false,",
-                    "        default: \"centred\",",
-                    "        types: [",
-                    "            \"number\",",
-                    "            \"string\",",
-                    "            \"function\",",
-                    "        ],",
-                    "        description: \"The X position for the sprite to start at. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n(game, me) => game.width - 50\"",
-                    "    }",
-                    "}"
-                ].join("\n")
-            },
             game: {
                 id: {
                     required: true,
@@ -3406,6 +3068,12 @@ Bagel = {
                                     types: ["string"],
                                     description: "The renderer for this game. Either \"auto\", \"canvas\" or \"webgl\". \"auto\" will use WebGL if it's supported by the browser, otherwise it'll use the basic 2d renderer (slower)."
                                 },
+                                dom: {
+                                    required: false,
+                                    default: true,
+                                    types: ["boolean"],
+                                    description: "If the canvas should be part of the DOM or not."
+                                },
                                 htmlElementID: {
                                     required: false,
                                     types: ["string"],
@@ -3413,6 +3081,157 @@ Bagel = {
                                 }
                             },
                             description: "Contains a few options for how the game is displayed."
+                        },
+                        loading: {
+                            required: false,
+                            default: {},
+                            subcheck: {
+                                mode: {
+                                    required: false,
+                                    default: "dynamic",
+                                    check: value => {
+                                        if (! ["preload", "dynamic"].includes(value)) {
+                                            return "Oh no! This only accepts \"preload\" and \"function\" but you used " + JSON.stringify(value) + ".";
+                                        }
+                                    },
+                                    types: ["string"],
+                                    description: "How assets should be loaded. Either \"preload\" or \"dynamic\". Preload loads all the assets before the game runs and dynamic only loads the assets when they're requested internally or by using the get function. A loading screen will show for those assets if they were requested on the first frame after a state change. Assets requested any other time won't trigger a loading screen."
+                                },
+                                skip: {
+                                    required: false,
+                                    default: true,
+                                    types: ["boolean"],
+                                    description: "If the loading screen should be skipped or not. If true, nothing will show until the game's loaded. This can annoy the user as it delays the page load but if it's short enough it saves time because they don't have to wait for the loading animation to finish."
+                                },
+                                animation: {
+                                    required: false,
+                                    default: {
+                                        game: {
+                                            assets: {
+                                                imgs: [
+                                                    {
+                                                        id: "Bagel",
+                                                        src: "../assets/imgs/bagel.png" // TODO: data url
+                                                    },
+                                                    {
+                                                        id: "JS",
+                                                        src: "../assets/imgs/js.png" // TODO: data url
+                                                    }
+                                                ]
+                                            },
+                                            sprites: [
+                                                {
+                                                    id: "Bagel",
+                                                    type: "canvas",
+                                                    fullRes: true,
+                                                    scripts: {
+                                                        init: [
+                                                            {
+                                                                code: me => {
+                                                                    me.vars.img = Bagel.get.asset.img("Bagel");
+                                                                },
+                                                                stateToRun: "loading"
+                                                            }
+                                                        ]
+                                                    },
+                                                    render: (me, game, ctx, canvas) => {
+                                                        let img = me.vars.img;
+                                                        let midPoint = canvas.width / 2;
+                                                        ctx.fillStyle = "white";
+                                                        ctx.imageSmoothingEnabled = false;
+
+                                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                                                        if (game.vars.stage == 0) {
+                                                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                                            let maxAngle = ((game.vars.loading.progress / 100) * 360) - 90;
+                                                            if (maxAngle > game.vars.angle) {
+                                                                game.vars.velocity += 2;
+                                                                game.vars.angle += game.vars.velocity;
+                                                                game.vars.velocity *= 0.9;
+                                                                if (maxAngle < game.vars.angle) {
+                                                                    game.vars.velocity = 0;
+                                                                    game.vars.angle = maxAngle;
+                                                                }
+                                                            }
+                                                            if (game.vars.loading.loading == 0 && game.vars.velocity == 0) {
+                                                                game.vars.stage++;
+                                                                return;
+                                                            }
+                                                            ctx.moveTo(midPoint, midPoint);
+                                                            ctx.arc(midPoint, midPoint, midPoint * 2, Bagel.maths.degToRad(-90), Bagel.maths.degToRad(game.vars.angle), true);
+                                                            ctx.lineTo(midPoint, midPoint);
+                                                            ctx.fill();
+
+                                                            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
+                                                        }
+                                                        else {
+                                                            if (game.vars.delay == 0) {
+                                                                game.vars.velocity += 1;
+                                                                me.width -= game.vars.velocity;
+                                                                me.height -= game.vars.velocity;
+                                                                game.vars.velocity *= 0.9;
+                                                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                                                                if (me.width <= 0) {
+                                                                    me.width = 1;
+                                                                    me.height = 1;
+                                                                    ctx.clearRect(0, 0, 1, 1);
+                                                                    game.vars.delay++;
+                                                                }
+                                                            }
+                                                            else {
+                                                                game.vars.delay++;
+                                                                if (game.vars.delay > 10) {
+                                                                    game.vars.loading.done = true;
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    width: (me, game) => Math.max(game.width, game.height) / 5,
+                                                    height: (me, game) => Math.max(game.width, game.height) / 5
+                                                },
+                                                {
+                                                    id: "Text",
+                                                    type: "canvas",
+                                                    fullRes: true,
+                                                    scripts: {
+                                                        init: [
+                                                            {
+                                                                code: me => {
+                                                                    me.y += Bagel.get.sprite("Bagel").height / 2;
+                                                                    me.y += me.height / 2;
+                                                                },
+                                                                stateToRun: "loading"
+                                                            }
+                                                        ]
+                                                    },
+                                                    render: (me, game, ctx, canvas) => {
+                                                        ctx.font = (canvas.height / 2) + "px Helvetica";
+                                                        ctx.textBaseline = "middle";
+
+                                                        let text = "Loading";
+                                                        ctx.fillText(text, (canvas.width / 2) - (ctx.measureText(text).width / 2), canvas.height / 2);
+                                                    },
+                                                    width: (me, game) => game.width,
+                                                    height: (me, game) => game.height / 10,
+                                                }
+                                            ]
+                                        },
+                                        state: "loading",
+                                        vars: {
+                                            angle: -90,
+                                            velocity: 0,
+                                            stage: 0,
+                                            delay: 0
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "The loading screen animation. Defaults to a Bagel themed one.\nIt's a game object and works exactly the same as a game except its loading screen is disabled, Game.vars.loading is automatically created and the id, width, height and config given for the game is ignored. Game.vars.loading contains the following:\n  progress -> The percentage of the assets loaded\n  loaded -> The number of assets loaded\n  loading -> The number currently loading\n  done -> Starts as false, set this to true when you're done (loaded should be 0 when you do this)"
+                                }
+                            },
+                            types: ["object"],
+                            description: "A few options for how Bagel.js should handle loading assets."
                         }
                     },
                     types: ["object"],
@@ -3433,6 +3252,11 @@ Bagel = {
             },
             sprite: {
                 sprite: {
+                    id: {
+                        required: true,
+                        types: ["string"],
+                        description: "The id for the sprite to be targeted by."
+                    },
                     type: {
                         required: true,
                         types: ["string"],
@@ -3475,10 +3299,21 @@ Bagel = {
                         },
                         types: ["object"],
                         description: "The sprite's scripts."
+                    },
+                    vars: {
+                        required: false,
+                        default: {},
+                        types: ["object"],
+                        description: "An object you can use to store data for the sprite."
                     }
                 },
                 clones: {
                     syntax: {
+                        id: {
+                            required: false,
+                            types: ["string"],
+                            description: "The id for the clone to be targeted by. Defaults to the parent's id followed by a hashtag and then the lowest number starting from 0 that hasn't already been used."
+                        },
                         type: {
                             required: true,
                             types: ["string"],
@@ -3515,9 +3350,21 @@ Bagel = {
                             },
                             types: ["object"],
                             description: "The clones's scripts."
+                        },
+                        vars: {
+                            required: false,
+                            default: {},
+                            types: ["object"],
+                            description: "An object you can use to store data for the clone."
                         }
                     },
                     args: {
+                        id: {
+                            syntax: {
+                                description: "The id for the clone to be targeted by. Defaults to the parent's id followed by a hashtag and then the lowest number starting from 0 that hasn't already been used."
+                            },
+                            mode: "replace"
+                        },
                         type: {
                             syntax: {
                                 required: true,
@@ -3561,8 +3408,589 @@ Bagel = {
                                 default: {}
                             },
                             mode: "ignore"
+                        },
+                        vars: {
+                            syntax: {
+                                description: "An object you can use to store data for the clone."
+                            },
+                            mode: "merge"
                         }
                     }
+                }
+            },
+            plugin: {
+                info: {
+                    required: true,
+                    types: ["object"],
+                    subcheck: {
+                        id: {
+                            required: true,
+                            types: ["string"],
+                            description: "The unique id for the plugin."
+                        },
+                        description: {
+                            required: true,
+                            types: ["string"],
+                            description: "A brief description of what the plugin is and what it does."
+                        }
+                    },
+                    description: "Contains some information about the plugin."
+                },
+                plugin: {
+                    required: false,
+                    subcheck: {
+                        types: {
+                            required: false,
+                            default: {},
+                            subcheck: {
+                                assets: {
+                                    required: false,
+                                    default: {},
+                                    arrayLike: true,
+                                    subcheck: {
+                                        args: {
+                                            required: true,
+                                            types: ["object"],
+                                            description: [
+                                                "The required and optional arguments for the sprite. Is an object where the key is the argument name. e.g {",
+                                                "    x: {",
+                                                "        required: false,",
+                                                "        default: \"centred\",",
+                                                "        types: [",
+                                                "            \"number\",",
+                                                "            \"string\",",
+                                                "            \"function\",",
+                                                "        ],",
+                                                "        description: \"The X position for the sprite. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\"",
+                                                "    }",
+                                                "}"
+                                            ].join("\n")
+                                        },
+                                        description: {
+                                            required: true,
+                                            types: ["string"],
+                                            description: "The description of this asset type, make this short and clear to help people when they use the wrong syntax."
+                                        },
+                                        check: {
+                                            required: true,
+                                            types: ["function"],
+                                            description: [
+                                                "Your check function for this asset type. ",
+                                                "A good check function will avoid a standard JavaScript error when the user inputs something wrong (e.g a can't read property X of null error).",
+                                                "\nFortunately, Bagel.js helps you out in a few ways:\n",
+                                                "  You can use the check function provided (while the check function is being run) to easily check an object to make sure it has the desired properties as well as setting defaults. (works in the same way as the \"args\" argument.)\n",
+                                                "  You should also make use of the \"args\" argument as you can easily choose which data types you want to allow for each arguments as well as setting defaults and required arguments.\n",
+                                                "  \"standardChecks\" has, well... some standard checks. If you want to make sure an id isn't used twice use \"standardChecks.id(<whichever argument is used for the id (defaults to \"id\")>)\". ",
+                                                "  You might also want to use the \"isInternal\" check with the arguments working the same as the previous but also having a second argument for the isInternal argument. This might be useful if you want to reserve some IDs for plugins as it'll block any IDs starting with a dot and without the asset having \"isInternal\" set to true.\n",
+                                                "  You probably want to use it like this:\n",
+                                                "    let error = standardChecks.id();\nif (error) return error;",
+                                                "  And if you find any problems with the user input, just use the return statement in the check function (e.g return \"Error\";) and Bagel.js will stop what it's doing, throw the error you specified and pause the game.\n",
+                                                "Some tips on making custom errors though:\n",
+                                                "  Always specifiy where the error is! Bagel.js will say which game it's in but, you know more than it about the error. You should specify which type they were making, the index of the problematic error and ideally how to fix it.\n",
+                                                "  Also, try to include information about the inputs the user provided. For example, if they used a duplicate ID, say what that id was in the error itself.\n",
+                                                "  Lastly, be nice to the programmer. Treat them like a user. It's helpful to know that you can just put in something you know's wrong and get a helpful mini-tutorial.\n",
+                                                "\nOne more thing: the arguments for the function is structured like this:",
+                                                "(asset, game, check, standardChecks, plugin, index) => {\n};\n",
+                                                "Where standardChecks contains functions and check is a function that checks objects.",
+                                                "\n\nGood luck! :P"
+                                            ].join("")
+                                        },
+                                        init: {
+                                            required: true,
+                                            types: ["function"],
+                                            description: [
+                                                "Where you make the asset object. When it's ready, simply use the \"ready\" function to tell Bagel.js that the asset's loaded.",
+                                                "Here's an example:",
+                                                "(asset, ready, game, plugin, index) => {",
+                                                "    let img = new Image();",
+                                                "    img.onload = () => {",
+                                                "        ready({;",
+                                                "            img: img,",
+                                                "            JSON: asset",
+                                                "        });",
+                                                "    };",
+                                                "};"
+                                            ].join("\n")
+                                        },
+                                        get: {
+                                            required: true,
+                                            subcheck: {
+                                                name: {
+                                                    required: true,
+                                                    types: ["string"],
+                                                    description: "The name of the function. Usually the singular version of the asset type. e.g: the type \"imgs\" would have the name \"img\" so the function would be \"Game.get.asset.img\". Defaults to the name of type."
+                                                },
+                                                handler: {
+                                                    required: false,
+                                                    default: (id, check, defaultFind, game, plugin, type) => defaultFind(id, check),
+                                                    types: [
+                                                        "function",
+                                                        "undefined"
+                                                    ],
+                                                    description: "The handler function for the \"get\" method. Defaults to using defaultFind.\nThe function should return the asset specified by the arguments. Or an error in the form of a string."
+                                                }
+                                            },
+                                            types: ["object"],
+                                            description: [
+                                                "Contains the name of the function and the function that gets the asset. e.g {",
+                                                "    name: \"img\"",
+                                                "}"
+                                            ].join("\n")
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "Contains the new asset types, the key is the name of type. (should be plural)"
+                                },
+                                sprites: {
+                                    required: false,
+                                    default: {},
+                                    arrayLike: true,
+                                    subcheck: {
+                                        description: {
+                                            required: true,
+                                            types: ["string"],
+                                            description: "A short explaination of what this sprite type does."
+                                        },
+                                        args: { // TODO: Should this be checked?
+                                            required: true,
+                                            types: ["object"],
+                                            description: "Same as the \"syntax\" argument for the check function. These checks are only run on original sprites, not clones."
+                                        },
+                                        cloneArgs: {
+                                            required: true,
+                                            types: ["object"],
+                                            arrayLike: true,
+                                            subcheck: {
+                                                syntax: {
+                                                    required: false,
+                                                    default: {},
+                                                    subcheck: {
+                                                        description: {
+                                                            required: false,
+                                                            check: (item, ob, index, game, prev) => {
+                                                                if (item == null) {
+                                                                    ob[index] = prev.prev.ob.args[prev.prevName].description;
+                                                                }
+                                                            },
+                                                            types: ["string"],
+                                                            description: "A brief description of what this property does. You might want to change this to mention clones instead of sprites."
+                                                        },
+                                                        types: {
+                                                            required: false,
+                                                            check: (item, ob, index, game, prev) => {
+                                                                if (item == null) {
+                                                                    ob[index] = prev.prev.ob.args[prev.prevName].types;
+                                                                }
+                                                            },
+                                                            types: ["array"],
+                                                            description: "The different data types this property accepts. e.g string, array, object etc."
+                                                        },
+                                                        required: {
+                                                            required: false,
+                                                            check: (value, ob, index, game, prev) => {
+                                                                // TODO: Not working <==============
+                                                                // It can't adopt the property from the parent because it doesn't exist yet.
+                                                                // TODO: error when parent doesn't have the property <=======
+                                                                if (value == null) {
+                                                                    ob[index] = prev.prev.ob.args[prev.prevName].required;
+                                                                }
+                                                            },
+                                                            types: ["boolean"],
+                                                            description: "If the argument is required or not. Most of the time, it should be optional."
+                                                        },
+                                                        check: {
+                                                            required: false,
+                                                            check: (item, ob, index, game, prev) => {
+                                                                if (item == null) {
+                                                                    ob[index] = prev.prev.ob.args[prev.prevName].check;
+                                                                }
+                                                            },
+                                                            types: [
+                                                                "function",
+                                                                "undefined"
+                                                            ],
+                                                            description: "The check function."
+                                                        },
+                                                        subcheck: {
+                                                            required: false,
+                                                            check: (item, ob, index, game, prev) => {
+                                                                if (item == null) {
+                                                                    ob[index] = prev.prev.ob.args[prev.prevName].subcheck;
+                                                                }
+                                                            },
+                                                            types: [
+                                                                "object",
+                                                                "undefined"
+                                                            ],
+                                                            description: "The subcheck. Same as a \"syntax\" argument."
+                                                        },
+                                                        default: {
+                                                            required: false,
+                                                            check: (item, ob, index, game, prev) => {
+                                                                if (item == null) {
+                                                                    ob[index] = prev.prev.ob.args[prev.prevName].default;
+                                                                }
+                                                            },
+                                                            types: "any",
+                                                            description: "The default value for when \"ignore\" mode is used and no value is found for a property."
+                                                        }
+                                                    },
+                                                    types: ["object"],
+                                                    description: "The syntax for clones of this sprite type. Any unspecified arguments will default to the values specified in the \"args\" argument for normal sprites."
+                                                },
+                                                mode: {
+                                                    required: false,
+                                                    default: "replace",
+                                                    check: (value) => {
+                                                        if (! [
+                                                            "replace",
+                                                            "merge",
+                                                            "ignore"
+                                                        ].includes(value)) {
+                                                            return "Huh, looks like you used an invalid option for this. It can only be \"replace\", \"merge\" or \"ignore\".";
+                                                        }
+                                                    },
+                                                    types: ["string"],
+                                                    description: [
+                                                        "The adoption method for this property. Either:",
+                                                        "  • \"replace\" -> The value is given based on the order of preference (from high to low): the \"clone\" function inputs, the \"clones\" attribute in the parent and the parent sprite's properties.",
+                                                        "  • \"merge\" -> Only for objects and arrays. They are merged together, in the event of a conflict, the order of preference applies.",
+                                                        "  • \"ignore\" -> Ignores the parent's properties. However, properties will still be taken from the parent's \"clones\" argument and the \"clone\" function using the order of preference. The property will be set to the default from either the parent or the clone's arguments if no value is assigned."
+                                                    ].join("\n")
+                                                }
+                                            },
+                                            description: "Same as the \"syntax\" argument for the check function. These checks are only run on clones, not original sprites. Unspecified properties will mean that the property doesn't exist for clones."
+                                        },
+                                        listeners: {
+                                            required: false,
+                                            default: {},
+                                            subcheck: {
+                                                steps: { // TODO: How should these be checked?
+                                                    required: false,
+                                                    default: {},
+                                                    types: ["object"],
+                                                    description: "Short functions that do a task. Can be called from any of the other functions using \"Bagel.step(<step id>)\"."
+                                                },
+                                                fns: {
+                                                    required: false,
+                                                    default: {},
+                                                    types: ["object"],
+                                                    description: "Functions that can replace the functions in listeners. The key is the id for it. The id can be used in place of this function in listeners."
+                                                },
+                                                property: {
+                                                    required: false,
+                                                    default: {},
+                                                    subcheck: {
+                                                        set: {
+                                                            required: false,
+                                                            default: null,
+                                                            check: (fn, listeners, property, game, prev) => {
+                                                                if (typeof fn == "string") {
+                                                                    if (! prev.ob.fns.hasOwnProperty(fn)) {
+                                                                        return "Huh, looks like you used an invalid id for a function. You used " + JSON.stringify(fn) + ".";
+                                                                    }
+                                                                    listeners[property] = prev.ob.fns[fn];
+                                                                }
+                                                            },
+                                                            types: [
+                                                                "function",
+                                                                "string"
+                                                            ],
+                                                            description: "A function that's run after the property is changed. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin and triggerSprite."
+                                                        },
+                                                        get: {
+                                                            required: false,
+                                                            default: null,
+                                                            check: (fn, listeners, property, game, prev) => {
+                                                                if (typeof fn == "string") {
+                                                                    if (! prev.ob.fns.hasOwnProperty(fn)) {
+                                                                        return "Hmm, looks like you used an invalid id for a function. You used " + JSON.stringify(fn) + ".";
+                                                                    }
+                                                                    listeners[property] = prev.ob.fns[fn];
+                                                                }
+                                                            },
+                                                            types: [
+                                                                "function",
+                                                                "string"
+                                                            ],
+                                                            description: "A function that's run before the value is sent back to the code that requested it. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin and triggerSprite."
+                                                        }
+                                                    },
+                                                    arrayLike: true,
+                                                    types: ["object"],
+                                                    description: "Contains the \"set\" and \"get\" listener functions."
+                                                }
+                                            },
+                                            types: ["object"],
+                                            description: "Functions that can run when certain conditions are met."
+                                        },
+                                        check: {
+                                            required: false,
+                                            default: null,
+                                            types: ["function"],
+                                            description: "A function that does extra checks. Use return <error message> in the function to create an error. These are the arguments given: sprite, game, check, index, where"
+                                        },
+                                        init: {
+                                            required: false,
+                                            default: null,
+                                            types: ["function"],
+                                            description: "Initialises the sprite. Is a function. Can be used to define attributes. These are the arguments given: sprite, game and plugin."
+                                        },
+                                        render: {
+                                            required: false,
+                                            default: {},
+                                            subcheck: {
+                                                ctx: {
+                                                    required: false,
+                                                    default: null,
+                                                    types: ["function"],
+                                                    description: "The ctx render function. Runs every frame."
+                                                },
+                                                webgl: {
+                                                    required: false,
+                                                    default: {},
+                                                    subcheck: {
+                                                        shaders: {
+                                                            required: false,
+                                                            default: {},
+                                                            subcheck: {
+                                                                vertex: { // TODO: check?
+                                                                    required: false,
+                                                                    default: [],
+                                                                    types: ["array"],
+                                                                    description: "An array of vertex shaders to run from first to last."
+                                                                },
+                                                                fragment: { // TODO: check?
+                                                                    required: false,
+                                                                    default: [],
+                                                                    types: ["array"],
+                                                                    description: "An array of fragment shaders to run from first to last."
+                                                                }
+                                                            },
+                                                            types: ["object"],
+                                                            description: "Contains the \"vertex\" and \"fragment\" shaders."
+                                                        },
+                                                        /* TODO
+                                                        render: {
+                                                            required: false,
+                                                            default: null,
+                                                            types: ["function"],
+                                                            description: "Does any extra processing before the sprite is renndered." // TODO: arguments
+                                                        }
+                                                        */
+                                                    },
+                                                    types: ["object"],
+                                                    description: "The webgl renderer. Runs every frame. Contains \"shaders\" and an optional \"render\" function which allows for extra processing before the vertex and fragment shaders are run."
+                                                }
+                                            },
+                                            types: ["object"],
+                                            description: "The render functions for this sprite type. Ideally should have both a webgl renderer and a fallback ctx renderer."
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "Contains the new sprite types, the key is the name of type. (should be singular)"
+                                }
+                            },
+                            types: ["object"],
+                            description: "Creates new types. (assets and sprites)"
+                        },
+                        assets: { // TODO: check
+                            required: false,
+                            default: {},
+                            types: ["object"],
+                            description: "Which assets to load for the plugin."
+                        },
+                        methods: {
+                            required: false,
+                            default: {},
+                            subcheck: {
+                                bagel: { // TODO: check
+                                    required: false,
+                                    default: {},
+                                    arrayLike: true,
+                                    subcheck: {
+                                        fn: {
+                                            required: false,
+                                            subcheck: {
+                                                args: { // TODO: check?
+                                                    required: true,
+                                                    types: ["object"],
+                                                    description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
+                                                },
+                                                fn: {
+                                                    required: true,
+                                                    types: ["function"],
+                                                    description: "The method itself. The arguments are the arguments (an object) and the plugin."
+                                                },
+                                                obArg: {
+                                                    required: true,
+                                                    types: ["boolean"],
+                                                    description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
+                                                },
+                                                category: {
+                                                    required: false,
+                                                    default: "",
+                                                    types: ["string"],
+                                                    description: "If specified, an object will be created in \"Bagel\" and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
+                                                }
+                                            },
+                                            types: ["object"],
+                                            description: "The method itself."
+                                        },
+                                        category: {
+                                            required: false,
+                                            types: ["object"],
+                                            description: "Contains categories where the key is the name of the category and their contents have the same syntax as here. Note: These aren't checked."
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "Contains framework functions. (Bagel.<function>...) The key is the name and the value is the function."
+                                },
+                                game: { // TODO: check
+                                    required: false,
+                                    default: {},
+                                    arrayLike: true,
+                                    /*
+                                    subcheck: {
+                                        args: { // TODO: check?
+                                            required: true,
+                                            types: ["object"],
+                                            description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
+                                        },
+                                        fn: {
+                                            required: true,
+                                            types: ["function"],
+                                            description: "The method itself. The arguments are the game, the arguments (an object) and the plugin."
+                                        },
+                                        obArg: {
+                                            required: true,
+                                            types: ["boolean"],
+                                            description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
+                                        },
+                                        category: {
+                                            required: false,
+                                            default: "",
+                                            types: ["string"],
+                                            description: "If specified, an object will be created in the game and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
+                                        }
+                                    },
+                                    */
+                                    types: ["object"],
+                                    description: "Contains game functions. (Game.<function>...) The key is the name and the value is the function."
+                                },
+                                sprite: { // TODO: check
+                                    required: false,
+                                    default: {},
+                                    /*
+                                    arrayLike: true,
+                                    subcheck: {
+                                        appliesTo: {
+                                            required: true,
+                                            types: ["array"],
+                                            description: "The sprite types that this method is added to."
+                                        },
+                                        args: { // TODO: check?
+                                            required: true,
+                                            types: ["object"],
+                                            description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
+                                        },
+                                        fn: {
+                                            required: true,
+                                            types: ["function"],
+                                            description: "The method itself. The arguments are the sprite, the arguments (an object), the game and the plugin."
+                                        },
+                                        obArg: {
+                                            required: true,
+                                            types: ["boolean"],
+                                            description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
+                                        },
+                                        category: {
+                                            required: false,
+                                            default: "",
+                                            types: ["string"],
+                                            description: "If specified, an object will be created in the sprites that this method applies to and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
+                                        }
+                                    },
+                                    */
+                                    types: ["object"],
+                                    description: "Contains sprite functions. (me.<function>...) The key is the name and the value is the function."
+                                }
+                            },
+                            types: ["object"],
+                            description: "Contains the 3 different method types: \"bagel\", \"game\" and \"sprite\"."
+                        },
+                        scripts: {
+                            required: false,
+                            default: {},
+                            subcheck: {
+                                preload: {
+                                    required: false,
+                                    default: [],
+                                    check: fn => {
+                                        if (typeof fn != "function") {
+                                            return "Hmm. Looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
+                                        }
+                                    },
+                                    checkEach: true,
+                                    types: ["array"],
+                                    description: "Preload functions. They run before the plugin is checked or initialised."
+                                },
+                                init: {
+                                    required: false,
+                                    default: [],
+                                    check: fn => {
+                                        if (typeof fn != "function") {
+                                            return ":/ Looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
+                                        }
+                                    },
+                                    checkEach: true,
+                                    types: ["array"],
+                                    description: "Init functions. They run once the plugin's been checked and mostly initialised. This function finishes it by doing stuff specific to this plugin."
+                                },
+                                main: {
+                                    required: false,
+                                    default: [],
+                                    check: fn => {
+                                        if (typeof fn != "function") {
+                                            return "Hmm, looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
+                                        }
+                                    },
+                                    checkEach: true,
+                                    types: ["array"],
+                                    description: "Main functions. They run on every frame before the rendering."
+                                },
+                                steps: {
+                                    required: false,
+                                    default: {},
+                                    check: fn => {
+                                        if (typeof fn != "function") {
+                                            return "Huh, looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
+                                        }
+                                    },
+                                    checkEach: true,
+                                    types: ["object"],
+                                    description: "Mini functions. They can help make your code clearer by spitting functions into the individual steps. Can use them with \"Bagel.step\" or the step function provided with the script."
+                                }
+                            },
+                            types: ["object"],
+                            description: "Contains the plugin's scripts. \"preload\", \"init\" and \"main\". Steps can also be used."
+                        },
+                        sprites: { // TODO: check
+                            required: false,
+                            default: [],
+                            subcheck: {}, // TODO
+                            types: ["array"],
+                            description: "Contains the plugin's sprites. Works the same way as Game.game.sprites. These will be created in every game where the plugin's active."
+                        }
+                    },
+                    types: ["object"],
+                    description: "Contains most of the plugin stuff. e.g the new types it adds, methods and defaults."
+                },
+                vars: {
+                    required: false,
+                    default: {},
+                    types: ["object"],
+                    description: "An object you can use to store data for the sprite."
                 }
             },
             disableArgCheck: {args: true}
@@ -3581,8 +4009,8 @@ Bagel = {
             return assets[id][current.assetTypeName];
         },
 
-        th: (num) => (num + 1) + ((num > 8 && num < 20)? "th" : ["st", "nd", "rd", "th", "th", "th", "th", "th", "th"][parseInt(num.toString()[num.toString().length - 1])]),
-        an: (str) => ["a", "e", "i", "o", "u"].includes(str[0].toLowerCase())? "an " + str : "a " + str,
+        th: num => (num + 1) + ((num > 8 && num < 20)? "th" : ["st", "nd", "rd", "th", "th", "th", "th", "th", "th"][parseInt(num.toString()[num.toString().length - 1])]),
+        an: str => ["a", "e", "i", "o", "u"].includes(str[0].toLowerCase())? "an " + str : "a " + str,
         list: (items, type, determiners) => {
             let output = "";
             for (let i in items) {
