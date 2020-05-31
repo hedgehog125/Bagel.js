@@ -1,13 +1,15 @@
 /*
 TODO:
-Dynamic loading
+Queue .click calls. Could be part of the plugin API?
 PWA creation
+Dynamic loading
 .clones checking? Does it already exist?
 Allow loading of other plugins
 Update "step" function to work in different places. Steps should also be in more places
 Pause music on state change? Or stop?
 ctx.save and restore. How's it used in the renderer? Is it efficient?
 Continue retrying when assets don't load?
+Scripts not checked?
 
 PERFORMANCE
 Prescale images on canvases?
@@ -26,6 +28,7 @@ Allow applying existing methods to their sprites?
 When is the sprite description used?
 Handling of two plugins with the same ids
 Values? Also sprite values? Init functions instead?
+Are the errors clear when obArg is false?
 
 General tidy up
 Steps in other places. Especially listeners
@@ -147,6 +150,7 @@ Bagel = {
                                         });
                                     };
                                 })(snd);
+                                hmm = snd; // TODO. Debug. The bug means above doesn't trigger
                                 snd.load();
                                 snd.src = asset.src;
                             },
@@ -617,6 +621,425 @@ Bagel = {
                                                 return "0" + num;
                                             }
                                             return num;
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        download: {
+                            fn: {
+                                obArg: false,
+                                args: {
+                                    data: {
+                                        required: true,
+                                        types: ["string"],
+                                        description: "The data for the file. Or the data URL if isUrl is set to true"
+                                    },
+                                    fileName: {
+                                        required: true,
+                                        types: ["string"],
+                                        description: "The file name for the file to be downloaded."
+                                    },
+                                    isURL: {
+                                        required: false,
+                                        default: false,
+                                        types: ["boolean"],
+                                        description: "If the data is a URL or not. This may be useful if you want to download a canvas using .toDataURL()."
+                                    },
+                                    mime: {
+                                        required: false,
+                                        default: "text/plain",
+                                        types: ["string"],
+                                        description: "The MIME type for the file."
+                                    }
+                                },
+                                fn: args => {
+                                    let url;
+                                    if (args.isURL) {
+                                        url = args.data;
+                                    }
+                                    else {
+                                        let blob = new Blob([args.data], {
+                                            type: args.mime
+                                        });
+                                        url = window.URL.createObjectURL(blob);
+                                    }
+
+                                    let downloadElement = document.createElement("a");
+                                    downloadElement.download = args.fileName;
+                                    downloadElement.href = url;
+                                    (downloadElement => {
+                                        downloadElement.onclick = () => downloadElement.remove();
+                                    })(downloadElement);
+                                    downloadElement.style.display = "none";
+                                    document.body.appendChild(downloadElement);
+                                    downloadElement.click();
+                                }
+                            }
+                        },
+                        upload: {
+                            fn: {
+                                obArg: false,
+                                args: {
+                                    handler: {
+                                        required: true,
+                                        types: ["function"],
+                                        description: "The handler function. It's given the data URL of the file as its first argument and the second is the file number, starting at 0 (for use with the 2nd argument set to true)"
+                                    },
+                                    multiple: {
+                                        required: false,
+                                        default: false,
+                                        types: ["boolean"],
+                                        description: "If multiple files can be uploaded or not. The handler will be called once per file."
+                                    }
+                                },
+                                fn: args => {
+                                    let input = document.createElement("input");
+                                    input.type = "file";
+                                    input.style.display = "none";
+                                    input.multiple = multiple;
+
+                                    let file = 0;
+                                    input.addEventListener("change", () => {
+                                        let reader = new FileReader();
+                                        ((reader, file) => {
+                                            reader.onload = event => {
+                                                code(event.target.result, file);
+                                                file++;
+                                                if (file < input.files.length) {
+                                                    reader.readAsDataURL(input.files[file]);
+                                                }
+                                            };
+                                        })(reader, file);
+                                        reader.readAsDataURL(input.files[0]);
+                                    }, false);
+                                    input.click();
+                                }
+                            }
+                        },
+                        pwa: {
+                            category: {
+                                init: {
+                                    fn: {
+                                        obArg: true,
+                                        args: {
+                                            worker: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "The URL of the service worker. They can be generated using Bagel.pwa.generate.worker. Its arguments are the game, extra files (e.g index.html, js files) and an optional fileName for the worker that will be downloaded by it."
+                                            },
+                                            icons: {
+                                                required: false,
+                                                default: false,
+                                                types: ["boolean"],
+                                                description: "If the icons exist or not. Generate them using Bagel.pwa.generate.icons."
+                                            },
+                                            manifest: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "The src of the manifest. Generate one using Bagel.pwa.generate.manifest."
+                                            },
+                                            minified: {
+                                                required: false,
+                                                default: false,
+                                                types: ["boolean"],
+                                                description: "If you've minified your main JavaScript file. You should also use the minified version of Bagel.js."
+                                            }
+                                        },
+                                        fn: args => {
+                                            if (args.worker) {
+                                                if (navigator.serviceWorker) {
+                                                    navigator.serviceWorker.register(args.worker);
+                                                }
+                                            }
+                                            else {
+                                                console.warn("The Bagel.js service worker's missing. Generate one using Bagel.pwa.generate.worker.");
+                                            }
+                                            if (! args.icons) {
+                                                console.warn("The Bagel.js icons are missing. Generate the icons using Bagel.pwa.generate.icons.");
+                                            }
+                                            if (args.manifest) {
+                                                // <link rel="manifest" href="/manifest.webmanifest">
+                                                let link = document.createElement("link");
+                                                link.rel = "manifest";
+                                                link.href = args.manifest;
+                                                document.head.appendChild(link);
+                                            }
+                                            else {
+                                                console.warn("The Bagel.js manifest is missing. Generate one using Bagel.pwa.generate.manifest once you've generated the icons using Bagel.pwa.generate.icons.");
+                                            }
+                                            if (! args.minified) {
+                                                console.warn("You're code isn't minified. Look up an online tool to help. Once you're done, set \"minified\" in Bagel.pwa.init to true. Also, make sure to run lighthouse or an equivalent so you can follow the best practices :)");
+                                            }
+                                        }
+                                    }
+                                },
+                                generate: {
+                                    category: {
+                                        worker: {
+                                            fn: {
+                                                obArg: false,
+                                                args: {
+                                                    game: {
+                                                        required: true,
+                                                        types: ["object"],
+                                                        description: "The game object."
+                                                    },
+                                                    extraFiles: {
+                                                        required: false,
+                                                        default: [],
+                                                        types: ["array"],
+                                                        description: "Any extra files that aren't assets but are needed. e.g index.html, main.js, bagel.js etc."
+                                                    },
+                                                    fileName: {
+                                                        required: false,
+                                                        default: "worker.js",
+                                                        types: ["string"],
+                                                        description: "The file name for the worker JavaScript file."
+                                                    }
+                                                },
+                                                fn: args => {
+                                                    let toCache = extraFiles;
+                                                    for (let assetType in game.game.assets) {
+                                                        for (let i in game.game.assets[assetType]) {
+                                                            toCache.push(game.game.assets[assetType][i].src);
+                                                        }
+                                                    }
+                                                    let template = [
+                                                        "let toCache = <CACHE>;",
+                                                        "self.addEventListener(\"install\", e => {",
+                                                        "e.waitUntil(",
+                                                        "caches.open(\"Bagel.js worker\").then(cache => cache.addAll(toCache))",
+                                                        ");",
+                                                        "});",
+                                                        "self.addEventListener(\"fetch\", e => {",
+                                                        "e.respondWith(",
+                                                        "caches.match(e.request).then(response => response || fetch(e.request))",
+                                                        ");",
+                                                        "});"
+                                                    ].join("");
+                                                    let worker = template.replace("<CACHE>", JSON.stringify(toCache));
+                                                    Bagel.download(worker, fileName, false, "application/javascript");
+
+                                                    console.log("Your service worker has been generated. You may need to click to trigger the download.\nNOTE: this worker will only work if it's placed in the root directory of your project and if the page you ran this function on is also in the root directory. You should also make sure that the array provided for the second argument contains your JavaScript (including the Bagel.js file) files and your HTML file.");
+                                                }
+                                            }
+                                        },
+                                        icons: {
+                                            fn: {
+                                                obArg: false,
+                                                args: {
+                                                    src: {
+                                                        required: true,
+                                                        types: ["string"],
+                                                        description: "The src of the 512x512 resolution icon."
+                                                    },
+                                                    pixelArt: {
+                                                        required: true,
+                                                        default: true,
+                                                        types: ["boolean"],
+                                                        description: "If the icon is pixel art or not. If it is, anti-aliasing will be disabled and there'll be no warning for having a low resolution icon."
+                                                    }
+                                                },
+                                                fn: args => {
+                                                    let img = new Image();
+                                                    (img => {
+                                                        img.onload = () => {
+                                                            if (img.width != img.height) {
+                                                                console.warn("Image width doesn't match image height.");
+                                                            }
+                                                            if (! args.pixelArt) {
+                                                                if (img.width != 512 || img.height != 512) {
+                                                                    console.warn("Image isn't 512x512.");
+                                                                }
+                                                            }
+
+                                                            let canvas = document.createElement("canvas");
+                                                            let ctx = canvas.getContext("2d");
+
+                                                            let resolutions = [
+                                                                128,
+                                                                144,
+                                                                152,
+                                                                192,
+                                                                256,
+                                                                512
+                                                            ];
+                                                            for (let i in resolutions) {
+                                                                let resolution = resolutions[i];
+                                                                canvas.width = resolution;
+                                                                canvas.height = resolution;
+                                                                ctx.imageSmoothingEnabled = ! args.pixelArt;
+
+                                                                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                                                Bagel.download(canvas.toDataURL("image/png"), resolution + "x" + resolution + ".png", true);
+                                                            }
+                                                            console.log("128, 144, 152, 192, 256 and 512 pixel resolutions have been generated. You may need to enable automatic downloads. These should be in a folder in your project directory (or subfolder). You can add them to your PWA by setting the \"icons\" argument in Bagel.pwa.init to the src of the folder containing them. e.g if you put them in assets/imgs/icons then it should be \"assets/imgs/icons/\".");
+                                                        };
+                                                    })(img);
+                                                    img.src = args.src;
+                                                    console.log("Loading image...");
+                                                }
+                                            }
+                                        },
+                                        manifest: {
+                                            fn: {
+                                                obArg: true,
+                                                args: {
+                                                    icons: {
+                                                        required: true,
+                                                        types: ["string"],
+                                                        description: "The src of the folder containing the icons. Ending it in a slash is optional. Generate these using Bagel.pwa.generate.icons, give it the src of your highest resolution image followed by if it's pixel art or not."
+                                                    },
+                                                    name: {
+                                                        required: true,
+                                                        types: ["string"],
+                                                        description: "The name of your PWA. Usually the name shown in an app list."
+                                                    },
+                                                    shortName: {
+                                                        required: false,
+                                                        types: ["string"],
+                                                        description: "A shorter name."
+                                                    },
+
+                                                    backgroundColour: {
+                                                        required: false,
+                                                        types: ["string"],
+                                                        description: "The background colour for the PWA. Is an HTML colour. Defaults to the page's background colour."
+                                                    },
+                                                    themeColour: {
+                                                        required: false,
+                                                        types: ["string"],
+                                                        description: "The theme colour for the app. See https://developer.mozilla.org/en-US/docs/Web/Manifest/theme_color"
+                                                    },
+                                                    categories: {
+                                                        required: false,
+                                                        types: ["array"],
+                                                        description: "Any categories your PWA fits into. e.g games."
+                                                    },
+                                                    description: {
+                                                        required: false,
+                                                        types: ["string"],
+                                                        description: "A brief description of what this PWA is or does."
+                                                    },
+                                                    dir: {
+                                                        required: false,
+                                                        types: ["string"],
+                                                        description: "The direction of the text. Probably not needed as the Bagel.js pwa creator only works for games and not websites with games in them. Either \"auto\", \"ltr\" or \"rtl\"."
+                                                    },
+                                                    display: {
+                                                        required: false,
+                                                        default: "fullscreen",
+                                                        types: ["string"],
+                                                        description: "The display mode for the PWA. Can be \"fullscreen\", \"standalone\", \"minimal-ui\" or \"browser\"."
+                                                    },
+                                                    iarcRatingId: {
+                                                        required: false,
+                                                        types: ["string"],
+                                                        description: "An id for if your website's been age rated or not."
+                                                    },
+                                                    lang: {
+                                                        required: false,
+                                                        types: ["string"],
+                                                        description: "The language of your PWA. e.g \"en-UK\"."
+                                                    },
+                                                    orientation: {
+                                                        required: false,
+                                                        default: "any",
+                                                        types: ["string"],
+                                                        description: "The default orientation for the PWA. Most of the time, you probably want to set this to \"landscape\" or leave it so it's \"any\"."
+                                                    },
+                                                    preferRelatedApplications: {
+                                                        required: false,
+                                                        types: ["boolean"],
+                                                        description: "Tells the browser to encourage users to install a similar app, e.g your native app instead. You probably won't want to use this."
+                                                    },
+                                                    relatedApplications: {
+                                                        required: false,
+                                                        types: ["array"],
+                                                        description: "See https://developer.mozilla.org/en-US/docs/Web/Manifest/related_applications"
+                                                    },
+                                                    scope: {
+                                                        required: false,
+                                                        default: location.href,
+                                                        types: ["string"],
+                                                        description: "The different URLs that the manifest applies to. Defaults to just the page where this generator was run."
+                                                    },
+                                                    screenshots: {
+                                                        required: false,
+                                                        types: ["array"],
+                                                        description: "Intended to be used by PWA stores. See https://developer.mozilla.org/en-US/docs/Web/Manifest/screenshots"
+                                                    },
+                                                    startURL: {
+                                                        required: false,
+                                                        default: location.href,
+                                                        types: ["string"],
+                                                        description: "The URL for the PWA to start at when it's opened."
+                                                    }
+                                                },
+                                                fn: args => {
+                                                    let map = {
+                                                        icons: "icons",
+                                                        name: "name",
+                                                        shortName: "short_name",
+                                                        backgroundColour: "background_color",
+                                                        themeColour: "theme_color",
+                                                        categories: "categories",
+                                                        description: "description",
+                                                        dir: "dir",
+                                                        display: "display",
+                                                        iarcRatingId: "iarc_rating_id",
+                                                        lang: "lang",
+                                                        orientation: "orientation",
+                                                        preferRelatedApplications: "prefer_related_applications",
+                                                        relatedApplications: "related_applications",
+                                                        scope: "scope",
+                                                        screenshots: "screenshots",
+                                                        startURL: "start_url"
+                                                    };
+                                                    let newArgs = {};
+                                                    for (let i in args) {
+                                                        if (args[i] == null) {
+                                                            if (i == "backgroundColour") {
+                                                                if (document.body) {
+                                                                    newArgs[map[i]] = document.body.bgColor;
+                                                                }
+                                                            }
+                                                        }
+                                                        else {
+                                                            newArgs[map[i]] = args[i];
+                                                        }
+                                                    }
+                                                    args = newArgs;
+
+                                                    if (args.icons[args.icons.length - 1] != "/") {
+                                                        args.icons += "/"; // Needs to end in a slash
+                                                    }
+                                                    let resolutions = [
+                                                        128,
+                                                        144,
+                                                        152,
+                                                        192,
+                                                        256,
+                                                        512
+                                                    ];
+                                                    let icons = [];
+                                                    for (let i in resolutions) {
+                                                        let resolution = resolutions[i];
+                                                        let size = resolution + "x" + resolution;
+                                                        icons.push({
+                                                            src: args.icons + size + ".png",
+                                                            sizes: size,
+                                                            type: "image/png"
+                                                        });
+                                                    }
+                                                    args.icons = icons;
+
+                                                    Bagel.download(JSON.stringify(args), "manifest.json", false, "application/json");
+                                                    console.log("Manifest generated. You may need to click to trigger the download. Put it in the root directory of your project and set the \"manifest\" argument in Bagel.init.pwa to its src.");
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1514,6 +1937,7 @@ Bagel = {
 
             let totalStart = new Date();
             for (let i in Bagel.internal.games) {
+                let start = new Date();
                 let game = Bagel.internal.games[i];
                 Bagel.internal.current.game = game;
 
@@ -1525,8 +1949,9 @@ Bagel = {
                     subFunctions.loading(game);
                 }
 
-                game.internal.FPSFrames++;
                 let now = new Date();
+                game.internal.FPSFrames++;
+                game.maxPossibleFPS = 1000 / (now - start);
                 if (now - game.internal.lastFPSUpdate >= 1000) {
                     game.currentFPS = game.internal.FPSFrames;
                     game.internal.FPSFrames = 0;
@@ -1763,7 +2188,7 @@ Bagel = {
                     game.loaded = false;
                     game.paused = false;
                     game.currentFPS = 60;
-                    game.currentRenderFPS = 60;
+                    game.maxPossibleFPS = 60;
 
                     let renderer = game.internal.renderer;
                     if (game.config.display.renderer == "auto") {
@@ -1815,7 +2240,9 @@ Bagel = {
                                     for (let i in sprite.scripts.init) {
                                         let script = sprite.scripts.init[i];
                                         if (script.stateToRun == game.state) {
-                                            script.code(sprite, game, Bagel.step);
+                                            if (typeof script.code == "function") {
+                                                script.code(sprite, game, Bagel.step);
+                                            }
                                         }
                                     }
                                     Bagel.internal.loadCurrent();
@@ -2185,8 +2612,8 @@ Bagel = {
                                 }
                                 else {
                                     ((position, methodName, plugin, method) => {
-                                        if (handler.obArg) {
-                                            position[methodName] = args => {
+                                        if (method.fn.obArg) {
+                                            bagelPosition[methodName] = args => {
                                                 if (args == null) args = {};
                                                 if (Bagel.internal.getTypeOf(args) != "object") {
                                                     console.error("Huh, looks like you used " + Bagel.internal.an(Bagel.internal.getTypeOf(args)) + " instead of an object.");
@@ -2196,7 +2623,7 @@ Bagel = {
                                                 args = Bagel.check({
                                                     ob: args,
                                                     syntax: method.fn.args,
-                                                    where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
+                                                    where: "Bagel.js method " + JSON.stringify(methodName)
                                                 }, Bagel.internal.checks.disableArgCheck);
                                                 // Passed the argument checks
 
@@ -2211,7 +2638,7 @@ Bagel = {
                                             };
                                         }
                                         else {
-                                            position[methodName] = (...args) => {
+                                            bagelPosition[methodName] = (...args) => {
                                                 let keys = Object.keys(method.fn.args);
                                                 let newArgs = {};
 
@@ -2226,7 +2653,7 @@ Bagel = {
                                                 newArgs = Bagel.check({
                                                     ob: newArgs,
                                                     syntax: method.fn.args,
-                                                    where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
+                                                    where: "Bagel.js method " + JSON.stringify(methodName)
                                                 }, Bagel.internal.checks.disableArgCheck);
                                                 // Passed the argument checks
 
@@ -2646,7 +3073,9 @@ Bagel = {
                             else {
                                 code = sprite.scripts[type][scriptInfo.script].code;
                             }
-                            code(sprite, game, Bagel.step);
+                            if (typeof code == "function") {
+                                code(sprite, game, Bagel.step);
+                            }
                         }
                         else {
                             let code;
@@ -3112,10 +3541,6 @@ Bagel = {
                                                     {
                                                         id: "Bagel",
                                                         src: "../assets/imgs/bagel.png" // TODO: data url
-                                                    },
-                                                    {
-                                                        id: "JS",
-                                                        src: "../assets/imgs/js.png" // TODO: data url
                                                     }
                                                 ]
                                             },

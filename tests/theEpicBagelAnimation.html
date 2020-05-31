@@ -1,13 +1,17 @@
 <!DOCTYPE html>
-<head>
-    <title>
-        Bagels 🥯!
-    </title>
-</head>
-<body bgColor="blue">
-    <p id="debug"></p>
-</body>
-
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="A simple animation in Bagel.js">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>
+            Bagels 🥯!
+        </title>
+    </head>
+    <body bgColor="white">
+        <p id="debug"></p>
+    </body>
+</html>
 <script src="../bagel.js"></script>
 <script>
 
@@ -40,7 +44,7 @@ Bagels = Bagel.init({
                         {
                             code: me => {
                                 let i = 0;
-                                while (i < 3) {
+                                while (i < 1) {
                                     me.clone();
                                     i++;
                                 }
@@ -100,6 +104,13 @@ Bagels = Bagel.init({
         },
         loading: {
             skip: false
+        },
+        pwa: {
+            enabled: false,
+            cache: [
+                "/tests/theEpicBagelAnimation.html",
+                "/bagel.js"
+            ]
         }
     }
 });
