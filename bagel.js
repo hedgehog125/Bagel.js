@@ -1,5 +1,8 @@
 /*
 TODO:
+Make shortName required or default to name
+Fix weird behaviour with rotating devices, only in PWAs? Canvas doesn't centre after rotating
+Bundle Bagel.js assets
 Queue .click calls. Could be part of the plugin API?
 PWA creation
 Dynamic loading
@@ -2215,7 +2218,7 @@ Bagel = {
                     renderer.canvas.width = game.width;
                     renderer.canvas.height = game.height;
                     if (game.config.display.mode == "fill") {
-                        renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); position: absolute; top:0; bottom: 0; left: 0; right: 0; margin: auto;"; // CSS from Phaser (https://phaser.io)
+                        renderer.canvas.style = "margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp
                     }
                     else {
                         renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);" ; // CSS from Phaser (https://phaser.io)
