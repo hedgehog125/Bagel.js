@@ -67,6 +67,10 @@ let game = Bagel.init({
 Bagel.pwa.init({
     worker: "worker.js",
     icons: true,
+    versions: "versions.json",
+    version: "version.txt",
+    versionStorageName: "Bagel.js spinning bagel version",
+    cacheStorageName: "Bagel.js Bagel",
     manifest: "manifest.json"
 });
 

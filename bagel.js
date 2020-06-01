@@ -1,10 +1,9 @@
 /*
 TODO:
-Make shortName required or default to name
-Fix weird behaviour with rotating devices, only in PWAs? Canvas doesn't centre after rotating
+Prevent the same tab from being open multiple times
+Fix network errors from version.txt when offline
 Bundle Bagel.js assets
-Queue .click calls. Could be part of the plugin API?
-PWA creation
+Queue .click calls in Bagel.upload. Could be part of the plugin API?
 Dynamic loading
 .clones checking? Does it already exist?
 Allow loading of other plugins
@@ -13,6 +12,7 @@ Pause music on state change? Or stop?
 ctx.save and restore. How's it used in the renderer? Is it efficient?
 Continue retrying when assets don't load?
 Scripts not checked?
+Bagel.pwa.generate.worker(game, ["bagel.js", ""]) produces a JSON error
 
 PERFORMANCE
 Prescale images on canvases?
@@ -20,6 +20,7 @@ Disable alpha?
 Automatic clone recycling
 WebGL renderer
 More efficient clone checking
+Canvases aren't removed entirely?
 
 PLUGINS
 Sprites
@@ -700,7 +701,7 @@ Bagel = {
                                     let input = document.createElement("input");
                                     input.type = "file";
                                     input.style.display = "none";
-                                    input.multiple = multiple;
+                                    input.multiple = args.multiple;
 
                                     let file = 0;
                                     input.addEventListener("change", () => {
@@ -742,6 +743,26 @@ Bagel = {
                                                 types: ["string"],
                                                 description: "The src of the manifest. Generate one using Bagel.pwa.generate.manifest."
                                             },
+                                            versions: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "The src of the version JSON file. Generate versions using Bagel.pwa.generate.version."
+                                            },
+                                            version: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "The src of the version file (the one that contains the latest version name). Generate versions using Bagel.pwa.generate.version."
+                                            },
+                                            versionStorageName: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "The name for the localStorage that contains the current downloaded version. e.g \"Marble game version\". localStorage is shared on a website so make sure the name is unique to this game. It's explained in Bagel.pwa.generate.version."
+                                            },
+                                            cacheStorageName: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "The cache storage name provided by Bagel.pwa.generate.worker."
+                                            },
                                             minified: {
                                                 required: false,
                                                 default: false,
@@ -758,6 +779,8 @@ Bagel = {
                                             else {
                                                 console.warn("The Bagel.js service worker's missing. Generate one using Bagel.pwa.generate.worker.");
                                             }
+
+
                                             if (! args.icons) {
                                                 console.warn("The Bagel.js icons are missing. Generate the icons using Bagel.pwa.generate.icons.");
                                             }
@@ -771,8 +794,40 @@ Bagel = {
                                             else {
                                                 console.warn("The Bagel.js manifest is missing. Generate one using Bagel.pwa.generate.manifest once you've generated the icons using Bagel.pwa.generate.icons.");
                                             }
+                                            if (! args.versions) {
+                                                console.warn("The Bagel.js version JSON file's missing. Use Bagel.pwa.generate.version.");
+                                            }
+                                            if (args.version) {
+                                                if (args.versionStorageName && args.versions && args.cacheStorageName) {
+                                                    fetch(args.version).then(res => res.text().then(version => {
+                                                        version = version.split("\n").join("");
+                                                        let installed = localStorage.getItem(args.versionStorageName);
+                                                        if (installed == null) installed = 0;
+                                                        if (installed != version) {
+                                                            fetch(args.versions).then(res => res.json().then(versions => {
+                                                                caches.open(args.cacheStorageName).then(cache => {
+                                                                    while (installed < versions.versions.length) {
+                                                                        cache.delete(versions.versions[installed].changed);
+                                                                        installed++;
+                                                                    }
+                                                                    localStorage.setItem(args.versionStorageName, installed);
+                                                                });
+                                                            }));
+                                                        }
+                                                    }));
+                                                }
+                                            }
+                                            else {
+                                                console.warn("The Bagel.js latest version file's missing. Use Bagel.pwa.generate.version.");
+                                            }
+                                            if (! args.versionStorageName) {
+                                                console.warn("The Bagel.js version storage name's missing. This is explained in Bagel.pwa.generate.version.");
+                                            }
+                                            if (! args.cacheStorageName) {
+                                                console.warn("The Bagel.js cache name's missing. This should've been added after running Bagel.pwa.generate.worker.");
+                                            }
                                             if (! args.minified) {
-                                                console.warn("You're code isn't minified. Look up an online tool to help. Once you're done, set \"minified\" in Bagel.pwa.init to true. Also, make sure to run lighthouse or an equivalent so you can follow the best practices :)");
+                                                console.warn("Your code isn't minified. Look up an online tool to help. Once you're done, set \"minified\" in Bagel.pwa.init to true. Also, make sure to run lighthouse or an equivalent so you can follow the best practices :)");
                                             }
                                         }
                                     }
@@ -788,11 +843,27 @@ Bagel = {
                                                         types: ["object"],
                                                         description: "The game object."
                                                     },
+                                                    icons: {
+                                                        required: true,
+                                                        types: ["string"],
+                                                        description: "The src of the folder containing the icons. Generate them with Bagel.pwa.generate.icons."
+                                                    },
                                                     extraFiles: {
                                                         required: false,
                                                         default: [],
                                                         types: ["array"],
                                                         description: "Any extra files that aren't assets but are needed. e.g index.html, main.js, bagel.js etc."
+                                                    },
+                                                    storageID: {
+                                                        required: false,
+                                                        types: ["string"],
+                                                        description: "The id for the cache storage the worker uses. Defaults to \"Bagel.js\" followed by a space and then the name of the game specified."
+                                                    },
+                                                    manifest: {
+                                                        required: false,
+                                                        default: "manifest.json",
+                                                        types: ["string"],
+                                                        description: "The src of your manifest or what will be the src."
                                                     },
                                                     fileName: {
                                                         required: false,
@@ -802,29 +873,51 @@ Bagel = {
                                                     }
                                                 },
                                                 fn: args => {
-                                                    let toCache = extraFiles;
+                                                    let toCache = args.extraFiles;
                                                     for (let assetType in game.game.assets) {
                                                         for (let i in game.game.assets[assetType]) {
                                                             toCache.push(game.game.assets[assetType][i].src);
                                                         }
                                                     }
+                                                    if (args.icons[args.icons.length - 1] != "/") {
+                                                        args.icons += "/";
+                                                    }
+                                                    let resolutions = [
+                                                        128,
+                                                        144,
+                                                        152,
+                                                        192,
+                                                        256,
+                                                        512
+                                                    ];
+                                                    for (let i in resolutions) {
+                                                        toCache.push(args.icons + resolutions[i] + "x" + resolutions[i] + ".png");
+                                                    }
+                                                    toCache.push(args.manifest);
+
                                                     let template = [
                                                         "let toCache = <CACHE>;",
-                                                        "self.addEventListener(\"install\", e => {",
+                                                        "self.addEventListener(\"install\",e=>{",
+                                                        "self.skipWaiting();",
                                                         "e.waitUntil(",
-                                                        "caches.open(\"Bagel.js worker\").then(cache => cache.addAll(toCache))",
-                                                        ");",
+                                                        "caches.open(<NAME>).then(cache=>cache.addAll(toCache))",
+                                                        ")",
                                                         "});",
-                                                        "self.addEventListener(\"fetch\", e => {",
+                                                        "self.addEventListener(\"fetch\",e=>{",
                                                         "e.respondWith(",
-                                                        "caches.match(e.request).then(response => response || fetch(e.request))",
-                                                        ");",
+                                                        "caches.match(e.request).then(response=>response||fetch(e.request))",
+                                                        ")",
                                                         "});"
                                                     ].join("");
                                                     let worker = template.replace("<CACHE>", JSON.stringify(toCache));
-                                                    Bagel.download(worker, fileName, false, "application/javascript");
+                                                    if (args.storageID == null) {
+                                                        args.storageID = "Bagel.js " + args.game.id;
+                                                    }
+                                                    worker = worker.replace("<NAME>", JSON.stringify(args.storageID));
+                                                    Bagel.download(worker, args.fileName, false, "application/javascript");
 
-                                                    console.log("Your service worker has been generated. You may need to click to trigger the download.\nNOTE: this worker will only work if it's placed in the root directory of your project and if the page you ran this function on is also in the root directory. You should also make sure that the array provided for the second argument contains your JavaScript (including the Bagel.js file) files and your HTML file.");
+                                                    console.log("Your service worker has been generated. Make sure to place this in the root directory of your project, also make sure that this page is in the root directory. You should also make sure that the array provided for the second argument contains your JavaScript (including the Bagel.js file) files and your HTML file.\nA new worker will need to be generated for each version (unless there's no new files) (versions can be generated using Bagel.pwa.generate.version)");
+                                                    console.log("Make sure you enable the worker by setting the \"worker\" argument to " + JSON.stringify(args.fileName) + " and by setting \"cacheStorageName\" to " + JSON.stringify(args.storageID) + " in Bagel.pwa.init. You should also generate a version using Bagel.pwa.generate.version if you haven't already.");
                                                 }
                                             }
                                         },
@@ -901,7 +994,7 @@ Bagel = {
                                                         description: "The name of your PWA. Usually the name shown in an app list."
                                                     },
                                                     shortName: {
-                                                        required: false,
+                                                        required: true,
                                                         types: ["string"],
                                                         description: "A shorter name."
                                                     },
@@ -1040,7 +1133,58 @@ Bagel = {
                                                     args.icons = icons;
 
                                                     Bagel.download(JSON.stringify(args), "manifest.json", false, "application/json");
-                                                    console.log("Manifest generated. You may need to click to trigger the download. Put it in the root directory of your project and set the \"manifest\" argument in Bagel.init.pwa to its src.");
+                                                    console.log("Manifest generated. Put it in the root directory of your project and set the \"manifest\" argument in Bagel.init.pwa to its src.");
+                                                }
+                                            }
+                                        },
+                                        version: {
+                                            fn: {
+                                                obArg: false,
+                                                args: {
+                                                    name: {
+                                                        required: true,
+                                                        types: ["string"],
+                                                        description: "The name of this version. e.g 1.0"
+                                                    },
+                                                    changed: {
+                                                        required: true,
+                                                        types: ["array"],
+                                                        description: "The srcs of files that have changed. This should include removed files but not new files. A rename should be treated as a removed file and then a new file. If this is your first version, this should be empty."
+                                                    },
+                                                    versions: {
+                                                        required: false,
+                                                        default: {
+                                                            syntax: 1,
+                                                            versions: []
+                                                        },
+                                                        types: ["object"],
+                                                        description: "The current version JSON."
+                                                    },
+                                                    fileName: {
+                                                        required: false,
+                                                        default: "versions.json",
+                                                        types: ["string"],
+                                                        description: "The file name for the versions JSON file."
+                                                    }
+                                                },
+                                                fn: args => {
+                                                    let versionSpecified = args.versions.versions.length != 0;
+                                                    args.versions.versions.push({
+                                                        name: args.name,
+                                                        changed: args.changed
+                                                    });
+                                                    Bagel.download(JSON.stringify(args.versions), args.fileName, false, "application/json");
+                                                    if ((! versionSpecified) && parseFloat(args.name) != 1) {
+                                                        console.warn("No previous version JSON was specified and this doesn't appear to be the first version.\nIf this isn't the first version, rerun this with the 3rd argument set to your current version JSON (not as a string).");
+                                                    }
+                                                    console.log("New version file generated. If there was no warning or you think it's incorrect, you should now " + (versionSpecified? "replace your existing versions.json file." : "move this file into your root directory") + ".");
+                                                    if (versionSpecified) {
+                                                        console.log("Don't forget to update your version file with\n" + args.name + " :)");
+                                                    }
+                                                    else {
+                                                        console.log("You also need a file to specifiy what the latest version is. Create a plain text file called \"version.txt\" in your root directory and put " + JSON.stringify(args.versions.versions.length) + " in it. New lines will be ignored.");
+                                                        console.log("Finally, link these two into your PWA by setting the \"versions\" and \"version\" arguments in Bagel.pwa.init to their corresponding file srcs, \"versionStorageName\" should also be set to something unique to the game (it's where the installed version is saved). If you've followed all the other steps properly, your PWA should now be working. (make sure you're running on an HTTPS server or localhost)");
+                                                    }
                                                 }
                                             }
                                         }
