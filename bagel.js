@@ -2222,31 +2222,31 @@ Bagel = {
                     };
 
                     (game => {
-                        addEventListener("mousemove", ctx => {
+                        addEventListener("mousemove", e => {
                             let canvas = game.internal.renderer.canvas;
                             let rect = canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
-                            mouse.x = ((ctx.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                            mouse.y = ((ctx.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                            mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                            mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
                         }, false);
-                        addEventListener("mousedown", ctx => {
+                        addEventListener("mousedown", e => {
                             Bagel.device.is.touchscreen = false;
                             game.input.mouse.down = true;
                         }, false);
-                        addEventListener("mouseup", ctx => {
+                        addEventListener("mouseup", e => {
                             game.input.mouse.down = false;
                         }, false);
-                        addEventListener("touchstart", ctx => {
+                        addEventListener("touchstart", e => {
                             Bagel.device.is.touchscreen = true;
 
                             let canvas = game.internal.renderer.canvas;
                             let rect = canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
-                            if (ctx.touches == null) {
-                                mouse.x = ((ctx.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((ctx.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                            if (e.touches == null) {
+                                mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                                mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
                                 game.input.touches = [
                                     {
                                         x: game.input.mouse.x,
@@ -2255,31 +2255,33 @@ Bagel = {
                                 ];
                             }
                             else {
-                                mouse.x = ((ctx.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((ctx.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                                mouse.y = ((e.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
 
                                 game.input.touches = [];
-                                for (let i in context.touches) {
+                                for (let i in e.touches) {
                                     game.input.touches.push({
-                                        x: ((ctx.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
-                                        y: ((ctx.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
+                                        x: ((e.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
+                                        y: ((e.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
                                     });
                                 }
                             }
 
                             mouse.down = true;
-                            ctx.preventDefault();
+                            if (e.cancelable) {
+                                ctx.preventDefault();
+                            }
                         }, false);
-                        addEventListener("touchmove", ctx => {
+                        addEventListener("touchmove", e => {
                             Bagel.device.is.touchscreen = true;
 
                             let canvas = game.internal.renderer.canvas;
                             let rect = canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
-                            if (ctx.touches == null) {
-                                mouse.x = ((ctx.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((ctx.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                            if (e.touches == null) {
+                                mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                                mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
                                 game.input.touches = [
                                     {
                                         x: mouse.x,
@@ -2288,39 +2290,43 @@ Bagel = {
                                 ];
                             }
                             else {
-                                mouse.x = ((ctx.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((ctx.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
+                                mouse.y = ((e.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
 
                                 game.input.touches = [];
-                                for (let i in context.touches) {
+                                for (let i in e.touches) {
                                     game.input.touches.push({
-                                        x: ((ctx.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
-                                        y: ((ctx.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
+                                        x: ((e.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
+                                        y: ((e.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
                                     });
                                 }
                             }
 
                             mouse.down = true;
-                            ctx.preventDefault();
+                            if (e.cancelable) {
+                                e.preventDefault();
+                            }
                         }, false);
-                        addEventListener("touchend", ctx => {
+                        addEventListener("touchend", e => {
                             Bagel.device.is.touchscreen = true;
 
                             game.input.touches = [];
 
                             game.input.mouse.down = false;
-                            ctx.preventDefault();
-                        }, false);
-                        document.addEventListener("keydown", ctx => {
-                            for (let i in Bagel.internal.games) {
-                                let game = Bagel.internal.games[i];
-                                game.input.keys.keys[ctx.keyCode] = true;
+                            if (e.cancelable) {
+                                e.preventDefault();
                             }
                         }, false);
-                        document.addEventListener("keyup", ctx => {
+                        document.addEventListener("keydown", e => {
                             for (let i in Bagel.internal.games) {
                                 let game = Bagel.internal.games[i];
-                                game.input.keys.keys[ctx.keyCode] = false;
+                                game.input.keys.keys[e.keyCode] = true;
+                            }
+                        }, false);
+                        document.addEventListener("keyup", e => {
+                            for (let i in Bagel.internal.games) {
+                                let game = Bagel.internal.games[i];
+                                game.input.keys.keys[e.keyCode] = false;
                             }
                         }, false);
 
