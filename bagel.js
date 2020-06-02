@@ -12,7 +12,7 @@ Pause music on state change? Or stop?
 ctx.save and restore. How's it used in the renderer? Is it efficient?
 Continue retrying when assets don't load?
 Scripts not checked?
-Bagel.pwa.generate.worker(game, ["bagel.js", ""]) produces a JSON error
+Offline handling while loading assets. Don't forget PWAs
 
 PERFORMANCE
 Prescale images on canvases?
@@ -47,6 +47,9 @@ Reserved ids
 Review closures
 Sounds not loading??? Sometimes...?
 Does the overwrite argument work?
+Touch inputs don't work. They throw errors
+generate.version sometimes doesn't exist???
+Files not updating sometimes? Not being removed maybe? Can't delete more than one from one .open? <========
 
 CREDITS
 Click, click release and mouse touch from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
@@ -807,10 +810,14 @@ Bagel = {
                                                             fetch(args.versions).then(res => res.json().then(versions => {
                                                                 caches.open(args.cacheStorageName).then(cache => {
                                                                     while (installed < versions.versions.length) {
-                                                                        cache.delete(versions.versions[installed].changed);
+                                                                        let changed = versions.versions[installed].changed;
+                                                                        for (let i in changed) {
+                                                                            cache.delete(changed[i]);
+                                                                        }
                                                                         installed++;
                                                                     }
                                                                     localStorage.setItem(args.versionStorageName, installed);
+                                                                    location.reload(); // Reload so all the new assets can be loaded
                                                                 });
                                                             }));
                                                         }
@@ -1177,9 +1184,9 @@ Bagel = {
                                                     if ((! versionSpecified) && parseFloat(args.name) != 1) {
                                                         console.warn("No previous version JSON was specified and this doesn't appear to be the first version.\nIf this isn't the first version, rerun this with the 3rd argument set to your current version JSON (not as a string).");
                                                     }
-                                                    console.log("New version file generated. If there was no warning or you think it's incorrect, you should now " + (versionSpecified? "replace your existing versions.json file." : "move this file into your root directory") + ".");
+                                                    console.log("New version file generated. If there was no warning or you think it's incorrect, you should now " + (versionSpecified? "replace your existing versions.json file" : "move this file into your root directory") + ".");
                                                     if (versionSpecified) {
-                                                        console.log("Don't forget to update your version file with\n" + args.name + " :)");
+                                                        console.log("Don't forget to update your version file with\n" + JSON.stringify(args.versions.versions.length) + " :)");
                                                     }
                                                     else {
                                                         console.log("You also need a file to specifiy what the latest version is. Create a plain text file called \"version.txt\" in your root directory and put " + JSON.stringify(args.versions.versions.length) + " in it. New lines will be ignored.");
@@ -2259,10 +2266,9 @@ Bagel = {
                                     });
                                 }
                             }
-                            Bagel.internal.autoplaySounds();
 
                             mouse.down = true;
-                            context.preventDefault();
+                            ctx.preventDefault();
                         }, false);
                         addEventListener("touchmove", ctx => {
                             Bagel.device.is.touchscreen = true;
@@ -2295,16 +2301,15 @@ Bagel = {
                             }
 
                             mouse.down = true;
-                            context.preventDefault();
+                            ctx.preventDefault();
                         }, false);
                         addEventListener("touchend", ctx => {
                             Bagel.device.is.touchscreen = true;
 
                             game.input.touches = [];
-                            Bagel.internal.autoplaySounds();
 
                             game.input.mouse.down = false;
-                            context.preventDefault();
+                            ctx.preventDefault();
                         }, false);
                         document.addEventListener("keydown", ctx => {
                             for (let i in Bagel.internal.games) {
