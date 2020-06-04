@@ -60,7 +60,8 @@ let game = Bagel.init({
             mode: "fill"
         },
         loading: {
-            skip: false
+            skip: false,
+            mode: "dynamic"
         }
     }
 });
@@ -71,6 +72,7 @@ Bagel.pwa.init({
     version: "version.txt",
     versionStorageName: "Bagel.js spinning bagel version",
     cacheStorageName: "Bagel.js Bagel",
+    multiTabStorageName: "Bagel.js spinning bagel multiTab",
     manifest: "manifest.json"
 });
 

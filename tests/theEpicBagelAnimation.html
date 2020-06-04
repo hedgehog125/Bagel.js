@@ -25,12 +25,7 @@ Bagels = Bagel.init({
                     src: "../assets/imgs/bagel.png"
                 }
             ],
-            snds: [
-                {
-                    id: "TODO",
-                    src: "../assets/snds/music.mp3"
-                }
-            ]
+            snds: []
         },
         sprites: [
             {
@@ -88,7 +83,7 @@ Bagels = Bagel.init({
             init: [
                 {
                     code: game => {
-                        game.playSound("TODO");
+                        
                     },
                     stateToRun: "Hail the bagel overlords"
                 }
@@ -104,13 +99,6 @@ Bagels = Bagel.init({
         },
         loading: {
             skip: false
-        },
-        pwa: {
-            enabled: false,
-            cache: [
-                "/tests/theEpicBagelAnimation.html",
-                "/bagel.js"
-            ]
         }
     }
 });

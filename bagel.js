@@ -1,11 +1,9 @@
 /*
 TODO:
-Prevent the same tab from being open multiple times
-Fix network errors from version.txt when offline
-Bundle Bagel.js assets
-Queue .click calls in Bagel.upload. Could be part of the plugin API?
-Dynamic loading
-.clones checking? Does it already exist?
+Change how assets work. Remove defaultFind, make it baked in etc.
+Option to forceLoad assets in plugins. (sounds)
+Load sprite images in the loading screen, plugin api to request them?
+Can asset ids be used multiple times if by different types?
 Allow loading of other plugins
 Update "step" function to work in different places. Steps should also be in more places
 Pause music on state change? Or stop?
@@ -33,6 +31,7 @@ When is the sprite description used?
 Handling of two plugins with the same ids
 Values? Also sprite values? Init functions instead?
 Are the errors clear when obArg is false?
+Plugin id handling, prevent duplicates, what about game.internal.plugins?
 
 General tidy up
 Steps in other places. Especially listeners
@@ -122,9 +121,7 @@ Bagel = {
                                 })(img);
                                 img.src = asset.src;
                             },
-                            get: {
-                                name: "img"
-                            }
+                            get: "img"
                         },
                         snds: {
                             args: {
@@ -161,9 +158,8 @@ Bagel = {
                                 snd.load();
                                 snd.src = asset.src;
                             },
-                            get: {
-                                name: "snd"
-                            }
+                            get: "snd",
+                            forcePreload: true // Only the metadata is loaded anyway
                         }
                     },
                     sprites: {
@@ -352,6 +348,9 @@ Bagel = {
                                             sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
                                         }
                                     }
+                                },
+                                beforeStateChange: () => {
+                                    
                                 }
                             },
                             description: "A basic type of sprite. Has the appearance of the image specified.",
@@ -369,9 +368,8 @@ Bagel = {
                             render: { // How do I render this type?
                                 ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
                                     if (sprite.img == null) return; // No image for this sprite
-                                    let imgs = game.internal.assets.assets.imgs;
-                                    if (imgs[sprite.img] == null) return; // No asset or it's still loading and wasn't preloaded
-                                    let img = imgs[sprite.img].img;
+                                    let img = Bagel.get.asset.img(sprite.img, game, true);
+                                    if (typeof img == "boolean") return; // It's loading or it doesn't exist
 
                                     ctx.globalAlpha = sprite.alpha;
 
@@ -720,7 +718,7 @@ Bagel = {
                                         })(reader, file);
                                         reader.readAsDataURL(input.files[0]);
                                     }, false);
-                                    input.click();
+                                    Bagel.internal.inputAction.queue(input => {input.click()}, input);
                                 }
                             }
                         },
@@ -766,6 +764,11 @@ Bagel = {
                                                 types: ["string"],
                                                 description: "The cache storage name provided by Bagel.pwa.generate.worker."
                                             },
+                                            multiTabStorageName: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "A name unique to this page for detecting multiple instances of the game and preventing them. (don't forget that domains share localStorage)"
+                                            },
                                             minified: {
                                                 required: false,
                                                 default: false,
@@ -774,6 +777,9 @@ Bagel = {
                                             }
                                         },
                                         fn: args => {
+                                            if (Bagel.internal.pwaInitialised) {
+                                                console.error("Erm, you can only run this function once per page. The PWA's already initialised.");
+                                            }
                                             if (args.worker) {
                                                 if (navigator.serviceWorker) {
                                                     navigator.serviceWorker.register(args.worker);
@@ -801,31 +807,59 @@ Bagel = {
                                                 console.warn("The Bagel.js version JSON file's missing. Use Bagel.pwa.generate.version.");
                                             }
                                             if (args.version) {
-                                                if (args.versionStorageName && args.versions && args.cacheStorageName) {
-                                                    fetch(args.version).then(res => res.text().then(version => {
-                                                        version = version.split("\n").join("");
-                                                        let installed = localStorage.getItem(args.versionStorageName);
-                                                        if (installed == null) installed = 0;
-                                                        if (installed != version) {
-                                                            fetch(args.versions).then(res => res.json().then(versions => {
-                                                                caches.open(args.cacheStorageName).then(cache => {
-                                                                    while (installed < versions.versions.length) {
-                                                                        let changed = versions.versions[installed].changed;
-                                                                        for (let i in changed) {
-                                                                            cache.delete(changed[i]);
+                                                if (navigator.onLine) {
+                                                    if (args.versionStorageName && args.versions && args.cacheStorageName) {
+                                                        fetch(args.version).then(res => res.text().then(version => {
+                                                            version = version.split("\n").join("");
+                                                            let installed = localStorage.getItem(args.versionStorageName);
+                                                            if (installed == null) installed = 0;
+                                                            if (installed != version) {
+                                                                fetch(args.versions).then(res => res.json().then(versions => {
+                                                                    caches.open(args.cacheStorageName).then(cache => {
+                                                                        while (installed < versions.versions.length) {
+                                                                            let changed = versions.versions[installed].changed;
+                                                                            for (let i in changed) {
+                                                                                cache.delete(changed[i]);
+                                                                            }
+                                                                            installed++;
                                                                         }
-                                                                        installed++;
-                                                                    }
-                                                                    localStorage.setItem(args.versionStorageName, installed);
-                                                                    location.reload(); // Reload so all the new assets can be loaded
-                                                                });
-                                                            }));
-                                                        }
-                                                    }));
+                                                                        localStorage.setItem(args.versionStorageName, installed);
+                                                                        location.reload(); // Reload so all the new assets can be loaded
+                                                                    });
+                                                                }));
+                                                            }
+                                                        }));
+                                                    }
+                                                }
+                                                else {
+                                                    console.log("You're offline.");
                                                 }
                                             }
                                             else {
                                                 console.warn("The Bagel.js latest version file's missing. Use Bagel.pwa.generate.version.");
+                                            }
+                                            if (args.multiTabStorageName) {
+                                                if (localStorage.getItem(args.multiTabStorageName) == null) {
+                                                    localStorage.setItem(args.multiTabStorageName, "0");
+                                                }
+                                                ((tick, value) => {
+                                                    setTimeout(() => {
+                                                        if (localStorage.getItem(args.multiTabStorageName) == tick) { // It hasn't changed
+                                                            let interval = setInterval(() => {
+                                                                value++;
+                                                                if (value > 100) value = 0;
+                                                                localStorage.setItem(args.multiTabStorageName, value);
+                                                            }, 500);
+                                                        }
+                                                        else { // Another tab changed it
+                                                            alert("Erm. Looks like you have two of the same tab open. Please close one. Data loss is possible if you continue.");
+                                                        }
+
+                                                    }, 1000);
+                                                })(localStorage.getItem(args.multiTabStorageName), 0);
+                                            }
+                                            else {
+                                                console.warn("The Bagel.js multi tab storage name is missing. This is a name unique to this page for detecting multiple instances of the game and preventing them. (don't forget that domains share localStorage)");
                                             }
                                             if (! args.versionStorageName) {
                                                 console.warn("The Bagel.js version storage name's missing. This is explained in Bagel.pwa.generate.version.");
@@ -836,6 +870,8 @@ Bagel = {
                                             if (! args.minified) {
                                                 console.warn("Your code isn't minified. Look up an online tool to help. Once you're done, set \"minified\" in Bagel.pwa.init to true. Also, make sure to run lighthouse or an equivalent so you can follow the best practices :)");
                                             }
+
+                                            Bagel.internal.pwaInitialised = true;
                                         }
                                     }
                                 },
@@ -1247,24 +1283,24 @@ Bagel = {
                                                             let where = "plugin Internal's function \"game.playSound\"";
                                                             game.add.asset.img({
                                                                 id: ".Internal.unmuteButtonMuted",
-                                                                src: "../assets/imgs/muted.png"
+                                                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgYpH/xRLwAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAFGSURBVEhLpVbbtcMwCCs9d4brjbJzvVGmcD9clQBRIY4+mtgRWBZ+VB5LGCNjnEMkY1DMIdnA6PfPKtbjw4wg9HyusXeMMSrDiYhotI/gzpIPOugMPaauCcowBedCXUcM0NKPcfTVDiCyKjwT+vQBnqDCZqLzhDkQZ0uNimjPtm/7tof8cfHCEesM3q/wbTvje55zMD8GwKh66B1jmEKjk3/nRLY2FFaols4PdBdkDdaBXa7bpeZYFbcFAt7RX9wroAJtqXJPwPeO3oUTGNPaXZZD1zDa+vsLbM0/8dkSPe364l91dO5ebZMS83RrQvF2vJkmmHO99dabCD0Hs2PmqlAF4mx+7xyQXnU1oexrBPKxAx/OffmPEtjmyR1kE/SOvf57603P1W+8D2TA1TNnmLEjWAm9Y3rgf54xpAbyryOFF8SAzG9tVk73YdUDkgAAAABJRU5ErkJggg=="
                                                             }, where); // Load its image
                                                             game.add.asset.img({
                                                                 id: ".Internal.unmuteButton",
-                                                                src: "../assets/imgs/unmuted.png"
+                                                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgoeC/S7LAAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAElSURBVEhLrZbREYQgDETNFaEdac3akTaR+2D2lODOBs/3w4gbWEJAbXiEu1LcY6YUkWRAa2je533e9YTbtE3bxBak44XgHJgZWsd1XMfY27Icy7EczDA3Sl5wY1lDCjMzM230Uz/mjWGC0g7duLu7x8i2FILBvLEYp2ALikbL/M346HAvAgSebdTVLdffx2fHv2Qweyp7yZZAMdpmstlibGm9JXpLs7peGoP/ks1YltcNvg01WNeEzkmsobf4GWSfpPqUaXr1gNXwB6/RgU9SpDdDvXqAa45w3kPIBGtrPdfdx/H7L17UoQbPFatro0zQnyEYi+OzzKX/Zp4aiihj5SxcEjWkYIdHG2Y7oYwBOQFAbZSBlLqFbSEzBtIGI+SvQ6IMRb66bmr2BeoT1QAAAABJRU5ErkJggg=="
                                                             }, where); // Load its image
 
                                                             game.add.asset.snd({
                                                                 id: ".Internal.unmuteButtonClick",
-                                                                src: "../assets/snds/clickDown.mp3"
+                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAAAwAABBIAYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBg0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ////////////////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQCzSEAAeAAAAQSSYAuqwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEnACyvdAAACoh3exu8jLeoIAgcKAgCAYLggCAIHCgIAhggGIPv5cEFg+D+sH/Lg4CHDHKHP/E4PghrBwMcEAQygY//BB3//+UBAEAx/KAhlAQcmYqIp0mTVUZDWGgyrJEUQYImG/BhWy0KoEQVVjZUyyAxi+zMxAcDuX+WiWnPTQwFZ4BkIgoSlO0HWRLRa6sZiyXtxgTnQ+IAlwFSpHstGDFzlpJ1J2pzS2mZiuluTRlbS2DUE23jTFgFMVrERfV4GUv7edHTZbTQ3CYA37KYccp4lAmlpzMpkEOspbRYs7LIi8j8MQbxBMzxd8NvvB7KbTgw4yl1W5P67sEQS7sYhl3Zx/ZbS7xUzi6X+TZJFYkkYszmT+NETCdJdz7uFIpTWyjsNSdyauojEpdBNNLm408Oz/87DE4loUgqsfmMAkgxuzs47j+VGWS1u8Uf913bjdZa8ehyAaaIu7EXJhhwZC4VK+0ifZr0F/j++Y/vHW6WVZwzAUWZ7FrTIbUonIxGL0OUt+9G5e5cXmm3gp+aBnEQfaROjKqF/Zl/ZQ+smaVSuk8zSmJNFZVG2Gv9BMO/dpccfkF6/er5y/LC67MYfWchq4/0fVrKAIu7lfHLva4zAQE2q//1VFBQEBKMzKuGAhVCgJqs+qAnVAVL/6vxmKMx///9VTqr/V9VXjMUZvgYCAQNP9YKrBX8S8ShsSgrEVZ0RBwRPg1Bp5U7rBUeGpUNiU78RBwRPUIoilTusFR4KqTEFNRTMuOTkuM6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqv/zYMTZGtmybx/DGACqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg=="
                                                             }, where);
                                                             game.add.asset.snd({
                                                                 id: ".Internal.unmuteButtonClickUp",
-                                                                src: "../assets/snds/clickUp.mp3"
+                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABMkATk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDLCEAAeAAAATJpqKjmQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAFogGux9BAAC6qruoVWtAv0iG8oCDgQcUBA4Jz8pLg+D+IAQd5cHwfB/rP/BAEDkoGPxACYPg+D5+GPUCAIA+/8HwQBAEAQBMH/h/8EAQBB3UCAPg+H/wQDH8HwfD8uD4Pg+qushml2hmlAYBrCAMEjTYbZgXKSJMQKAAkRyGgr9CoNCahLjLRnVAAhorQiAL13knoq8qAdYdH1rCt6FqmTC2dsHT1HCMoc2jWLUjdBRNoyJv4RMO0+0ZrvFNRFbrNnkWi/kVZar+lnZySwWwG4+ixJ1YkCQ+8pbp5BEMtK0x06WUrt+hjNymv+3B3YjhSwzfl+pU8dytnvDLdWPVbMpuUdPNWprdLVi9irfi0sqU17Ofj8Oyrct1AT9y2td13+c+7WpqbfJqlpatarGeX5Xf7rD/86DE0Up0bqMfmsAAw5zWN6btVKDKzU7yzzKbyps6amyrU1/uWWOOP8paa13k1DVLjTV7tumz7llnhjZyws6t1pfMyHcons7H42c6avS27mprVaNVbUzS/vdL3u/5l3+5fv7N/qaMNZRoSaM02g0LO2aTFcDsQUEAsfvVoGoStQqLLLRgFURCVLcDdYiz5huShkdWIiu/qVSyzERIxDHQ0pUtZNFTUECvRA6UymyVysMPMABBJfQHFAUZwC8TIEEyk3udBhrpMhGCRxJYZOULpBco1Sk7HGyX0/l6VsgUOZnGH2U2MI0A8GLUeKwWfCoQ8E0F/6BprcYalVlOdmj4tNyf6VXuLTLIuC/LorRbMhlMYw1BN2yzJs8dd2zGcZmTN3lUWlUzOQ3H4CpuPEw6G8qsZxtNxgFx//OwxNNQVC56/5jICGCqtSrclTdpucj0tjkRoKGIwTcd2njO6CtVptyqNXJuK0t2kpst61lv+a139Y6nN092prC19Ncls5QzfIlc3CL8BS+tasZXvm3RityJRaIxGw+0pj0Na7jvWWst/v//////UpprXcqYjJN1BQCkqkxBTUUzLjk5LjOqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqr/8xDE8QAAA/wBwAAAqqqqqqqqqqqqqqqqqg=="
                                                             }, where);
                                                             game.add.asset.snd({
                                                                 id: ".Internal.unmuteButtonMouseTouch",
-                                                                src: "../assets/snds/mouseTouch.mp3"
+                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABP0ASkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDKiEAAeAAAAT9uAw0pwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEjkqnedDMACyMBL0ufxEQvkRC3REREKgYACCEe7JpkEIy7Jp3Ed7Jp3vezyad7+9nkyd7BMmH8uf8Tg+8uD4f/l///Ln/5d//h///rB9//g+z7q7iFlKYTSjQDSknrKLQgSoGlObS2JMhgJeYvuY7AQqCdmwWOKDMmn7BoHzfVVVDBTsLMmppKqLp0vOKCTvSCZkpdHXbYjEnpVuWSqo6TdY6z5ur2PA3FrEqV1EYgu8tyumPPoyarCXtXFGr8QhiZqr8pX8uxX4koFKn9eB8HDaw7rWJFKXioqVfzRW6vxFrMeu5RKAaDjxU8JmvtRDCV2s7eEsvZyCV49gGxGsaOrQvzT1XFsZczpYai2PYeyq3GyRSXSh3n8sSyN237rWKSKdhqLdhtiVC9kzIIlEpq69DRb/86DE406karb/mMAFHbtWq4NWxKsdSq9Wpq3JuxT27ff5X7T3+U+X2/yntXm4vk5WpFjMzsGWX6qVJdG5dlTRyHoL7Wz/Gl7rKm3KvrV8cfpr8Zw5vm+/vt/G9V5re6lXCtV5KptKs5xLtdN7LRLNNperiCirq5ChNOZN0QkNyLgShrjSgaOXwEQpl1LzMZFtXeJAWG2ugwCMCNzUA833wAgJFXiAwSlUnkYugAJmMGF1gGAPCykUA0eGnu4YEOjRSYWOGAildqzYmsuUy5iUvmJQAQcyg7MCIzJAUw00r8huy/cNv9U28b9Oy0iBBCHGPhRiiWYIThCaZeuGOoyQ7WYu15yXHdWd9Z6msOrSf+Mpywm2TF6mlNJAaDCEAQJmBCbMc6sImYkzqn5TydmE5FtTFmXQHCpN//PAxNRcDG6O/5nYDVKDH5bfR9WU0pr5ggqBA8oDTAQqCi/xcpSpqVz8LlBLOfbs5VZXujdmZpdX5qLSKjpb0upn9qw66lmtflMqp05X1a6/rouqyKIwwBQqKvq+Evp6ksmbcY7m78VoYzhVr5T7cG3l0W5dptdpH/ll+zVtWfx5LUJyri9r6yHdWgjThQG12U2M5TSRrGgXNn3///3/P////99pfGdgs1VMQU1FVUxBTUUzLjk5LjNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//MQxPIAAAP8AcAAAFVVVVVVVVVVVVVVVVU="
                                                             }, where);
 
                                                             let size = Math.min(game.width, game.height) / 10;
@@ -1933,9 +1969,10 @@ Bagel = {
             merge.types.sprites(game, plugin);
 
             merge.methods(game, plugin);
+            game.internal.plugins[plugin.info.id] = plugin;
             Bagel.internal.loadCurrent();
         },
-        loadAsset: (asset, game, type, where, i) => {
+        loadAsset: (asset, game, type, where, i, forceLoad) => {
             let current = Bagel.internal.current;
 
             Bagel.internal.saveCurrent();
@@ -1946,6 +1983,7 @@ Bagel = {
             current.game = game;
 
             let assetLoader = game.internal.combinedPlugins.types.assets[type];
+            let loadNow = game.config.loading.mode != "dynamic" || forceLoad || assetLoader.forcePreload;
             let plugin = assetLoader.internal.plugin;
             current.plugin = plugin;
 
@@ -1955,7 +1993,7 @@ Bagel = {
                 assets.assets[type] = {};
             }
 
-            Bagel.check({
+            asset = Bagel.check({
                 ob: asset,
                 where: where,
                 syntax: assetLoader.args
@@ -1981,9 +2019,23 @@ Bagel = {
                     }
                 }
             })(asset, game); // This is called by the init function once the asset has loaded
-            let assetOb = assetLoader.init(asset, ready, game, assetLoader.internal.plugin, i);
+            if (loadNow) {
+                assetLoader.init(asset, ready, game, assetLoader.internal.plugin, i);
+                game.internal.assets.loading++;
+            }
+            else {
+                let toLoad = game.internal.assets.toLoad;
+                if (toLoad[type] == null) toLoad[type] = {};
+                toLoad[type][asset.id] = {
+                    ready: ready,
+                    asset: asset,
+                    assetLoader: assetLoader,
+                    i: i,
+                    where: where,
+                    game: game
+                }; // Queue it to be loaded
+            }
 
-            game.internal.assets.loading++;
             Bagel.internal.loadCurrent();
         },
         createSprite: (sprite, game, parent, where, noCheck, idIndex) => {
@@ -2158,7 +2210,8 @@ Bagel = {
                         assets: {
                             loading: 0,
                             loaded: 0,
-                            assets: {}
+                            assets: {},
+                            toLoad: {}
                         },
                         combinedPlugins: { // Not all parts of the plugin are combined, only the ones where there mustn't be conflicts TODO: What does this mean?
                             types: {
@@ -2177,7 +2230,8 @@ Bagel = {
                                 }
                             }
                         }, // The plugins are combined as they're loaded
-                        lastState: (! game.state)
+                        lastState: (! game.state),
+                        plugins: {}
                     };
 
                     game = Bagel.check({
@@ -2233,9 +2287,11 @@ Bagel = {
                         addEventListener("mousedown", e => {
                             Bagel.device.is.touchscreen = false;
                             game.input.mouse.down = true;
+                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         addEventListener("mouseup", e => {
                             game.input.mouse.down = false;
+                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         addEventListener("touchstart", e => {
                             Bagel.device.is.touchscreen = true;
@@ -2271,6 +2327,7 @@ Bagel = {
                             if (e.cancelable) {
                                 ctx.preventDefault();
                             }
+                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         addEventListener("touchmove", e => {
                             Bagel.device.is.touchscreen = true;
@@ -2316,18 +2373,21 @@ Bagel = {
                             if (e.cancelable) {
                                 e.preventDefault();
                             }
+                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         document.addEventListener("keydown", e => {
                             for (let i in Bagel.internal.games) {
                                 let game = Bagel.internal.games[i];
                                 game.input.keys.keys[e.keyCode] = true;
                             }
+                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         document.addEventListener("keyup", e => {
                             for (let i in Bagel.internal.games) {
                                 let game = Bagel.internal.games[i];
                                 game.input.keys.keys[e.keyCode] = false;
                             }
+                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
 
                         if (document.readyState == "complete") {
@@ -2451,6 +2511,9 @@ Bagel = {
                             Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i);
                         }
                     }
+                    if (game.internal.assets.loading == 0) {
+                        game.loaded = true;
+                    }
                 },
                 methods: game => {
                     let methods = game.internal.combinedPlugins.methods.game;
@@ -2562,17 +2625,18 @@ Bagel = {
                     }
                 },
                 loadingScreen: game => {
-                    if (! game.config.loading.skip) {
+                    if (! (game.config.loading.skip || game.loaded)) {
                         Bagel.internal.saveCurrent();
-                        Bagel.internal.current.plugin = Bagel.internal.plugin; // TODO: is it a problem if it's not the game's version?
+                        Bagel.internal.current.plugin = game.internal.plugins.Internal;
 
-                        let loadingScreen = Bagel.internal.deepClone(game.config.loading.animation); // TODO: does it need cloning first?
+                        let loadingScreen = Bagel.internal.deepClone(game.config.loading.animation);
                         loadingScreen.id = ".Internal.loadingScreen." + game.id;
                         loadingScreen.width = game.width;
                         loadingScreen.height = game.height;
                         loadingScreen.config = {
                             loading: {
-                                skip: true
+                                skip: true,
+                                mode: "preload"
                             },
                             display: {
                                 dom: false
@@ -2655,41 +2719,51 @@ Bagel = {
                                     combined.types.assets[newType].internal = {
                                         plugin: plugin
                                     };
-                                    combined.types.internal.pluralAssetTypes[typeJSON.get.name] = newType;
+                                    combined.types.internal.pluralAssetTypes[typeJSON.get] = newType;
 
-                                    let defaultFind = Bagel.internal.defaultFind;
-                                    // Define the getter function. The function wrapping is so some data can be saved to the function that isn't shared between all of the functions
                                     ((newType, typeJSON, boundGame, plugin) => {
-                                        Bagel.get.asset[typeJSON.get.name] = (id, game, check) => {
+                                        Bagel.get.asset[typeJSON.get] = (id, game, check) => {
                                             let current = Bagel.internal.current;
+                                            let plural = boundGame.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
 
                                             Bagel.internal.saveCurrent();
 
                                             current.assetType = newType;
-                                            current.assetTypeName = typeJSON.get.name;
+                                            current.assetTypeName = typeJSON.get;
                                             current.game = game == null? current.game : game;
                                             current.plugin = plugin;
 
-                                            let output = typeJSON.get.handler(
-                                                id,
-                                                check,
-                                                defaultFind,
-                                                current.game,
-                                                plugin,
-                                                newType
-                                            );
+                                            let assets = current.game.internal.assets;
+                                            let loadedAssets = assets.assets[current.assetType];
+                                            if (loadedAssets[id] == null) { // Invalid id
+                                                let exists = assets.toLoad[plural];
+                                                if (exists) exists = exists[id];
+                                                if (exists) {
+                                                    let info = exists;
+                                                    current.i = info.i;
+                                                    current.where = info.where;
 
-                                            if (typeof output == "string") { // Error
-                                                console.error(output);
-                                                Bagel.internal.oops(current.game);
+                                                    info.assetLoader.init(info.asset, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
+                                                    info.game.internal.assets.loading++;
+                                                    return true; // It's loading
+                                                }
+                                                else {
+                                                    if (check) {
+                                                        Bagel.internal.loadCurrent();
+                                                        return false;
+                                                    };
+                                                    console.error("Oops. That asset doesn't exist. You tried to get the asset with the id " + JSON.stringify(id) + ".");
+                                                    Bagel.internal.oops(current.game);
+                                                }
                                             }
+                                            let asset = loadedAssets[id][current.assetTypeName];
                                             Bagel.internal.loadCurrent();
-                                            return output;
+                                            return asset;
                                         };
-                                        boundGame.add.asset[typeJSON.get.name] = (asset, where) => {
-                                            if (! where) where = "the function Game.add.asset." + typeJSON.get.name;
-                                            let plural = game.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get.name];
-                                            Bagel.internal.loadAsset(asset, boundGame, plural, where);
+                                        boundGame.add.asset[typeJSON.get] = (asset, where) => {
+                                            if (! where) where = "the function Game.add.asset." + typeJSON.get;
+                                            let plural = game.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
+                                            Bagel.internal.loadAsset(asset, boundGame, plural, where, true);
                                         };
                                     })(newType, typeJSON, game, plugin);
                                 }
@@ -2908,8 +2982,7 @@ Bagel = {
                             syntax: handler.internal.cloneSyntax
                         }, {
                             args: true,
-                            missing: true, // Missing arguments don't matter, they're dealt with in a minute
-                            //useless: true // "type" isn't included in the syntax
+                            missing: true // Missing arguments don't matter, they're dealt with in a minute
                         }); // Check any existing properties supplied by the clone function
 
                         let clone = Bagel.internal.deepClone;
@@ -3193,7 +3266,7 @@ Bagel = {
                 }
             },
             tick: {
-                scripts: (type, sprites, game) => { // TODO: does this work with non-sprite scripts?
+                scripts: (type, sprites, game, state) => {
                     if (Bagel.internal.games[game.id] == null) return;
                     let scripts;
                     if (sprites) {
@@ -3201,7 +3274,7 @@ Bagel = {
                             scripts = game.internal.scripts.index.sprites[type];
                         }
                         else {
-                            scripts = game.internal.scripts.index.sprites[type][game.state];
+                            scripts = game.internal.scripts.index.sprites[type][state];
                         }
                     }
                     else {
@@ -3209,7 +3282,7 @@ Bagel = {
                             scripts = game.internal.scripts.index[type];
                         }
                         else {
-                            scripts = game.internal.scripts.index[type][game.state];
+                            scripts = game.internal.scripts.index[type][state];
                         }
                     }
                     if (scripts == null) { // No scripts
@@ -3308,18 +3381,19 @@ Bagel = {
                     let subFunctions = Bagel.internal.subFunctions.tick;
 
                     if (! game.paused) {
-                        if (game.state != game.internal.lastState) {
+                        let state = game.state;
+                        if (state != game.internal.lastState) {
                             subFunctions.hideSprites(game);
 
-                            subFunctions.scripts("init", true, game);
-                            subFunctions.scripts("init", false, game);
-                            game.internal.lastState = game.state;
+                            subFunctions.scripts("init", true, game, state);
+                            subFunctions.scripts("init", false, game, state);
+                            game.internal.lastState = state;
                         }
 
-                        subFunctions.scripts("main", true, game);
-                        subFunctions.scripts("main", false, game);
-                        subFunctions.scripts("all", true, game);
-                        subFunctions.scripts("all", false, game);
+                        subFunctions.scripts("main", true, game, state);
+                        subFunctions.scripts("main", false, game, state);
+                        subFunctions.scripts("all", true, game, state);
+                        subFunctions.scripts("all", false, game, state);
                         if (Bagel.internal.games[game.id] == null) return;
                         subFunctions.render[game.config.display.renderer](game);
                     }
@@ -3698,7 +3772,7 @@ Bagel = {
                                                 imgs: [
                                                     {
                                                         id: "Bagel",
-                                                        src: "../assets/imgs/bagel.png" // TODO: data url
+                                                        src: "data:image/png;base64,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"
                                                     }
                                                 ]
                                             },
@@ -3848,6 +3922,17 @@ Bagel = {
                     clones: {
                         required: false,
                         default: {},
+                        check: (value, ob, index, game, prev) => {
+                            let syntax = game.internal.combinedPlugins.types.sprites[ob.type].internal.cloneSyntax;
+                            Bagel.check({
+                                ob: value,
+                                where: "the sprite " + JSON.stringify(ob.id) + "'s \"clone\" argument",
+                                syntax: syntax
+                            }, {
+                                args: true,
+                                missing: true
+                            });
+                        },
                         types: ["object"],
                         description: "The default data for a clone of this sprite.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
                     },
@@ -4072,7 +4157,7 @@ Bagel = {
                                                 "  Always specifiy where the error is! Bagel.js will say which game it's in but, you know more than it about the error. You should specify which type they were making, the index of the problematic error and ideally how to fix it.\n",
                                                 "  Also, try to include information about the inputs the user provided. For example, if they used a duplicate ID, say what that id was in the error itself.\n",
                                                 "  Lastly, be nice to the programmer. Treat them like a user. It's helpful to know that you can just put in something you know's wrong and get a helpful mini-tutorial.\n",
-                                                "\nOne more thing: the arguments for the function is structured like this:",
+                                                "\nOne more thing: the arguments for the function is structured like this:\n",
                                                 "(asset, game, check, standardChecks, plugin, index) => {\n};\n",
                                                 "Where standardChecks contains functions and check is a function that checks objects.",
                                                 "\n\nGood luck! :P"
@@ -4097,28 +4182,14 @@ Bagel = {
                                         },
                                         get: {
                                             required: true,
-                                            subcheck: {
-                                                name: {
-                                                    required: true,
-                                                    types: ["string"],
-                                                    description: "The name of the function. Usually the singular version of the asset type. e.g: the type \"imgs\" would have the name \"img\" so the function would be \"Game.get.asset.img\". Defaults to the name of type."
-                                                },
-                                                handler: {
-                                                    required: false,
-                                                    default: (id, check, defaultFind, game, plugin, type) => defaultFind(id, check),
-                                                    types: [
-                                                        "function",
-                                                        "undefined"
-                                                    ],
-                                                    description: "The handler function for the \"get\" method. Defaults to using defaultFind.\nThe function should return the asset specified by the arguments. Or an error in the form of a string."
-                                                }
-                                            },
-                                            types: ["object"],
-                                            description: [
-                                                "Contains the name of the function and the function that gets the asset. e.g {",
-                                                "    name: \"img\"",
-                                                "}"
-                                            ].join("\n")
+                                            types: ["string"],
+                                            description: "The name of the function. Usually the singular version of the asset type."
+                                        },
+                                        forcePreload: {
+                                            required: false,
+                                            default: false,
+                                            types: ["boolean"],
+                                            description: "If this asset must be preloaded even when the loading mode is set to \"dynamic\". Be careful about how you use this because it can increase loading times."
                                         }
                                     },
                                     types: ["object"],
@@ -4578,19 +4649,6 @@ Bagel = {
             },
             disableArgCheck: {args: true}
         },
-        defaultFind: (id, check) => {
-            if (id == null) {
-                return "Huh, looks like you forgot the \"id\" argument for the \"defaultFind\" function.";
-            }
-            let current = Bagel.internal.current;
-            let assets = current.game.internal.assets.assets[current.assetType];
-
-            if (assets[id] == null) { // Invalid id
-                if (check) return false;
-                return "Oops. That asset doesn't exist. You tried to get the asset with the id " + JSON.stringify(id) + ".";
-            }
-            return assets[id][current.assetTypeName];
-        },
 
         th: num => (num + 1) + ((num > 8 && num < 20)? "th" : ["st", "nd", "rd", "th", "th", "th", "th", "th", "th"][parseInt(num.toString()[num.toString().length - 1])]),
         an: str => ["a", "e", "i", "o", "u"].includes(str[0].toLowerCase())? "an " + str : "a " + str,
@@ -4681,13 +4739,37 @@ Bagel = {
         },
         saveCurrent: () => {
             let internal = Bagel.internal;
-            internal.currentStack.push({...internal.current}); // Add current values to the stack
+            let current = internal.current;
+            //internal.currentStack.push({...internal.current}); // Add current values to the stack
+            internal.currentStack.push({
+                asset: current.asset,
+                assetType: current.assetType,
+                assetTypeName: current.assetTypeName,
+                game: current.game,
+                i: current.i,
+                plugin: current.plugin,
+                sprite: current.sprite,
+                where: current.where
+            });
         },
         loadCurrent: () => {
             let internal = Bagel.internal;
             internal.current = internal.currentStack.pop(); // Load the last state
         },
         currentStack: [],
+        inputAction: {
+            queued: [],
+            queue: (code, data) => {
+                Bagel.internal.inputAction.queued.push([code, data]);
+            },
+            input: () => {
+                let queued = Bagel.internal.inputAction.queued;
+                for (let i in queued) {
+                    queued[i][0](queued[i][1]);
+                }
+                Bagel.internal.inputAction.queued = [];
+            }
+        },
 
         requestAnimationFrame: window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,
         debug: {
