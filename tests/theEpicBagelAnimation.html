@@ -35,6 +35,14 @@ Bagels = Bagel.init({
                 },
                 visible: false,
                 scripts: {
+                    init: [
+                        { // This just makes sure the bagel loads
+                            code: me => {
+                                me.visible = false;
+                            },
+                            stateToRun: "Hail the bagel overlords"
+                        }
+                    ],
                     main: [
                         {
                             code: me => {
@@ -83,7 +91,7 @@ Bagels = Bagel.init({
             init: [
                 {
                     code: game => {
-                        
+
                     },
                     stateToRun: "Hail the bagel overlords"
                 }
@@ -98,11 +106,10 @@ Bagels = Bagel.init({
             mode: "fill"
         },
         loading: {
-            skip: false
+            skip: false,
+            mode: "dynamic"
         }
     }
 });
-console.log("A")
-Bagel.upload(a => console.log(a));
 
 </script>

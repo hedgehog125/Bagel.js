@@ -1,9 +1,7 @@
 /*
 TODO:
-Change how assets work. Remove defaultFind, make it baked in etc.
-Option to forceLoad assets in plugins. (sounds)
-Load sprite images in the loading screen, plugin api to request them?
-Can asset ids be used multiple times if by different types?
+Checks for "img" argument? Error if id is invalid, exclude null
+Change how assets work. Remove defaultFind, make it baked in etc. Remove standardChecks
 Allow loading of other plugins
 Update "step" function to work in different places. Steps should also be in more places
 Pause music on state change? Or stop?
@@ -348,9 +346,6 @@ Bagel = {
                                             sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
                                         }
                                     }
-                                },
-                                beforeStateChange: () => {
-                                    
                                 }
                             },
                             description: "A basic type of sprite. Has the appearance of the image specified.",
@@ -583,7 +578,6 @@ Bagel = {
                     }
                 },
                 assets: {},
-                sprites: [],
 
                 methods: {
                     bagel: {
@@ -1945,6 +1939,20 @@ Bagel = {
                     init: [],
                     main: [],
                     steps: {}
+                },
+                listeners: {
+                    state: (state, game) => {
+                        let scripts = game.internal.scripts.index.sprites.init[state];
+                        if (scripts == null) return;
+                        for (let i in scripts) {
+                            let sprite = scripts[i].sprite;
+                            if (sprite.type == "sprite") {
+                                if (sprite.img) {
+                                    Bagel.get.asset.img(sprite.img, game, true); // Requesting it will trigger loading
+                                }
+                            }
+                        }
+                    }
                 }
             },
             vars: {
@@ -1969,6 +1977,7 @@ Bagel = {
             merge.types.sprites(game, plugin);
 
             merge.methods(game, plugin);
+            merge.listeners(game, plugin)
             game.internal.plugins[plugin.info.id] = plugin;
             Bagel.internal.loadCurrent();
         },
@@ -2010,12 +2019,20 @@ Bagel = {
 
             let ready = ((assetJSON, game) => asset => {
                 let assets = game.internal.assets;
+                let combinedPlugins = game.internal.combinedPlugins;
+                let plural = combinedPlugins.types.internal.pluralAssetTypes[combinedPlugins.types.assets[type].get];
+
                 assets.assets[type][assetJSON.id] = asset;
                 assets.loaded++;
                 assets.loading--;
                 if (assets.loading == 0) {
                     if (game.config.loading.skip) {
                         game.loaded = true;
+                    }
+                }
+                if (assets.toLoad[plural]) {
+                    if (assets.toLoad[plural][assetJSON.id]) {
+                        delete assets.toLoad[plural][assetJSON.id]; // Doesn't need loading anymore
                     }
                 }
             })(asset, game); // This is called by the init function once the asset has loaded
@@ -2063,6 +2080,10 @@ Bagel = {
                 }
             };
 
+            sprite.cloneIDs = [];
+            sprite.cloneCount = 0;
+            sprite.isClone = (!! parent);
+            sprite.idIndex = idIndex;
             let register = subFunctions.register;
             register.scripts("init", sprite, game, parent);
             register.scripts("main", sprite, game, parent);
@@ -2070,11 +2091,6 @@ Bagel = {
             register.methods(sprite, game);
             register.listeners(sprite, game, parent);
 
-            // TODO: Function for making all the very core stuff
-            sprite.cloneIDs = [];
-            sprite.cloneCount = 0;
-            sprite.isClone = (!! parent);
-            sprite.idIndex = idIndex;
             game.internal.idIndex[sprite.id] = idIndex;
             game.internal.renderer.layers.push(idIndex);
 
@@ -2149,7 +2165,10 @@ Bagel = {
 
                 subFunctions.scaleCanvas(game);
                 if (game.loaded) {
-                    subFunctions.loaded(game);
+                    if (subFunctions.loaded(game)) { // Loading screen triggered
+                        Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                        subFunctions.loading(game);
+                    }
                 }
                 else {
                     subFunctions.loading(game);
@@ -2228,7 +2247,8 @@ Bagel = {
                                 sprites: {
                                     type: "sprite"
                                 }
-                            }
+                            },
+                            listeners: {}
                         }, // The plugins are combined as they're loaded
                         lastState: (! game.state),
                         plugins: {}
@@ -2751,7 +2771,8 @@ Bagel = {
                                                     if (check) {
                                                         Bagel.internal.loadCurrent();
                                                         return false;
-                                                    };
+                                                    }
+                                                    console.log(assets.toLoad[plural])
                                                     console.error("Oops. That asset doesn't exist. You tried to get the asset with the id " + JSON.stringify(id) + ".");
                                                     Bagel.internal.oops(current.game);
                                                 }
@@ -2963,6 +2984,20 @@ Bagel = {
                                     position = combined.methods[type];
                                 }
                                 Bagel.internal.subFunctions.loadPlugin.merge.subMethods(game, plugin, type, method, methodName, position, [], Bagel);
+                            }
+                        }
+                    },
+                    listeners: (game, plugin) => {
+                        let combined = game.internal.combinedPlugins.listeners;
+                        let listeners = plugin.plugin.listeners;
+                        for (let type in listeners) {
+                            let listener = listeners[type];
+                            if (listener) {
+                                if (combined[type] == null) combined[type] = [];
+                                combined[type].push({
+                                    fn: listener,
+                                    plugin: plugin
+                                });
                             }
                         }
                     }
@@ -3383,11 +3418,18 @@ Bagel = {
                     if (! game.paused) {
                         let state = game.state;
                         if (state != game.internal.lastState) {
-                            subFunctions.hideSprites(game);
+                            Bagel.internal.triggerPluginListener("state", game, state);
+                            if (game.internal.assets.loading == 0) {
+                                subFunctions.hideSprites(game);
 
-                            subFunctions.scripts("init", true, game, state);
-                            subFunctions.scripts("init", false, game, state);
-                            game.internal.lastState = state;
+                                subFunctions.scripts("init", true, game, state);
+                                subFunctions.scripts("init", false, game, state);
+                                game.internal.lastState = state;
+                            }
+                            else { // Something needs to load
+                                game.loaded = false;
+                                return true;
+                            }
                         }
 
                         subFunctions.scripts("main", true, game, state);
@@ -3803,7 +3845,7 @@ Bagel = {
                                                             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                                                             let maxAngle = ((game.vars.loading.progress / 100) * 360) - 90;
                                                             if (maxAngle > game.vars.angle) {
-                                                                game.vars.velocity += 2;
+                                                                game.vars.velocity += 5;
                                                                 game.vars.angle += game.vars.velocity;
                                                                 game.vars.velocity *= 0.9;
                                                                 if (maxAngle < game.vars.angle) {
@@ -4629,12 +4671,18 @@ Bagel = {
                             types: ["object"],
                             description: "Contains the plugin's scripts. \"preload\", \"init\" and \"main\". Steps can also be used."
                         },
-                        sprites: { // TODO: check
+                        listeners: {
                             required: false,
-                            default: [],
-                            subcheck: {}, // TODO
-                            types: ["array"],
-                            description: "Contains the plugin's sprites. Works the same way as Game.game.sprites. These will be created in every game where the plugin's active."
+                            default: {},
+                            subcheck: {
+                                state: {
+                                    required: false,
+                                    types: ["function"],
+                                    description: "The game state listener function. Triggers on the first frame with the new state from the start. Runs before init scripts and the loading screen."
+                                }
+                            },
+                            types: ["object"],
+                            description: "Contains listener functions for different things."
                         }
                     },
                     types: ["object"],
@@ -4666,7 +4714,7 @@ Bagel = {
             }
             return output;
         },
-        getTypeOf: (entity) => {
+        getTypeOf: entity => {
             if (Array.isArray(entity)) {
                 return "array";
             }
@@ -4675,7 +4723,7 @@ Bagel = {
             }
             return typeof entity;
         },
-        deepClone: (entity) => {
+        deepClone: entity => {
             if (typeof entity != "object" || entity == null) { // Includes arrays
                 return entity;
             }
@@ -4757,6 +4805,7 @@ Bagel = {
             internal.current = internal.currentStack.pop(); // Load the last state
         },
         currentStack: [],
+
         inputAction: {
             queued: [],
             queue: (code, data) => {
@@ -4768,6 +4817,21 @@ Bagel = {
                     queued[i][0](queued[i][1]);
                 }
                 Bagel.internal.inputAction.queued = [];
+            }
+        },
+        triggerPluginListener: (type, game, value) => {
+            let listeners = game.internal.combinedPlugins.listeners[type];
+
+            if (listeners) {
+                let current = Bagel.internal.current;
+                Bagel.internal.saveCurrent();
+                current.game = game;
+                for (let i in listeners) {
+                    let listener = listeners[i];
+                    current.plugin = listener.plugin;
+                    listener.fn(value, game, listener.plugin);
+                }
+                Bagel.internal.loadCurrent();
             }
         },
 
