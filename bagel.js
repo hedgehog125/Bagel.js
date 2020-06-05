@@ -2656,7 +2656,8 @@ Bagel = {
                                 mode: "preload"
                             },
                             display: {
-                                dom: false
+                                dom: false,
+                                backgroundColour: "transparent"
                             }
                         };
                         if (loadingScreen.vars == null) {
