@@ -1,8 +1,7 @@
 /*
 TODO:
-Allow loading of other plugins
+Pause music on state change? Or stop? Use the new listener <================
 Update "step" function to work in different places. Steps should also be in more places
-Pause music on state change? Or stop?
 ctx.save and restore. How's it used in the renderer? Is it efficient?
 Continue retrying when assets don't load?
 Scripts not checked?
@@ -14,7 +13,6 @@ Disable alpha?
 Automatic clone recycling
 WebGL renderer
 More efficient clone checking
-Canvases aren't removed entirely?
 
 PLUGINS
 Sprites
@@ -42,9 +40,6 @@ Reserved ids
 Review closures
 Sounds not loading??? Sometimes...?
 Does the overwrite argument work?
-Touch inputs don't work. They throw errors
-generate.version sometimes doesn't exist???
-Files not updating sometimes? Not being removed maybe? Can't delete more than one from one .open? <========
 
 CREDITS
 Click, click release and mouse touch from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
@@ -888,6 +883,10 @@ Bagel = {
                                                             toCache.push(game.game.assets[assetType][i].src);
                                                         }
                                                     }
+                                                    for (let plugin in game.game.plugins) {
+                                                        toCache.push(game.game.plugins[plugin].src);
+                                                    }
+
                                                     if (args.icons[args.icons.length - 1] != "/") {
                                                         args.icons += "/";
                                                     }
@@ -1913,7 +1912,7 @@ Bagel = {
                     steps: {}
                 },
                 listeners: {
-                    state: (state, game) => {
+                    prepState: (state, game) => {
                         let scripts = game.internal.scripts.index.sprites.init[state];
                         if (scripts == null) return;
                         for (let i in scripts) {
@@ -1942,6 +1941,7 @@ Bagel = {
             current.plugin = plugin;
 
             plugin = subFunctions.check(game, plugin);
+            plugin.args = Bagel.internal.deepClone(args);
 
             // Combine all the plugins into one plugin
             let merge = subFunctions.merge;
@@ -2139,6 +2139,18 @@ Bagel = {
                 Bagel.internal.current.game = game;
 
                 subFunctions.scaleCanvas(game);
+
+                if (game.state != game.internal.lastPrepState) {
+                    Bagel.internal.triggerPluginListener("prepState", game, game.state);
+                    if (game.internal.assets.loading != 0) { // Something needs to load
+                        if (game.loaded) {
+                            game.loaded = false;
+                            Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                        }
+                    }
+                    game.internal.lastPrepState = game.state;
+                }
+
                 if (game.loaded) {
                     if (subFunctions.loaded(game)) { // Loading screen triggered
                         Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
@@ -2226,6 +2238,7 @@ Bagel = {
                             listeners: {}
                         }, // The plugins are combined as they're loaded
                         lastState: (! game.state),
+                        lastPrepState: (! game.state),
                         plugins: {}
                     };
 
@@ -2493,7 +2506,15 @@ Bagel = {
                 plugins: game => {
                     for (let i in game.game.plugins) {
                         let plugin = game.game.plugins[i];
-                        Bagel.internal.loadPlugin(plugin, game);
+                        game.internal.assets.loading++; // Not technically an asset but this stops the game loading until its done
+                        ((game, src, args) => {
+                            fetch(plugin.src).then(res => res.text().then(plugin => {
+                                game.internal.assets.loading--;
+                                game.internal.assets.loaded++;
+                                plugin = (new Function("return " + plugin))(); // Not entirely sure if this is good practice or not but it allows the functions to be parsed unlike JSON.parse
+                                Bagel.internal.loadPlugin(plugin, game, args);
+                            }));
+                        })(game, plugin.src);
                     }
                 },
                 assets: game => {
@@ -3589,8 +3610,6 @@ Bagel = {
                 game: {
                     required: false,
                     default: {},
-                    types: ["object"],
-                    description: "Where most of the properties are.",
                     subcheck: {
                         assets: {
                             required: false,
@@ -3662,8 +3681,29 @@ Bagel = {
                             },
                             types: ["object"],
                             description: "The object that contains all the game scripts (\"init\" and \"main\") that aren't for a sprite."
+                        },
+                        plugins: {
+                            required: false,
+                            default: [],
+                            arrayLike: true,
+                            subcheck: {
+                                src: {
+                                    required: true,
+                                    types: ["string"],
+                                    description: "The src of the plugin file. Should be a json or js file."
+                                },
+                                options: {
+                                    required: false,
+                                    types: ["object"],
+                                    description: "May not apply to all plugins but includes options for how they behave."
+                                }
+                            },
+                            types: ["array"],
+                            description: "The plugins to load for this game. Plugins enhance Bagel.js' abilities or make certain things easier."
                         }
-                    }
+                    },
+                    types: ["object"],
+                    description: "Where most of the properties are."
                 },
                 state: {
                     required: true,
@@ -4433,7 +4473,7 @@ Bagel = {
                             required: false,
                             default: {},
                             subcheck: {
-                                bagel: { // TODO: check
+                                bagel: {
                                     required: false,
                                     default: {},
                                     arrayLike: true,
@@ -4441,8 +4481,15 @@ Bagel = {
                                         fn: {
                                             required: false,
                                             subcheck: {
-                                                args: { // TODO: check?
-                                                    required: true,
+                                                args: {
+                                                    required: false,
+                                                    check: (value, ob) => {
+                                                        if (! ob.normal) {
+                                                            if (value == null) {
+                                                                return "Oops, looks like you missed this argument.";
+                                                            }
+                                                        }
+                                                    },
                                                     types: ["object"],
                                                     description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
                                                 },
@@ -4452,15 +4499,22 @@ Bagel = {
                                                     description: "The method itself. The arguments are the arguments (an object) and the plugin."
                                                 },
                                                 obArg: {
-                                                    required: true,
+                                                    required: false,
+                                                    check: (value, ob) => {
+                                                        if (! ob.normal) {
+                                                            if (value == null) {
+                                                                return "Oops, looks like you missed this argument.";
+                                                            }
+                                                        }
+                                                    },
                                                     types: ["boolean"],
                                                     description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
                                                 },
-                                                category: {
+                                                normal: {
                                                     required: false,
-                                                    default: "",
-                                                    types: ["string"],
-                                                    description: "If specified, an object will be created in \"Bagel\" and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
+                                                    default: false,
+                                                    types: ["boolean"],
+                                                    description: "If the method should just be a normal function. This can increase performance but obArg and args won't work anymore. You will also have to rely on Bagel.internal.current for finding out the current game, sprite, etc."
                                                 }
                                             },
                                             types: ["object"],
@@ -4475,72 +4529,120 @@ Bagel = {
                                     types: ["object"],
                                     description: "Contains framework functions. (Bagel.<function>...) The key is the name and the value is the function."
                                 },
-                                game: { // TODO: check
+                                game: {
                                     required: false,
                                     default: {},
                                     arrayLike: true,
-                                    /*
                                     subcheck: {
-                                        args: { // TODO: check?
-                                            required: true,
-                                            types: ["object"],
-                                            description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
-                                        },
                                         fn: {
-                                            required: true,
-                                            types: ["function"],
-                                            description: "The method itself. The arguments are the game, the arguments (an object) and the plugin."
-                                        },
-                                        obArg: {
-                                            required: true,
-                                            types: ["boolean"],
-                                            description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
+                                            required: false,
+                                            subcheck: {
+                                                args: {
+                                                    required: false,
+                                                    check: (value, ob) => {
+                                                        if (! ob.normal) {
+                                                            if (value == null) {
+                                                                return "Oops, looks like you missed this argument.";
+                                                            }
+                                                        }
+                                                    },
+                                                    types: ["object"],
+                                                    description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
+                                                },
+                                                fn: {
+                                                    required: true,
+                                                    types: ["function"],
+                                                    description: "The method itself. The arguments are the arguments (an object) and the plugin."
+                                                },
+                                                obArg: {
+                                                    required: false,
+                                                    check: (value, ob) => {
+                                                        if (! ob.normal) {
+                                                            if (value == null) {
+                                                                return "Oops, looks like you missed this argument.";
+                                                            }
+                                                        }
+                                                    },
+                                                    types: ["boolean"],
+                                                    description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
+                                                },
+                                                normal: {
+                                                    required: false,
+                                                    default: false,
+                                                    types: ["boolean"],
+                                                    description: "If the method should just be a normal function. This can increase performance but obArg and args won't work anymore. You will also have to rely on Bagel.internal.current for finding out the current game, sprite, etc."
+                                                }
+                                            },
+                                            types: ["object"],
+                                            description: "The method itself."
                                         },
                                         category: {
                                             required: false,
-                                            default: "",
-                                            types: ["string"],
-                                            description: "If specified, an object will be created in the game and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
+                                            types: ["object"],
+                                            description: "Contains categories where the key is the name of the category and their contents have the same syntax as here. Note: These aren't checked."
                                         }
                                     },
-                                    */
                                     types: ["object"],
                                     description: "Contains game functions. (Game.<function>...) The key is the name and the value is the function."
                                 },
-                                sprite: { // TODO: check
+                                sprite: {
                                     required: false,
                                     default: {},
-                                    /*
                                     arrayLike: true,
                                     subcheck: {
-                                        appliesTo: {
-                                            required: true,
-                                            types: ["array"],
-                                            description: "The sprite types that this method is added to."
-                                        },
-                                        args: { // TODO: check?
-                                            required: true,
-                                            types: ["object"],
-                                            description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
-                                        },
                                         fn: {
-                                            required: true,
-                                            types: ["function"],
-                                            description: "The method itself. The arguments are the sprite, the arguments (an object), the game and the plugin."
-                                        },
-                                        obArg: {
-                                            required: true,
-                                            types: ["boolean"],
-                                            description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
+                                            required: false,
+                                            subcheck: {
+                                                appliesTo: {
+                                                    required: true,
+                                                    types: ["array"],
+                                                    description: "The sprite types that this method is added to."
+                                                },
+                                                args: {
+                                                    required: false,
+                                                    check: (value, ob) => {
+                                                        if (! ob.normal) {
+                                                            if (value == null) {
+                                                                return "Oops, looks like you missed this argument.";
+                                                            }
+                                                        }
+                                                    },
+                                                    types: ["object"],
+                                                    description: "The syntax for the arguments. These is always an object, even if you set \"obArg\" to false."
+                                                },
+                                                fn: {
+                                                    required: true,
+                                                    types: ["function"],
+                                                    description: "The method itself. The arguments are the arguments (an object) and the plugin."
+                                                },
+                                                obArg: {
+                                                    required: false,
+                                                    check: (value, ob) => {
+                                                        if (! ob.normal) {
+                                                            if (value == null) {
+                                                                return "Oops, looks like you missed this argument.";
+                                                            }
+                                                        }
+                                                    },
+                                                    types: ["boolean"],
+                                                    description: "If the arguments should be inputted as an object or should use a normal function input. You probably only want to use the 2nd one if there aren't many arguments."
+                                                },
+                                                normal: {
+                                                    required: false,
+                                                    default: false,
+                                                    types: ["boolean"],
+                                                    description: "If the method should just be a normal function. This can increase performance but obArg and args won't work anymore. You will also have to rely on Bagel.internal.current for finding out the current game, sprite, etc."
+                                                }
+                                            },
+                                            types: ["object"],
+                                            description: "The method itself."
                                         },
                                         category: {
                                             required: false,
-                                            default: "",
-                                            types: ["string"],
-                                            description: "If specified, an object will be created in the sprites that this method applies to and this method will be in this object. This is good for grouping functions. You can also chain multiple categories by separating them with a dot."
+                                            types: ["object"],
+                                            description: "Contains categories where the key is the name of the category and their contents have the same syntax as here. Note: These aren't checked."
                                         }
                                     },
-                                    */
                                     types: ["object"],
                                     description: "Contains sprite functions. (me.<function>...) The key is the name and the value is the function."
                                 }
@@ -4608,10 +4710,15 @@ Bagel = {
                             required: false,
                             default: {},
                             subcheck: {
+                                prepState: {
+                                    required: false,
+                                    types: ["function"],
+                                    description: "Runs on the first frame of a new game state. Regardless of if the game's loaded or not. Any loading triggered here will be part of a loading screen."
+                                },
                                 state: {
                                     required: false,
                                     types: ["function"],
-                                    description: "The game state listener function. Triggers on the first frame with the new state from the start. Runs before init scripts and the loading screen."
+                                    description: "The game state listener function. Triggers on the first frame with the new state from the start. Runs before init scripts and the loading screen. Only runs once the game's loaded but can also trigger a loading screen by requesting or adding an asset."
                                 }
                             },
                             types: ["object"],
@@ -4795,7 +4902,11 @@ Bagel = {
                 let log = Bagel.internal.debug.logList;
                 let stringQueue = JSON.stringify(queue);
 
-                if (! log.includes(stringQueue)) {
+                if (log.includes(stringQueue)) {
+                    Bagel.internal.debug.queue = [];
+                    return false;
+                }
+                else {
                     log.push(stringQueue);
                     for (let i in queue) {
                         let item = queue[i];
@@ -4808,6 +4919,7 @@ Bagel = {
                     }
                 }
                 Bagel.internal.debug.queue = [];
+                return true;
             },
             queue: [],
             logList: []
@@ -5020,10 +5132,11 @@ Bagel = {
 
         if (otherErrors) {
             output.log("In " + args.where + ".");
-            output.log("Object:");
-            output.log(args.ob);
+            if (output.send()) {
+                console.log("Object:");
+                console.log(args.ob);
+            }
 
-            output.send();
             Bagel.internal.oops(args.game);
         }
         output.send();
