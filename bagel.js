@@ -30,6 +30,7 @@ Plugin id handling, prevent duplicates, what about game.internal.plugins?
 General tidy up
 Steps in other places. Especially listeners
 Finish the TODO descriptions
+Apple touch icons
 README
 Plugin conventions
 
@@ -3387,8 +3388,16 @@ Bagel = {
                         let layers = renderer.layers;
                         let handlers = game.internal.combinedPlugins.types.sprites;
 
-                        ctx.fillStyle = "white";
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        // Clear the canvas
+                        let clearStyle = game.config.display.backgroundColour;
+                        if (clearStyle == "transparent") {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        }
+                        else {
+                            ctx.fillStyle = clearStyle;
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        }
+
                         for (let spriteIndex in layers) {
                             let sprite = game.game.sprites[layers[spriteIndex]];
                             let handler = handlers[sprite.type];
@@ -3454,7 +3463,14 @@ Bagel = {
                         loading.loading = assets.loading;
 
 
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        let clearStyle = game.config.display.backgroundColour;
+                        if (clearStyle == "transparent") {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        }
+                        else {
+                            ctx.fillStyle = clearStyle;
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        }
                         ctx.drawImage(loadingScreen.internal.renderer.canvas, 0, 0, canvas.width, canvas.height);
                         if (loadingScreen.vars.loading.done) {
                             game.loaded = true;
@@ -3754,6 +3770,12 @@ Bagel = {
                                     required: false,
                                     types: ["string"],
                                     description: "An element to append the canvas to. If unspecified, it will be added to the document or body."
+                                },
+                                backgroundColour: {
+                                    required: false,
+                                    default: "white",
+                                    types: ["string"],
+                                    description: "The HTML colour for the canvas background. Can also be \"transparent\"."
                                 }
                             },
                             description: "Contains a few options for how the game is displayed."
