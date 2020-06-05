@@ -1,7 +1,5 @@
 /*
 TODO:
-Checks for "img" argument? Error if id is invalid, exclude null
-Change how assets work. Remove defaultFind, make it baked in etc. Remove standardChecks
 Allow loading of other plugins
 Update "step" function to work in different places. Steps should also be in more places
 Pause music on state change? Or stop?
@@ -88,25 +86,8 @@ Bagel = {
                 types: {
                     assets: {
                         imgs: {
-                            args: {
-                                id: {
-                                    required: true,
-                                    types: ["string"],
-                                    description: "The id to target the image by."
-                                },
-                                src: {
-                                    required: true,
-                                    types: ["string"],
-                                    description: "The src of the image."
-                                }
-                            },
+                            args: {},
                             description: "Images give a sprite (only the sprite type though) its appearance. Just set its \"img\" argument to the id of the image you want to use.",
-                            check: (asset, game, check, standardChecks, plugin, index) => {
-                                let error = standardChecks.id();
-                                if (error) return error;
-                                error = standardChecks.isInternal();
-                                if (error) return error;
-                            },
                             init: (asset, ready, game, plugin, index) => {
                                 let img = new Image();
                                 (img => {
@@ -122,25 +103,8 @@ Bagel = {
                             get: "img"
                         },
                         snds: {
-                            args: {
-                                id: {
-                                    required: true,
-                                    types: ["string"],
-                                    description: "The id to target the sound by."
-                                },
-                                src: {
-                                    required: true,
-                                    types: ["string"],
-                                    description: "The src of the sound."
-                                }
-                            },
-                            description: "Sounds can be played by anything. They're played using Game.playSound(<id>)",
-                            check: (asset, game, check, standardChecks, plugin, index) => {
-                                let error = standardChecks.id();
-                                if (error) return error;
-                                error = standardChecks.isInternal();
-                                if (error) return error;
-                            },
+                            args: {},
+                            description: "Sounds can be played by anything. They're played using game.playSound(<id>)",
                             init: (asset, ready, game, plugin, index) => {
                                 let snd = new Audio();
                                 snd.preload = "metadata";
@@ -364,7 +328,15 @@ Bagel = {
                                 ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
                                     if (sprite.img == null) return; // No image for this sprite
                                     let img = Bagel.get.asset.img(sprite.img, game, true);
-                                    if (typeof img == "boolean") return; // It's loading or it doesn't exist
+                                    if (typeof img == "boolean") { // It's loading or it doesn't exist
+                                        if (img) { // Loading
+
+                                        }
+                                        else { // Doesn't exist
+                                            console.error("Huh, the sprite " + JSON.stringify(sprite.id) + "'s image doesn't exist, it doesn't appear to be loading either. Check game.game.assets to make sure your asset is called " + JSON.stringify(sprite.img) + ", or change the sprite image to something else. (don't forget, it's case sensitive!)");
+                                            Bagel.internal.oops(game);
+                                        }
+                                    }
 
                                     ctx.globalAlpha = sprite.alpha;
 
@@ -2005,9 +1977,12 @@ Bagel = {
             asset = Bagel.check({
                 ob: asset,
                 where: where,
-                syntax: assetLoader.args
+                syntax: assetLoader.internal.args
             }, Bagel.internal.checks.disableArgCheck);
-            let error = assetLoader.check(asset, game, Bagel.internal.check, Bagel.internal.standardChecks.asset, plugin, i);
+            let error;
+            if (assetLoader.check) {
+                error = assetLoader.check(asset, game, Bagel.internal.check, plugin, i);
+            }
 
             if (error) {
                 Bagel.internal.loadCurrent();
@@ -2737,7 +2712,11 @@ Bagel = {
                                 if (merge) {
                                     combined.types.assets[newType] = typeJSON;
                                     combined.types.assets[newType].internal = {
-                                        plugin: plugin
+                                        plugin: plugin,
+                                        args: {
+                                            ...Bagel.internal.checks.assets,
+                                            ...typeJSON.args
+                                        }
                                     };
                                     combined.types.internal.pluralAssetTypes[typeJSON.get] = newType;
 
@@ -3559,52 +3538,6 @@ Bagel = {
             }
         },
 
-        standardChecks: {
-            asset: {
-                id: (id) => {
-                    let game = Bagel.internal.current.game;
-                    let asset = Bagel.internal.current.asset;
-                    let type = Bagel.internal.current.assetType;
-                    id = id == null? "id" : id;
-
-                    if (game.internal.assets.assets[type][asset[id]] != null) {
-                        return "Oh no! You used an id for an asset that's already being used. Maybe try something else.\nYou used "
-                        + JSON.stringify(game.game.assets[type][i][id])
-                        + " in GameJSON.game.assets." + type + " item " + index + ".";
-                    }
-                },
-                isInternal: (isInternal, id) => {
-                    let current = Bagel.internal.current;
-                    let asset = current.asset;
-                    let type = current.assetType;
-                    let where = current.where;
-                    let currentStack = Bagel.internal.currentStack;
-                    let lastPluginID = currentStack.length == 0? null : currentStack[currentStack.length - 1].plugin;
-                    if (lastPluginID) lastPluginID = lastPluginID.info.id;
-
-                    id = id == null? "id" : id;
-                    isInternal = isInternal == null? "isInternal" : isInternal;
-
-                    let prefix = asset[id].split(".")[1];
-                    if (asset[id][0] == ".") { // Reserved
-                        if (lastPluginID == null) {
-                            return "This is awkward... IDs starting with a dot are only for plugins. In "
-                            + where
-                            + ".\nIf it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
-                            + JSON.stringify(prefix)
-                            + " ;)";
-                        }
-                        else {
-                            if (prefix != lastPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
-                                return "Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + lastPluginID) + " and you tried to use the id " + JSON.stringify(asset[id]) + ". In "
-                                + where
-                                + ".\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".";
-                            }
-                        }
-                    }
-                }
-            }
-        },
         checks: {
             game: {
                 id: {
@@ -4182,7 +4115,7 @@ Bagel = {
                                             description: "The description of this asset type, make this short and clear to help people when they use the wrong syntax."
                                         },
                                         check: {
-                                            required: true,
+                                            required: false,
                                             types: ["function"],
                                             description: [
                                                 "Your check function for this asset type. ",
@@ -4693,6 +4626,18 @@ Bagel = {
                     default: {},
                     types: ["object"],
                     description: "An object you can use to store data for the sprite."
+                }
+            },
+            assets: {
+                id: {
+                    required: true,
+                    types: ["string"],
+                    description: "The id to target the asset by."
+                },
+                src: {
+                    required: true,
+                    types: ["string"],
+                    description: "The src of the asset. e.g \"assets/imgs/bagel.png\""
                 }
             },
             disableArgCheck: {args: true}
