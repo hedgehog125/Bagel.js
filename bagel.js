@@ -1,5 +1,6 @@
 /*
 TODO:
+Fix background colour for loading screen, fix text not showing on dark backgrounds <========
 Pause music on state change? Or stop? Use the new listener <================
 Update "step" function to work in different places. Steps should also be in more places
 ctx.save and restore. How's it used in the renderer? Is it efficient?
@@ -2667,7 +2668,8 @@ Bagel = {
                             progress: 0,
                             loaded: 0,
                             loading: game.internal.assets.loading,
-                            done: false
+                            done: false,
+                            game: game
                         };
 
                         loadingScreen = Bagel.init(loadingScreen);
@@ -3832,9 +3834,15 @@ Bagel = {
                                                     render: (me, game, ctx, canvas) => {
                                                         let img = me.vars.img;
                                                         let midPoint = canvas.width / 2;
-                                                        ctx.fillStyle = "white";
                                                         ctx.imageSmoothingEnabled = false;
 
+                                                        let gameConfig = game.vars.loading.game.config;
+                                                        if (gameConfig.display.backgroundColour == "transparent") {
+                                                            ctx.fillStyle = document.body.bgColor;
+                                                        }
+                                                        else {
+                                                            ctx.fillStyle = gameConfig.display.backgroundColour;
+                                                        }
                                                         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                                                         if (game.vars.stage == 0) {
@@ -3902,10 +3910,28 @@ Bagel = {
                                                         ]
                                                     },
                                                     render: (me, game, ctx, canvas) => {
+                                                        let backgroundColour = game.vars.loading.game.config.display.backgroundColour;
+                                                        if (backgroundColour == "transparent") {
+                                                            backgroundColour = document.body.bgColor;
+                                                        }
+                                                        ctx.fillStyle = backgroundColour;
+                                                        backgroundColour = ctx.fillStyle; // Makes it a hex colour
+                                                        
+                                                        let rgb = backgroundColour;
+                                                        let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
+                                                        if (brightness > 127) {
+                                                            ctx.fillStyle = "black";
+                                                        }
+                                                        else {
+                                                            ctx.fillStyle = "white";
+                                                        }
+
+
                                                         ctx.font = (canvas.height / 2) + "px Helvetica";
                                                         ctx.textBaseline = "middle";
 
                                                         let text = "Loading";
+                                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
                                                         ctx.fillText(text, (canvas.width / 2) - (ctx.measureText(text).width / 2), canvas.height / 2);
                                                     },
                                                     width: (me, game) => game.width,
