@@ -1,13 +1,5 @@
 /*
 TODO:
-Fix background colour for loading screen, fix text not showing on dark backgrounds <========
-Pause music on state change? Or stop? Use the new listener <================
-Update "step" function to work in different places. Steps should also be in more places
-ctx.save and restore. How's it used in the renderer? Is it efficient?
-Continue retrying when assets don't load?
-Scripts not checked?
-Offline handling while loading assets. Don't forget PWAs
-
 PERFORMANCE
 Prescale images on canvases?
 Disable alpha?
@@ -37,6 +29,7 @@ Plugin conventions
 
 
 TESTING
+Scripts and steps in plugins
 Reserved ids
 "All" game scripts
 Review closures
@@ -62,12 +55,14 @@ Bagel = {
 
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
         subFunctions.plugins(game);
-        subFunctions.assets(game);
         subFunctions.methods(game);
         subFunctions.initScripts(game);
         subFunctions.initSprites(game);
         subFunctions.preload(game);
-        subFunctions.loadingScreen(game);
+        if (game.config.loading.skip || document.readyState == "complete") {
+            subFunctions.assets(game);
+            subFunctions.loadingScreen(game);
+        }
 
         Bagel.internal.games[game.id] = game;
         Bagel.internal.loadCurrent();
@@ -89,11 +84,8 @@ Bagel = {
                                 let img = new Image();
                                 (img => {
                                     img.onload = () => {
-                                        ready({
-                                            img: img,
-                                            JSON: asset
-                                        });
-                                    }
+                                        ready(img);
+                                    };
                                 })(img);
                                 img.src = asset.src;
                             },
@@ -107,10 +99,7 @@ Bagel = {
                                 snd.preload = "metadata";
                                 (snd => {
                                     snd.onloadeddata = () => {
-                                        ready({
-                                            snd: snd,
-                                            JSON: asset
-                                        });
+                                        ready(snd);
                                     };
                                 })(snd);
                                 hmm = snd; // TODO. Debug. The bug means above doesn't trigger
@@ -327,7 +316,7 @@ Bagel = {
                                     let img = Bagel.get.asset.img(sprite.img, game, true);
                                     if (typeof img == "boolean") { // It's loading or it doesn't exist
                                         if (img) { // Loading
-
+                                            return; // Don't render it this frame, wait until it's loaded
                                         }
                                         else { // Doesn't exist
                                             console.error("Huh, the sprite " + JSON.stringify(sprite.id) + "'s image doesn't exist, it doesn't appear to be loading either. Check game.game.assets to make sure your asset is called " + JSON.stringify(sprite.img) + ", or change the sprite image to something else. (don't forget, it's case sensitive!)");
@@ -362,7 +351,8 @@ Bagel = {
                                     }
                                     ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
                                     ctx.globalAlpha = 1;
-                                }
+                                },
+                                clean: true
                             }
                         },
                         canvas: {
@@ -541,7 +531,8 @@ Bagel = {
                                     ctx.drawImage(sprite.canvas, sprite.x - (sprite.width / 2), sprite.y - (sprite.height / 2), sprite.width, sprite.height);
                                     ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
                                     ctx.globalAlpha = 1;
-                                }
+                                },
+                                clean: true
                             }
                         }
                     }
@@ -1925,6 +1916,14 @@ Bagel = {
                                 }
                             }
                         }
+
+                        // Pause all the audio
+                        let snds = game.internal.assets.assets.snds;
+                        if (snds) {
+                            for (i in snds) {
+                                snds[i].pause();
+                            }
+                        }
                     }
                 }
             },
@@ -2107,7 +2106,7 @@ Bagel = {
 
                     Bagel.internal.current.sprite = clone;
                     for (let i in clone.scripts.init) {
-                        clone.scripts.init[i](clone, game, Bagel.step);
+                        clone.scripts.init[i](clone, game, Bagel.step.sprite);
                     }
                     Bagel.internal.current.sprite = parent;
 
@@ -2135,41 +2134,43 @@ Bagel = {
             let subFunctions = Bagel.internal.subFunctions.tick;
 
             let totalStart = new Date();
-            for (let i in Bagel.internal.games) {
-                let start = new Date();
-                let game = Bagel.internal.games[i];
-                Bagel.internal.current.game = game;
+            if (document.readyState == "complete") {
+                for (let i in Bagel.internal.games) {
+                    let start = new Date();
+                    let game = Bagel.internal.games[i];
+                    Bagel.internal.current.game = game;
 
-                subFunctions.scaleCanvas(game);
+                    subFunctions.scaleCanvas(game);
 
-                if (game.state != game.internal.lastPrepState) {
-                    Bagel.internal.triggerPluginListener("prepState", game, game.state);
-                    if (game.internal.assets.loading != 0) { // Something needs to load
-                        if (game.loaded) {
-                            game.loaded = false;
+                    if (game.state != game.internal.lastPrepState) {
+                        Bagel.internal.triggerPluginListener("prepState", game, game.state);
+                        if (game.internal.assets.loading != 0) { // Something needs to load
+                            if (game.loaded) {
+                                game.loaded = false;
+                                Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                            }
+                        }
+                        game.internal.lastPrepState = game.state;
+                    }
+
+                    if (game.loaded) {
+                        if (subFunctions.loaded(game)) { // Loading screen triggered
                             Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                            subFunctions.loading(game);
                         }
                     }
-                    game.internal.lastPrepState = game.state;
-                }
-
-                if (game.loaded) {
-                    if (subFunctions.loaded(game)) { // Loading screen triggered
-                        Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                    else {
                         subFunctions.loading(game);
                     }
-                }
-                else {
-                    subFunctions.loading(game);
-                }
 
-                let now = new Date();
-                game.internal.FPSFrames++;
-                game.maxPossibleFPS = 1000 / (now - start);
-                if (now - game.internal.lastFPSUpdate >= 1000) {
-                    game.currentFPS = game.internal.FPSFrames;
-                    game.internal.FPSFrames = 0;
-                    game.internal.lastFPSUpdate = now;
+                    let now = new Date();
+                    game.internal.FPSFrames++;
+                    game.maxPossibleFPS = 1000 / (now - start);
+                    if (now - game.internal.lastFPSUpdate >= 1000) {
+                        game.currentFPS = game.internal.FPSFrames;
+                        game.internal.FPSFrames = 0;
+                        game.internal.lastFPSUpdate = now;
+                    }
                 }
             }
             Bagel.internal.current.game = null;
@@ -2469,7 +2470,7 @@ Bagel = {
                                         let script = sprite.scripts.init[i];
                                         if (script.stateToRun == game.state) {
                                             if (typeof script.code == "function") {
-                                                script.code(sprite, game, Bagel.step);
+                                                script.code(sprite, game, Bagel.step.sprite);
                                             }
                                         }
                                     }
@@ -2643,7 +2644,7 @@ Bagel = {
                     }
                 },
                 loadingScreen: game => {
-                    if (! (game.config.loading.skip || game.loaded)) {
+                    if (! game.config.loading.skip) {
                         Bagel.internal.saveCurrent();
                         Bagel.internal.current.plugin = game.internal.plugins.Internal;
 
@@ -2689,6 +2690,12 @@ Bagel = {
                             else {
                                 document.appendChild(game.internal.renderer.canvas);
                             }
+                        }
+                    }
+                    if (! game.config.loading.skip) {
+                        Bagel.internal.subFunctions.init.assets(game); // The page has to have loaded before loading the assets so as not to delay the page load
+                        if (game.config.loading.mode == "preload") {
+                            Bagel.internal.subFunctions.init.loadingScreen(game);
                         }
                     }
                 }
@@ -2759,7 +2766,13 @@ Bagel = {
 
                                             let assets = current.game.internal.assets;
                                             let loadedAssets = assets.assets[current.assetType];
-                                            if (loadedAssets[id] == null) { // Invalid id
+                                            let doesntExist = true;
+                                            if (loadedAssets) {
+                                                if (loadedAssets[id]) {
+                                                    doesntExist = false;
+                                                }
+                                            }
+                                            if (doesntExist) { // Invalid id
                                                 let exists = assets.toLoad[plural];
                                                 if (exists) exists = exists[id];
                                                 if (exists) {
@@ -2781,7 +2794,7 @@ Bagel = {
                                                     Bagel.internal.oops(current.game);
                                                 }
                                             }
-                                            let asset = loadedAssets[id][current.assetTypeName];
+                                            let asset = loadedAssets[id];
                                             Bagel.internal.loadCurrent();
                                             return asset;
                                         };
@@ -3344,7 +3357,7 @@ Bagel = {
                                 code = sprite.scripts[type][scriptInfo.script].code;
                             }
                             if (typeof code == "function") {
-                                code(sprite, game, Bagel.step);
+                                code(sprite, game, Bagel.step.sprite);
                             }
                         }
                         else {
@@ -3355,7 +3368,7 @@ Bagel = {
                             else {
                                 code = game.game.scripts[type][scriptInfo.script].code;
                             }
-                            code(game, Bagel.step);
+                            code(game, Bagel.step.sprite);
                         }
                     }
                 },
@@ -3407,6 +3420,9 @@ Bagel = {
 
                             if (sprite.visible) {
                                 if (handler.render != null) {
+                                    if (! handler.render.clean) {
+                                        ctx.save();
+                                    }
                                     handler.render.ctx(
                                         sprite,
                                         ctx,
@@ -3416,6 +3432,9 @@ Bagel = {
                                         scaleX,
                                         scaleY
                                     );
+                                    if (! handler.render.clean) {
+                                        ctx.restore();
+                                    }
                                 }
                             }
                         }
@@ -3461,7 +3480,12 @@ Bagel = {
                         let assets = game.internal.assets;
                         let loading = loadingScreen.vars.loading;
 
-                        loading.progress = (assets.loaded / (assets.loading + assets.loaded)) * 100;
+                        if (assets.loaded == 0) {
+                            loading.progress = 0; // 0/0 == NaN
+                        }
+                        else {
+                            loading.progress = (assets.loaded / (assets.loading + assets.loaded)) * 100;
+                        }
                         loading.loaded = assets.loaded;
                         loading.loading = assets.loading;
 
@@ -3687,7 +3711,6 @@ Bagel = {
                                 all: {
                                     required: false,
                                     default: [],
-                                    arrayLike: true,
                                     check: value => {
                                         if (typeof value != "function") {
                                             return "Huh. This should be a function but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
@@ -3857,7 +3880,7 @@ Bagel = {
                                                                     game.vars.angle = maxAngle;
                                                                 }
                                                             }
-                                                            if (game.vars.loading.loading == 0 && game.vars.velocity == 0) {
+                                                            if (game.vars.loading.progress == 100 && game.vars.velocity == 0) {
                                                                 game.vars.stage++;
                                                                 return;
                                                             }
@@ -3916,7 +3939,7 @@ Bagel = {
                                                         }
                                                         ctx.fillStyle = backgroundColour;
                                                         backgroundColour = ctx.fillStyle; // Makes it a hex colour
-                                                        
+
                                                         let rgb = backgroundColour;
                                                         let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
                                                         if (brightness > 127) {
@@ -4007,18 +4030,56 @@ Bagel = {
                             init: {
                                 required: false,
                                 default: [],
+                                subcheck: {
+                                    code: {
+                                        required: true,
+                                        types: [
+                                            "function",
+                                            "undefined"
+                                        ],
+                                        description: "The code to be run when the \"stateToRun\" property matches the game state."
+                                    },
+                                    stateToRun: {
+                                        required: true,
+                                        types: ["string"],
+                                        description: "The state when this script will be run."
+                                    }
+                                },
+                                arrayLike: true,
                                 types: ["array"],
                                 description: "Contains init scripts. They run when the game state first changes to the script's state."
                             },
                             main: {
                                 required: false,
                                 default: [],
+                                arrayLike: true,
+                                subcheck: {
+                                    code: {
+                                        required: true,
+                                        types: [
+                                            "function",
+                                            "undefined"
+                                        ],
+                                        description: "The code to be run when the \"stateToRun\" property matches the game state."
+                                    },
+                                    stateToRun: {
+                                        required: true,
+                                        types: ["string"],
+                                        description: "The state when this script will be run."
+                                    }
+                                },
                                 types: ["array"],
                                 description: "Contains main scripts. They run for every frame where the script's state and the game's state match."
                             },
                             all: {
                                 required: false,
                                 default: [],
+                                check: value => {
+                                    if (typeof value != "function") {
+                                        return "Huh. This should be a function but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                    }
+                                },
+                                checkEach: true,
                                 types: ["array"],
                                 description: "Contains \"all\" scripts. They run on every frame and aren't affected by the game state."
                             },
@@ -4236,11 +4297,9 @@ Bagel = {
                                                 "(asset, ready, game, plugin, index) => {",
                                                 "    let img = new Image();",
                                                 "    img.onload = () => {",
-                                                "        ready({;",
-                                                "            img: img,",
-                                                "            JSON: asset",
-                                                "        });",
+                                                "        ready(img);",
                                                 "    };",
+                                                "   img.src = \"foo\";",
                                                 "};"
                                             ].join("\n")
                                         },
@@ -4386,8 +4445,14 @@ Bagel = {
                                                 steps: { // TODO: How should these be checked?
                                                     required: false,
                                                     default: {},
+                                                    check: value => {
+                                                        if (typeof value != "function") {
+                                                            return "Oops, steps can only be functions. You used " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                                        }
+                                                    },
+                                                    checkEach: true,
                                                     types: ["object"],
-                                                    description: "Short functions that do a task. Can be called from any of the other functions using \"Bagel.step(<step id>)\"."
+                                                    description: "Short functions that do a task. Can be called from any of the other functions using \"Bagel.step.plugin.spriteListener(<step id>)\"."
                                                 },
                                                 fns: {
                                                     required: false,
@@ -4499,10 +4564,16 @@ Bagel = {
                                                     },
                                                     types: ["object"],
                                                     description: "The webgl renderer. Runs every frame. Contains \"shaders\" and an optional \"render\" function which allows for extra processing before the vertex and fragment shaders are run."
+                                                },
+                                                clean: {
+                                                    required: false,
+                                                    default: false,
+                                                    types: ["boolean"],
+                                                    description: "If the ctx settings are returned to normal by the render functions. Ideally, ctx.save and ctx.restore should be avoided and this should be set to true."
                                                 }
                                             },
                                             types: ["object"],
-                                            description: "The render functions for this sprite type. Ideally should have both a webgl renderer and a fallback ctx renderer."
+                                            description: "The render functions for this sprite type. Ideally should have both a webgl renderer and a fallback ctx renderer. For maximum performance, \"clean\" should be set to true and ctx.save and ctx.restore should be avoided (but ctx settings must be reset to what they were before after rendering)"
                                         }
                                     },
                                     types: ["object"],
@@ -4749,7 +4820,7 @@ Bagel = {
                                     },
                                     checkEach: true,
                                     types: ["object"],
-                                    description: "Mini functions. They can help make your code clearer by spitting functions into the individual steps. Can use them with \"Bagel.step\" or the step function provided with the script."
+                                    description: "Mini functions. They can help make your code clearer by spitting functions into the individual steps. Can use them with \"Bagel.step.plugin.scripts\" or the step function provided with the script."
                                 }
                             },
                             types: ["object"],
@@ -4978,7 +5049,6 @@ Bagel = {
 
     // == Methods ==
     check: (args, disableChecks, where, logObject) => {
-        //console.trace(args, args.where)
         // TODO: is where needed?
         if (! disableChecks) disableChecks = {};
         if (! (args.prev || disableChecks.args)) { // TODO: allow subcheck, check etc. arguments?
@@ -5276,14 +5346,58 @@ Bagel = {
             return game.game.sprites[game.internal.idIndex[id]];
         }
     },
-    step: id => {
-            // TODO: Error if it's outside of a game or sprite. Error if no script
+    step: {
+        sprite: id => {
+            let current = Bagel.internal.current;
+            let game = current.game;
+            let sprite = current.sprite;
+            if (sprite == null) {
+                console.error("Oops, this must be run in a sprite script.");
+                Bagel.internal.oops(game);
+            }
+            let step = sprite.scripts.steps[id];
+            if (step == null) {
+                console.error("Huh, the step " + JSON.stringify(id) + " doesn't exist in the sprite " + JSON.stringify(sprite.id) + ".");
+                Bagel.internal.oops(game);
+            }
 
-            let game = Bagel.internal.current.game;
-            let me = Bagel.internal.current.sprite;
-
-            return me.scripts.steps[id](me, game, Bagel.step);
+            return step(sprite, game, Bagel.step.sprite);
         },
+        plugin: {
+            scripts: id => {
+                let current = Bagel.internal.current;
+                let game = current.game;
+                let plugin = current.plugin;
+                if (plugin == null) {
+                    console.error("Oops, this must be run inside a plugin.");
+                    Bagel.internal.oops(game);
+                }
+                let step = plugin.scripts.steps[id];
+                if (step == null) {
+                    console.error("Huh, the step " + JSON.stringify(id) + " doesn't exist in plugin " + plugin.info.id + ".");
+                    Bagel.internal.oops(game);
+                }
+
+                return step(plugin, game, Bagel.step.plugin.scripts);
+            },
+            spriteListener: id => { // TODO: finish
+                let current = Bagel.internal.current;
+                let game = current.game;
+                let plugin = current.plugin;
+                if (plugin == null) {
+                    console.error("Oops, this must be run inside a plugin.");
+                    Bagel.internal.oops(game);
+                }
+                let step = plugin.scripts.steps[id];
+                if (step == null) {
+                    console.error("Huh, the step " + JSON.stringify(id) + " doesn't exist in plugin " + plugin.info.id + ".");
+                    Bagel.internal.oops(game);
+                }
+
+                return step(plugin, game, Bagel.step.plugin.scripts);
+            }
+        }
+    },
     config: {
         flags: {
             warnOfUselessParameters: true
