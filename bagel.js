@@ -1,9 +1,8 @@
 /*
 TODO:
-stopSound
-
 PERFORMANCE
-Prescale images on canvases?
+Laggy on firefox? Large canvases could be the issue?
+Prescale images on canvases? Prerotate? Before = 42 FPS, 1500 bagels, js console closed
 Disable alpha?
 Automatic clone recycling
 WebGL renderer
@@ -330,6 +329,19 @@ Bagel = {
                                         if (typeof value == "function") {
                                             sprite[property] = value(sprite, game); // Avoid the setter
                                         }
+                                    },
+                                    prerender: (sprite, value, property, game, plugin, triggerSprite) => {
+                                        if (sprite.img == null) return; // No image for this sprite
+                                        let img = Bagel.get.asset.img(sprite.img, game, true);
+                                        if (typeof img == "boolean") { // It's loading or it doesn't exist
+                                            return;
+                                        }
+                                        let canvas = triggerSprite.internal.preRenderCanvas;
+                                        let ctx = triggerSprite.internal.preRenderCtx;
+
+                                        canvas.width = triggerSprite.width * triggerSprite.internal.scaleX;
+                                        canvas.height = triggerSprite.height * triggerSprite.internal.scaleY;
+                                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                                     }
                                 },
                                 property: {
@@ -340,10 +352,12 @@ Bagel = {
                                         get: "xy"
                                     },
                                     width: {
-                                        get: "dimensions"
+                                        get: "dimensions",
+                                        set: "prerender"
                                     },
                                     height: {
-                                        get: "dimensions"
+                                        get: "dimensions",
+                                        set: "prerender"
                                     },
                                     scale: {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
@@ -351,12 +365,15 @@ Bagel = {
                                             triggerSprite.height = value + "x";
                                         },
                                         get: (sprite, value, property, game, plugin) => {
-                                            let img = Bagel.get.asset.img(value);
+                                            let img = Bagel.get.asset.img(sprite.img);
                                             let scaleX = sprite.width / img.width;
                                             let scaleY = sprite.height / img.height;
 
                                             sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
                                         }
+                                    },
+                                    img: {
+                                        set: "prerender"
                                     },
                                     angle: {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
@@ -381,7 +398,11 @@ Bagel = {
                                     collision: null
                                 };
 
-                                sprite.internal.cache = {};
+                                let internal = sprite.internal;
+                                internal.cache = {};
+                                internal.preRenderCanvas = document.createElement("canvas");
+                                internal.preRenderCtx = internal.preRenderCanvas.getContext("2d");
+
                                 sprite.angle = sprite.internal.properties.angle; // Trigger the setter
                             },
                             render: { // How do I render this type?
@@ -398,27 +419,35 @@ Bagel = {
                                         }
                                     }
 
+                                    if (sprite.internal.scaleX != scaleX || sprite.internal.scaleY != scaleY) {
+                                        sprite.internal.scaleX = scaleX;
+                                        sprite.internal.scaleY = scaleY;
+                                        sprite.width = sprite.internal.properties.width; // Trigger the setter to prerender it
+                                    }
+                                    sprite.internal.scaleX = scaleX;
+                                    sprite.internal.scaleY = scaleY;
+
                                     ctx.globalAlpha = sprite.alpha;
 
                                     let flipX = sprite.width >= 0? 1 : -1;
                                     let flipY = sprite.height >= 0? 1 : -1;
-                                    scaleX = scaleX * flipX;
-                                    scaleY = scaleY * flipY;
-                                    ctx.scale(scaleX, scaleY);
+                                    //scaleX = scaleX * flipX;
+                                    //scaleY = scaleY * flipY;
+                                    ctx.scale(flipX, flipY);
 
                                     let halfWidth = sprite.width / 2;
                                     let halfHeight = sprite.height / 2;
-                                    if (sprite.angle == 90) { // Don't rotate if we don't need to. TODO: test
-                                        ctx.drawImage(img, sprite.x - halfWidth, sprite.y - halfHeight, sprite.width, sprite.height);
+                                    if (sprite.angle == 90) {
+                                        ctx.drawImage(sprite.internal.preRenderCanvas, (sprite.x - halfWidth) * scaleX, (sprite.y - halfHeight) * scaleY);
                                     }
                                     else {
                                         let angle = Bagel.maths.degToRad(sprite.angle - 90);
-                                        let x = sprite.x;
-                                        let y = sprite.y;
+                                        let x = sprite.x * scaleX;
+                                        let y = sprite.y * scaleY;
 
                                         ctx.translate(x, y);
                                         ctx.rotate(angle);
-                                        ctx.drawImage(img, -halfWidth, -halfHeight, sprite.width, sprite.height);
+                                        ctx.drawImage(sprite.internal.preRenderCanvas, (-halfWidth) * scaleX, (-halfHeight) * scaleY);
 
                                         ctx.rotate(-angle);
                                         ctx.translate(-x, -y);
@@ -1484,6 +1513,21 @@ Bagel = {
                                             })(plugin);
                                         }
                                     }
+                                }
+                            }
+                        },
+                        stopSound: {
+                            fn: {
+                                obArg: false,
+                                args: {
+                                    id: {
+                                        required: true,
+                                        types: ["string"],
+                                        description: "The id of the sound to stop."
+                                    }
+                                },
+                                fn: (game, args, plugin) => {
+                                    Bagel.get.asset.snd(args.id, game).stop();
                                 }
                             }
                         }
