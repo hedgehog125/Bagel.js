@@ -1,5 +1,7 @@
 /*
 TODO:
+stopSound
+
 PERFORMANCE
 Prescale images on canvases?
 Disable alpha?
@@ -108,6 +110,78 @@ Bagel = {
                             },
                             get: "snd",
                             forcePreload: true // Only the metadata is loaded anyway
+                        },
+                        spritesheets: {
+                            args: {
+                                frames: {
+                                    required: true,
+                                    check: value => {
+                                        if (typeof value != "number") {
+                                            return "Oops, this should be a number and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                        }
+                                    },
+                                    checkEach: true,
+                                    types: ["array"],
+                                    description: "How many frames there are for each animation. Animation frames go along the x axis."
+                                },
+                                animations: {
+                                    required: true,
+                                    check: value => {
+                                        if (typeof value != "string") {
+                                            return "Oops, this should be a string and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                        }
+                                    },
+                                    checkEach: true,
+                                    types: ["array"],
+                                    description: "The names of the different animations. Separate animations go down the y axis."
+                                }
+                            },
+                            init: (asset, ready, game, plugin, index) => {
+                                let img = new Image();
+                                ((img, asset, game) => {
+                                    img.onload = () => {
+                                        let maxWidth = 0;
+                                        for (let i in asset.frames) {
+                                            if (asset.frames[i] > maxWidth) {
+                                                maxWidth = asset.frames[i];
+                                            }
+                                        }
+                                        if (img.width % maxWidth != 0) {
+                                            console.warn("The image width isn't divisible by the \"frames\" argument. You should probably check if both of them're correct.");
+                                        }
+                                        if (img.height % asset.animations.length) {
+                                            console.warn("The image height isn't divisible by the length of the \"animations\" argument. You should probably check if both of them're correct.");
+                                        }
+
+                                        let width = img.width / maxWidth;
+                                        let height = img.height / asset.animations.length;
+                                        let assets = game.internal.assets.assets;
+
+                                        let y = 0;
+                                        while (y < asset.animations.length) {
+                                            let name = asset.animations[y];
+                                            let x = 0;
+                                            while (x < asset.frames[y]) {
+                                                let id = asset.id + "." + name + "." + x;
+                                                let canvas = document.createElement("canvas");
+                                                canvas.width = width;
+                                                canvas.height = height;
+                                                let ctx = canvas.getContext("2d");
+                                                ctx.drawImage(img, -(x * width), -(y * height));
+
+                                                if (assets.imgs == null) assets.imgs = {};
+                                                assets.imgs[id] = canvas;
+                                                x++;
+                                            }
+                                            y++;
+                                        }
+                                        ready();
+                                    };
+                                })(img, asset, game);
+                                img.src = asset.src;
+                            },
+                            description: "Contains many separate images. Useful for animations.",
+                            get: "spritesheet"
                         }
                     },
                     sprites: {
@@ -1915,6 +1989,22 @@ Bagel = {
                                     Bagel.get.asset.img(sprite.img, game, true); // Requesting it will trigger loading
                                 }
                             }
+                            if (sprite.request[state]) {
+                                for (let type in sprite.request[state]) {
+                                    let singular = game.internal.combinedPlugins.types.assets[type];
+                                    if (singular == null) {
+                                        console.error("Oops, the (plural) asset type " + JSON.stringify(type) + " doesn't exist in this game.");
+                                        console.log("These are the only types:");
+                                        console.log(Object.keys(game.internal.combinedPlugins.types.assets).join("\n"));
+                                        Bagel.internal.oops(game);
+                                    }
+
+                                    singular = singular.get;
+                                    for (let i in sprite.request[state][type]) {
+                                        Bagel.get.asset[singular](sprite.request[state][type][i], game, true); // Requesting it will trigger loading
+                                    }
+                                }
+                            }
                         }
 
                         // Pause all the audio
@@ -1965,6 +2055,10 @@ Bagel = {
             current.game = game;
 
             let assetLoader = game.internal.combinedPlugins.types.assets[type];
+            if (assetLoader == null) {
+                console.warn("The asset type " + JSON.stringify(type) + " doesn't appear to exist for this game. You might want to check that the plugin that adds it's been loaded. In the game " + JSON.stringify(game.id) + ".game.assets." + type + " item " + i + ".");
+                return;
+            }
             let loadNow = game.config.loading.mode != "dynamic" || forceLoad || assetLoader.forcePreload;
             let plugin = assetLoader.internal.plugin;
             current.plugin = plugin;
@@ -2527,7 +2621,7 @@ Bagel = {
 
                         for (let i in assets) {
                             let asset = assets[i];
-                            Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i);
+                            Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i, i);
                         }
                     }
                     if (game.internal.assets.loading == 0) {
@@ -4098,6 +4192,12 @@ Bagel = {
                         default: {},
                         types: ["object"],
                         description: "An object you can use to store data for the sprite."
+                    },
+                    request: {
+                        required: false,
+                        default: {},
+                        types: ["object"],
+                        description: "Contains assets the sprite needs before it becomes active. Used as part of dynamic loading. The keys are the game states and the values are an object with the keys being the asset type (plural) and the value being an array of the assets of that type that need to be loaded."
                     }
                 },
                 clones: {
