@@ -1,7 +1,7 @@
 /*
 TODO:
+check plugin sprite args
 PERFORMANCE
-Automatic clone recycling
 WebGL renderer
 More efficient clone checking
 
@@ -231,6 +231,11 @@ Bagel = {
                                     ],
                                     description: "The height for the sprite. Defaults to the height of the image. You can also set it to a multiple of the image height by setting it to \"1x\", \"2x\", etc."
                                 },
+                                scale: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "The scale of the sprite. If both the width and height are unspecified, the sprite width and height are set to the image width and height multiplied by the scale."
+                                },
                                 visible: {
                                     required: false,
                                     default: true,
@@ -285,6 +290,12 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
+                                scale: {
+                                    syntax: {
+                                        description: "The scale of the clone. If both the width and height are unspecified, the sprite width and height are set to the image width and height multiplied by the scale."
+                                    },
+                                    mode: "replace"
+                                },
                                 visible: {
                                     syntax: {
                                         description: "Determines if the clone is visible or not."
@@ -310,23 +321,64 @@ Bagel = {
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
+                                                return;
                                             }
                                         }
                                         if (typeof value == "function") {
                                             sprite[property] = value(sprite, game); // Avoid the setter
+                                            return;
                                         }
+                                        if (typeof value == "number") return;
+
+                                        // It's invalid if it wasn't any of those valid values
+                                        console.error("Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        Bagel.internal.oops(game);
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite) => {
                                         if (typeof value == "string") {
                                             if (value.includes("x")) {
                                                 let scale = parseFloat(value.split("x")[0]);
 
-                                                sprite[property] = Bagel.get.asset.img(triggerSprite.img)[property] * scale;
+                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                                sprite[property] = img[property] * scale;
+
+                                                // Update the scale
+                                                let scaleX = sprite.width / img.width;
+                                                let scaleY = sprite.height / img.height;
+                                                sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                                return;
                                             }
                                         }
                                         if (typeof value == "function") {
                                             sprite[property] = value(sprite, game); // Avoid the setter
+
+                                            let img = Bagel.get.asset.img(triggerSprite.img);
+                                            // Update the scale
+                                            let scaleX = sprite.width / img.width;
+                                            let scaleY = sprite.height / img.height;
+                                            sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                            return;
                                         }
+                                        if (typeof value == "number") {
+                                            let img = Bagel.get.asset.img(triggerSprite.img);
+                                            // Update the scale
+                                            let scaleX = sprite.width / img.width;
+                                            let scaleY = sprite.height / img.height;
+                                            sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                            return;
+                                        };
+                                        if (value == null) {
+                                            if (sprite.scale) {
+                                                triggerSprite[property] = sprite.scale + "x"; // It's triggerSprite so it becomes a number
+                                            }
+                                            else {
+                                                triggerSprite[property] = "1x";
+                                            }
+                                            return;
+                                        }
+
+                                        console.error("Hmm. This can only be a function, a multiple of its image " + property + " (e.g 1x, 2x, 0.3x etc.) or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        Bagel.internal.oops(game);
                                     }
                                 },
                                 property: {
@@ -344,15 +396,16 @@ Bagel = {
                                     },
                                     scale: {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
-                                            triggerSprite.width = value + "x";
-                                            triggerSprite.height = value + "x";
-                                        },
-                                        get: (sprite, value, property, game, plugin) => {
-                                            let img = Bagel.get.asset.img(value);
-                                            let scaleX = sprite.width / img.width;
-                                            let scaleY = sprite.height / img.height;
-
-                                            sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                            if (value != null) {
+                                                if (typeof value == "number") {
+                                                    triggerSprite.width = value + "x";
+                                                    triggerSprite.height = value + "x";
+                                                }
+                                                else {
+                                                    console.error("Erm, this can only be a number. In the sprite " + JSON.stringify(triggerSprite.id) + ".scale. You tried to set it to " + JSON.stringify(value) + ".");
+                                                    Bagel.internal.oops(game);
+                                                }
+                                            }
                                         }
                                     },
                                     angle: {
@@ -378,13 +431,6 @@ Bagel = {
                                     collision: null
                                 };
                                 sprite.internal.cache = {};
-
-                                let values = sprite.internal.properties;
-                                sprite.x = values.x;
-                                sprite.y = values.y;
-                                sprite.width = values.height;
-                                sprite.height = values.height;
-                                sprite.angle = values.angle;
                             },
                             render: { // How do I render this type?
                                 ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
@@ -546,32 +592,45 @@ Bagel = {
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
+                                                return;
                                             }
                                         }
                                         if (typeof value == "function") {
                                             sprite[property] = value(sprite, game); // Avoid the setter
+                                            return;
                                         }
+                                        if (typeof value == "number") return;
+
+                                        // It's invalid if it wasn't any of those valid values
+                                        console.error("Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        Bagel.internal.oops(game);
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite) => {
                                         if (typeof value == "function") {
                                             sprite[property] = value(sprite, game); // Avoid the setter
+                                            return;
                                         }
+                                        if (typeof value == "number") return;
+
+                                        console.error("Oops, this can only be a function or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        Bagel.internal.oops(game);
                                     }
                                 },
                                 property: {
                                     x: {
-                                        get: "xy"
+                                        set: "xy"
                                     },
                                     y: {
-                                        get: "xy"
+                                        set: "xy"
                                     },
                                     width: {
-                                        get: "dimensions"
+                                        set: "dimensions"
                                     },
                                     height: {
-                                        get: "dimensions"
+                                        set: "dimensions"
                                     }
-                                }
+                                },
+                                trigger: true
                             },
                             description: "A \"2d\" canvas sprite. Anything rendered onto the canvas gets rendered onto the main canvas.",
                             init: (sprite, game) => {
@@ -3233,9 +3292,28 @@ Bagel = {
                 },
                 init: (sprite, game) => {
                     let current = Bagel.internal.current;
-
+                    Bagel.internal.saveCurrent();
+                    current.sprite = sprite;
+                    current.game = game;
                     let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+                    let plugin = handler.internal.plugin;
+                    current.plugin = plugin;
+
                     handler.init(sprite, game, current.plugin);
+                    if (handler.listeners.trigger) { // Trigger all the listeners to initialise them
+                        for (let property in handler.listeners.property) {
+                            let listener = handler.listeners.property[property];
+                            if (listener.set) { // Only the "set" listeners are triggered
+                                let error = listener.set(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite);
+
+                                if (error) {
+                                    console.error(error);
+                                    Bagel.internal.oops(game);
+                                }
+                            }
+                        }
+                    }
+                    Bagel.internal.loadCurrent();
                 },
                 register: {
                     scripts: (type, sprite, game, parent) => {
@@ -4574,7 +4652,7 @@ Bagel = {
                                             required: false,
                                             default: {},
                                             subcheck: {
-                                                steps: { // TODO: How should these be checked?
+                                                steps: {
                                                     required: false,
                                                     default: {},
                                                     check: value => {
@@ -4589,6 +4667,12 @@ Bagel = {
                                                 fns: {
                                                     required: false,
                                                     default: {},
+                                                    check: value => {
+                                                        if (typeof value != "function") {
+                                                            return "Oops, functions can only be, well... functions. You used " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                                        }
+                                                    },
+                                                    checkEach: true,
                                                     types: ["object"],
                                                     description: "Functions that can replace the functions in listeners. The key is the id for it. The id can be used in place of this function in listeners."
                                                 },
@@ -4634,6 +4718,12 @@ Bagel = {
                                                     arrayLike: true,
                                                     types: ["object"],
                                                     description: "Contains the \"set\" and \"get\" listener functions."
+                                                },
+                                                trigger: {
+                                                    required: false,
+                                                    default: false,
+                                                    types: ["boolean"],
+                                                    description: "If the listeners should be triggered during sprite initialisation. This can be useful in some situations."
                                                 }
                                             },
                                             types: ["object"],
