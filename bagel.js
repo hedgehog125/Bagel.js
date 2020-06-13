@@ -1,10 +1,6 @@
 /*
 TODO:
-stopSound
-
 PERFORMANCE
-Prescale images on canvases?
-Disable alpha?
 Automatic clone recycling
 WebGL renderer
 More efficient clone checking
@@ -58,6 +54,7 @@ Bagel = {
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
         subFunctions.plugins(game);
         subFunctions.methods(game);
+        subFunctions.assets(game, true);
         subFunctions.initScripts(game);
         subFunctions.initSprites(game);
         subFunctions.preload(game);
@@ -334,16 +331,16 @@ Bagel = {
                                 },
                                 property: {
                                     x: {
-                                        get: "xy"
+                                        set: "xy"
                                     },
                                     y: {
-                                        get: "xy"
+                                        set: "xy"
                                     },
                                     width: {
-                                        get: "dimensions"
+                                        set: "dimensions"
                                     },
                                     height: {
-                                        get: "dimensions"
+                                        set: "dimensions"
                                     },
                                     scale: {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
@@ -365,12 +362,12 @@ Bagel = {
                                             let rad = Bagel.maths.degToRad(sprite.angle + 90);
                                             cache.cos = Math.cos(rad);
                                             cache.sin = Math.sin(rad);
-                                        },
-                                        get: sprite => {
+
                                             sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
                                         }
                                     }
-                                }
+                                },
+                                trigger: true
                             },
                             description: "A basic type of sprite. Has the appearance of the image specified.",
                             check: (sprite, game, check, index, where) => {
@@ -380,9 +377,14 @@ Bagel = {
                                 sprite.last = {
                                     collision: null
                                 };
-
                                 sprite.internal.cache = {};
-                                sprite.angle = sprite.internal.properties.angle; // Trigger the setter
+
+                                let values = sprite.internal.properties;
+                                sprite.x = values.x;
+                                sprite.y = values.y;
+                                sprite.width = values.height;
+                                sprite.height = values.height;
+                                sprite.angle = values.angle;
                             },
                             render: { // How do I render this type?
                                 ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
@@ -2059,7 +2061,7 @@ Bagel = {
             game.internal.plugins[plugin.info.id] = plugin;
             Bagel.internal.loadCurrent();
         },
-        loadAsset: (asset, game, type, where, i, forceLoad) => {
+        loadAsset: (asset, game, type, where, i, forceLoad, dontLoad) => {
             let current = Bagel.internal.current;
 
             Bagel.internal.saveCurrent();
@@ -2074,7 +2076,7 @@ Bagel = {
                 console.warn("The asset type " + JSON.stringify(type) + " doesn't appear to exist for this game. You might want to check that the plugin that adds it's been loaded. In the game " + JSON.stringify(game.id) + ".game.assets." + type + " item " + i + ".");
                 return;
             }
-            let loadNow = game.config.loading.mode != "dynamic" || forceLoad || assetLoader.forcePreload;
+            let loadNow = game.config.loading.mode != "dynamic" || forceLoad || assetLoader.forcePreload && (! dontLoad);
             let plugin = assetLoader.internal.plugin;
             current.plugin = plugin;
 
@@ -2629,14 +2631,14 @@ Bagel = {
                         })(game, plugin.src);
                     }
                 },
-                assets: game => {
+                assets: (game, dontLoad) => {
                     let allAssets = game.game.assets;
                     for (let type in allAssets) {
                         let assets = allAssets[type];
 
                         for (let i in assets) {
                             let asset = assets[i];
-                            Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i, i);
+                            Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i, i, false, dontLoad);
                         }
                     }
                     if (game.internal.assets.loading == 0) {
@@ -2898,9 +2900,8 @@ Bagel = {
                                                         Bagel.internal.loadCurrent();
                                                         return false;
                                                     }
-                                                    console.log(assets.toLoad[plural])
                                                     console.error("Oops. That asset doesn't exist. You tried to get the asset with the id " + JSON.stringify(id) + ".");
-                                                    Bagel.internal.oops(current.game);
+                                                    Bagel.internal.oops(boundGame);
                                                 }
                                             }
                                             let asset = loadedAssets[id];
@@ -3383,44 +3384,60 @@ Bagel = {
 
                             sprite.internal.properties[property] = sprite[property];
                             ((sprite, property, game, plugin, handlers) => {
-                                Object.defineProperty(sprite, property, {
-                                    get: () => {
-                                        if (handlers.get != null) {
-                                            let current = Bagel.internal.current;
-                                            Bagel.internal.saveCurrent();
-                                            current.sprite = sprite;
-                                            current.game = game;
-                                            current.plugin = plugin;
+                                let get = () => {
+                                    let current = Bagel.internal.current;
+                                    Bagel.internal.saveCurrent();
+                                    current.sprite = sprite;
+                                    current.game = game;
+                                    current.plugin = plugin;
 
-                                            let error = handlers.get(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite);
+                                    let error = handlers.get(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite);
 
-                                            if (error) {
-                                                console.error(error);
-                                                Bagel.internal.oops(game);
-                                            }
-                                            Bagel.internal.loadCurrent();
+                                    if (error) {
+                                        console.error(error);
+                                        Bagel.internal.oops(game);
+                                    }
+                                    Bagel.internal.loadCurrent();
+                                    return sprite.internal.properties[property];
+                                };
+                                let set = value => {
+                                    sprite.internal.properties[property] = value;
+                                    let current = Bagel.internal.current;
+                                    Bagel.internal.saveCurrent();
+                                    current.sprite = sprite;
+                                    current.game = game;
+                                    current.plugin = plugin;
+
+                                    let error = handlers.set(sprite.internal.properties, value, property, game, plugin, sprite);
+
+                                    if (error) {
+                                        console.error(error);
+                                        Bagel.internal.oops(game);
+                                    }
+                                    Bagel.internal.loadCurrent();
+                                }
+                                if (handlers.get || handlers.set) {
+                                    if (handlers.get && handlers.set) {
+                                        Object.defineProperty(sprite, property, {
+                                            get: get,
+                                            set: set
+                                        });
+                                    }
+                                    else {
+                                        if (handlers.get) {
+                                            Object.defineProperty(sprite, property, {
+                                                get: get,
+                                                set: value => {sprite.internal.properties[property] = value}
+                                            });
                                         }
-                                        return sprite.internal.properties[property];
-                                    },
-                                    set: (value) => {
-                                        sprite.internal.properties[property] = value;
-                                        if (handlers.set != null) {
-                                            let current = Bagel.internal.current;
-                                            Bagel.internal.saveCurrent();
-                                            current.sprite = sprite;
-                                            current.game = game;
-                                            current.plugin = plugin;
-
-                                            let error = handlers.set(sprite.internal.properties, value, property, game, plugin, sprite);
-
-                                            if (error) {
-                                                console.error(error);
-                                                Bagel.internal.oops(game);
-                                            }
-                                            Bagel.internal.loadCurrent();
+                                        else {
+                                            Object.defineProperty(sprite, property, {
+                                                get: () => sprite.internal.properties[property],
+                                                set: set
+                                            });
                                         }
                                     }
-                                });
+                                }
                             })(sprite, property, game, spriteHandler.internal.plugin, handlers);
                         }
                     }
