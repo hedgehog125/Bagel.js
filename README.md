@@ -15,7 +15,7 @@ This lead to me making Beginning.js, not a perfect framework but still better th
  * Being JSON based structures the code
  * Robust input checking (for most things) with helpful errors
  * Plugins (some core stuff also uses a plugin)
- * A PWA creation tool
+ * A PWA creation tool ([example](http://hedgehog125.github.io/Bagel-PWA/))
  * Scales the resolution for any device while keeping the aspect ratio
 
  * A game (by me) will soon be in development using it
