@@ -1,5 +1,6 @@
 # Bagel.js
 A bread based JavaScript game framework
+
 ![alt text](https://github.com/hedgehog125/Bagel.js/blob/veryVeryUnstable/assets/imgs/bagel.png "The Bagel.js Logo")
 
 # Introduction
