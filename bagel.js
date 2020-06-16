@@ -1,38 +1,25 @@
 /*
 TODO:
-check plugin sprite args
-PERFORMANCE
+README
+Finish the TODO descriptions
+Apple touch icons
+Can you change the type of a clone to be different from the parent?
+TODO comments
+Phaser/Pixi.js style console message
+Make the method implementation less bodged
 WebGL renderer
-More efficient clone checking
+Bagel.js vs Phaser (canvas) speed
+Gamepad support
+Re-implement methods so the code's less ugly
 
 PLUGINS
-Sprites
-Plugin assets
-Are sprites and assets needed for them?
-Scripts
-Asset conventions
-Allow applying existing methods to their sprites?
-When is the sprite description used?
-Handling of two plugins with the same ids
-Values? Also sprite values? Init functions instead?
 Are the errors clear when obArg is false?
 Plugin id handling, prevent duplicates, what about game.internal.plugins?
 
-General tidy up
-Steps in other places. Especially listeners
-Finish the TODO descriptions
-Apple touch icons
-README
-Plugin conventions
-
-
 TESTING
-Scripts and steps in plugins
-Reserved ids
-"All" game scripts
-Review closures
 Sounds not loading??? Sometimes...?
 Does the overwrite argument work?
+
 
 CREDITS
 Click, click release and mouse touch from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
@@ -317,7 +304,7 @@ Bagel = {
                             },
                             listeners: {
                                 fns: {
-                                    xy: (sprite, value, property, game, plugin, triggerSprite) => {
+                                    xy: (sprite, value, property, game, plugin, triggerSprite, step) => {
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
@@ -339,7 +326,11 @@ Bagel = {
                                             if (value.includes("x")) {
                                                 let scale = parseFloat(value.split("x")[0]);
 
-                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                                let img = Bagel.get.asset.img(triggerSprite.img, game, true);
+                                                if (img == null) {
+                                                    sprite[property] = 1;
+                                                    return;
+                                                }
                                                 sprite[property] = img[property] * scale;
 
                                                 // Update the scale
@@ -672,7 +663,6 @@ Bagel = {
                         }
                     }
                 },
-                assets: {},
 
                 methods: {
                     bagel: {
@@ -1588,7 +1578,6 @@ Bagel = {
                                 }
                             }
                         },
-
                         layer: {
                             category: {
                                 bringToFront: {
@@ -1720,7 +1709,6 @@ Bagel = {
                                 }
                             }
                         },
-
                         touching: {
                             category: {
                                 mouse: {
@@ -2049,11 +2037,6 @@ Bagel = {
                         }
                     }
                 },
-                scripts: {
-                    init: [],
-                    main: [],
-                    steps: {}
-                },
                 listeners: {
                     prepState: (state, game) => {
                         let scripts = game.internal.scripts.index.sprites.init[state];
@@ -2107,6 +2090,11 @@ Bagel = {
             Bagel.internal.saveCurrent();
             current.plugin = plugin;
 
+            if (plugin.plugin) {
+                if (plugin.plugin.scripts) {
+                    if (plugin.plugin.scripts.preload) plugin.plugin.scripts.preload(plugin, game, Bagel.step.plugin.scripts);
+                }
+            }
             plugin = subFunctions.check(game, plugin);
             plugin.args = Bagel.internal.deepClone(args);
 
@@ -2116,7 +2104,8 @@ Bagel = {
             merge.types.sprites(game, plugin);
 
             merge.methods(game, plugin);
-            merge.listeners(game, plugin)
+            if (plugin.plugin.scripts.init) plugin.plugin.scripts.init(plugin, game, Bagel.step.plugin.scripts);
+            merge.listeners(game, plugin);
             game.internal.plugins[plugin.info.id] = plugin;
             Bagel.internal.loadCurrent();
         },
@@ -2203,8 +2192,16 @@ Bagel = {
         },
         createSprite: (sprite, game, parent, where, noCheck, idIndex) => {
             let subFunctions = Bagel.internal.subFunctions.createSprite;
-            sprite.type = sprite.type == null? game.internal.combinedPlugins.defaults.sprites.type : sprite.type; // If the sprite type isn't specified, default to default agreed by the plugins
-            let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+            let combined = game.internal.combinedPlugins;
+            sprite.type = sprite.type == null? combined.defaults.sprites.type : sprite.type; // If the sprite type isn't specified, default to default agreed by the plugins
+            let handler = combined.types.sprites[sprite.type];
+            if (handler == null) {
+                let spriteTypes = Object.keys(combined.types.sprites);
+                if (! spriteTypes.includes(sprite.type)) {
+                    console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + " for the sprite " + JSON.stringify(sprite.id) + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                    Bagel.internal.oops(game);
+                }
+            }
 
             let current = Bagel.internal.current;
             let currentPluginID = current.plugin? current.plugin.info.id : null;
@@ -2231,6 +2228,7 @@ Bagel = {
             sprite.isClone = (!! parent);
             sprite.idIndex = idIndex;
             let register = subFunctions.register;
+
             register.scripts("init", sprite, game, parent);
             register.scripts("main", sprite, game, parent);
             register.scripts("all", sprite, game, parent);
@@ -2343,7 +2341,7 @@ Bagel = {
                     }
                 }
             }
-            Bagel.internal.current.game = null;
+            Bagel.internal.resetCurrent(); // Just in case something messes it up, although it might make debugging harder :/
             let total = new Date() - totalStart;
             subFunctions.tick();
         },
@@ -2663,28 +2661,39 @@ Bagel = {
 
                     for (let i in scripts) {
                         let script = scripts[i];
-                        let state = script.stateToRun;
-
-                        if (index[state] == null) index[state] = [];
-                        index[state].push({
-                            script: i
-                        });
+                        if (type == "all") { // Has no state
+                            index.push({
+                                script: i
+                            });
+                        }
+                        else {
+                            let state = script.stateToRun;
+                            if (index[state] == null) index[state] = [];
+                            index[state].push({
+                                script: i
+                            });
+                        }
                     }
                 },
                 initScripts: game => {
                     let init = Bagel.internal.subFunctions.init.scripts;
                     init(game, "init");
                     init(game, "main");
+                    init(game, "all");
                 },
                 plugins: game => {
                     for (let i in game.game.plugins) {
                         let plugin = game.game.plugins[i];
                         game.internal.assets.loading++; // Not technically an asset but this stops the game loading until its done
                         ((game, src, args) => {
-                            fetch(plugin.src).then(res => res.text().then(plugin => {
+                            fetch(src).then(res => res.text().then(plugin => {
                                 game.internal.assets.loading--;
                                 game.internal.assets.loaded++;
                                 plugin = (new Function("return " + plugin))(); // Not entirely sure if this is good practice or not but it allows the functions to be parsed unlike JSON.parse
+                                if (typeof plugin != "object") {
+                                    console.error("Erm, the plugin with the src " + JSON.stringify(src) + "isn't an object, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(plugin))) + ". If you made the plugin, you should check you've written it correctly. If you didn't, make sure the src is for the right file.";
+                                    Bagel.internal.oops(game);
+                                }
                                 Bagel.internal.loadPlugin(plugin, game, args);
                             }));
                         })(game, plugin.src);
@@ -2934,7 +2943,7 @@ Bagel = {
                                             current.game = game == null? current.game : game;
                                             current.plugin = plugin;
 
-                                            let assets = current.game.internal.assets;
+                                            let assets = boundGame.internal.assets;
                                             let loadedAssets = assets.assets[current.assetType];
                                             let doesntExist = true;
                                             if (loadedAssets) {
@@ -2952,13 +2961,12 @@ Bagel = {
 
                                                     info.assetLoader.init(info.asset, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
                                                     info.game.internal.assets.loading++;
+                                                    Bagel.internal.loadCurrent();
                                                     return true; // It's loading
                                                 }
                                                 else {
-                                                    if (check) {
-                                                        Bagel.internal.loadCurrent();
-                                                        return false;
-                                                    }
+                                                    Bagel.internal.loadCurrent();
+                                                    if (check) return false;
                                                     console.error("Oops. That asset doesn't exist. You tried to get the asset with the id " + JSON.stringify(id) + ".");
                                                     Bagel.internal.oops(boundGame);
                                                 }
@@ -3113,9 +3121,10 @@ Bagel = {
                             }
                         }
                     },
-                    subMethods: (game, plugin, type, method, methodName, position, combinedPosition, bagelPosition) => {
+                    subMethods: (game, plugin, type, method, methodName, position, oldPosition, combinedPosition, bagelPosition) => {
                         let subFunctions = Bagel.internal.subFunctions.loadPlugin.merge;
                         if (method.category) {
+                            let oldPosition = position;
                             if (type == "bagel") {
                                 if (! bagelPosition[methodName]) bagelPosition[methodName] = {};
                                 bagelPosition = bagelPosition[methodName];
@@ -3126,13 +3135,13 @@ Bagel = {
                             }
                             combinedPosition.push(methodName);
                             for (let i in method.category) {
-                                subFunctions.subMethods(game, plugin, type, method.category[i], i, position, combinedPosition, bagelPosition);
+                                subFunctions.subMethods(game, plugin, type, method.category[i], i, position, oldPosition, combinedPosition, bagelPosition);
                             }
                         }
                         else {
                             if (type == "sprite") {
                                 for (let i in method.fn.appliesTo) {
-                                    let oldPosition = position;
+                                    let tmp = position;
                                     let spriteType = method.fn.appliesTo[i];
                                     if (position[spriteType] == null) position[spriteType] = {};
                                     position = position[spriteType];
@@ -3143,7 +3152,28 @@ Bagel = {
                                         position = position[category];
                                     }
                                     subFunctions.method(game, plugin, type, spriteType, position, method, methodName, bagelPosition);
-                                    position = oldPosition;
+                                    position = tmp;
+                                }
+                                if (method.apply) {
+                                    if (oldPosition[method.apply.from] == null) {
+                                        console.error("Oops, Bagel.js can't copy that method from the sprite type " + JSON.stringify(method.apply.from) + " because it doesn't seem to exist. Check the plugin that adds it has been loaded first. Also check the names and categories. In plugin " + plugin.info.id + ".");
+                                        Bagel.internal.oops(game);
+                                    }
+                                    let methodToCopy = oldPosition[method.apply.from][methodName];
+                                    for (i in method.apply.to) {
+                                        let tmp = position;
+                                        let spriteType = method.apply.to[i];
+                                        if (position[spriteType] == null) position[spriteType] = {};
+                                        position = position[spriteType];
+
+                                        for (let c in combinedPosition) {
+                                            let category = combinedPosition[c];
+                                            if (position[category] == null) position[category] = {};
+                                            position = position[category];
+                                        }
+                                        subFunctions.method(game, plugin, type, spriteType, position, methodToCopy, methodName, bagelPosition);
+                                        position = tmp;
+                                    }
                                 }
                             }
                             else {
@@ -3162,14 +3192,8 @@ Bagel = {
                             for (let methodName in methods) {
                                 let method = methods[methodName];
 
-                                let position;
-                                if (type == "sprite") {
-                                    position = combined.methods.sprite;
-                                }
-                                else {
-                                    position = combined.methods[type];
-                                }
-                                Bagel.internal.subFunctions.loadPlugin.merge.subMethods(game, plugin, type, method, methodName, position, [], Bagel);
+                                let position = combined.methods[type];
+                                Bagel.internal.subFunctions.loadPlugin.merge.subMethods(game, plugin, type, method, methodName, position, position, [], Bagel);
                             }
                         }
                     },
@@ -3251,29 +3275,6 @@ Bagel = {
                         syntax: parent? handler.internal.cloneSyntax : handler.args
                     }, Bagel.internal.checks.disableArgCheck);
 
-                    let prefix = sprite.id.split(".")[1];
-                    if (sprite.id[0] == ".") { // Reserved
-                        if (currentPluginID == null) {
-                            console.error("This is awkward... IDs starting with a dot are only for plugins. You tried to use the id "
-                                + JSON.stringify(sprite.id)
-                                + ". In "
-                                + where
-                                + ".\nf it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
-                                + JSON.stringify(prefix)
-                                + " ;)");
-                            Bagel.internal.oops(game);
-                        }
-                        else {
-                            if (prefix != currentPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
-                                console.error("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + pluginID) + " and you tried to use the id " + JSON.stringify(sprite.id) + ". In "
-                                + where
-                                + ".\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".");
-                                Bagel.internal.oops(game);
-                            }
-                        }
-                    }
-
-
                     return sprite;
                 },
                 extraChecks: (sprite, game, where, idIndex) => {
@@ -3299,12 +3300,13 @@ Bagel = {
                     let plugin = handler.internal.plugin;
                     current.plugin = plugin;
 
+
                     handler.init(sprite, game, current.plugin);
                     if (handler.listeners.trigger) { // Trigger all the listeners to initialise them
                         for (let property in handler.listeners.property) {
                             let listener = handler.listeners.property[property];
                             if (listener.set) { // Only the "set" listeners are triggered
-                                let error = listener.set(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite);
+                                let error = listener.set(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener);
 
                                 if (error) {
                                     console.error(error);
@@ -3469,7 +3471,7 @@ Bagel = {
                                     current.game = game;
                                     current.plugin = plugin;
 
-                                    let error = handlers.get(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite);
+                                    let error = handlers.get(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener);
 
                                     if (error) {
                                         console.error(error);
@@ -3486,7 +3488,7 @@ Bagel = {
                                     current.game = game;
                                     current.plugin = plugin;
 
-                                    let error = handlers.set(sprite.internal.properties, value, property, game, plugin, sprite);
+                                    let error = handlers.set(sprite.internal.properties, value, property, game, plugin, sprite, Bagel.step.plugin.spriteListener);
 
                                     if (error) {
                                         console.error(error);
@@ -3574,6 +3576,16 @@ Bagel = {
                             }
                             code(game, Bagel.step.sprite);
                         }
+                    }
+                },
+                pluginScripts: game => {
+                    for (let i in game.internal.plugins) {
+                        let plugin = game.internal.plugins[i];
+                        Bagel.internal.saveCurrent();
+                        Bagel.internal.current.plugin = plugin;
+
+                        if (plugin.plugin.scripts.main) plugin.plugin.scripts.main(plugin, game, Bagel.step.plugin.scripts);
+                        Bagel.internal.loadCurrent();
                     }
                 },
                 hideSprites: game => {
@@ -3667,6 +3679,7 @@ Bagel = {
                             }
                         }
 
+                        subFunctions.pluginScripts(game);
                         subFunctions.scripts("main", true, game, state);
                         subFunctions.scripts("main", false, game, state);
                         subFunctions.scripts("all", true, game, state);
@@ -4202,6 +4215,29 @@ Bagel = {
                 sprite: {
                     id: {
                         required: true,
+                        check: (id, sprite, name, game) => {
+                            let currentStack = Bagel.internal.currentStack;
+                            let lastPluginID = currentStack.length == 0? null : currentStack[currentStack.length - 1].plugin;
+                            if (lastPluginID) lastPluginID = lastPluginID.info.id;
+
+                            let prefix = id.split(".")[1];
+                            if (id[0] == ".") { // Reserved
+                                if (lastPluginID == null) {
+                                    return ("This is awkward... ids starting with a dot are only for plugins. You tried to use the id "
+                                    + JSON.stringify(id)
+                                    + ".\nIf it's important that it has this name, you could write a plugin instead, just make sure its id (Plugin.info.id) is set to "
+                                    + JSON.stringify(prefix)
+                                    + " ;)");
+                                }
+                                else {
+                                    if (prefix != lastPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
+                                        return ("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + lastPluginID) + " and you tried to use the id "
+                                        + JSON.stringify(id)
+                                        + ".\nYou can fix this by changing the prefix (the bit after a full stop starting but before the next full stop), removing it or changing the plugin id in \"Plugin.info.id\".");
+                                    }
+                                }
+                            }
+                        },
                         types: ["string"],
                         description: "The id for the sprite to be targeted by."
                     },
@@ -4428,6 +4464,11 @@ Bagel = {
                     subcheck: {
                         id: {
                             required: true,
+                            check: value => {
+                                if (Bagel.internal.current.game.internal.plugins[value]) {
+                                    return "Oops, you used an id for a plugin that's already been used. You tried to use the id " + JSON.stringify(value) + " in the game " + JSON.stringify(Bagel.internal.current.game.id) + ". This plugin might've already been loaded or maybe the plugins are too similar? If you're making this plugin, you could try changing Plugin.info.id.";
+                                }
+                            },
                             types: ["string"],
                             description: "The unique id for the plugin."
                         },
@@ -4541,6 +4582,39 @@ Bagel = {
                                         args: { // TODO: Should this be checked?
                                             required: true,
                                             types: ["object"],
+                                            arrayLike: true,
+                                            subcheck: {
+                                                description: {
+                                                    required: true,
+                                                    types: ["string"],
+                                                    description: "A brief description of what this property does."
+                                                },
+                                                types: {
+                                                    required: true,
+                                                    types: ["array"],
+                                                    description: "The different data types this property accepts. e.g string, array, object etc."
+                                                },
+                                                required: {
+                                                    required: true,
+                                                    types: ["boolean"],
+                                                    description: "If the argument is required or not. Most of the time, it should be optional."
+                                                },
+                                                check: {
+                                                    required: false,
+                                                    types: ["function"],
+                                                    description: "The check function."
+                                                },
+                                                subcheck: {
+                                                    required: false,
+                                                    types: ["object"],
+                                                    description: "The subcheck. Same as a \"syntax\" argument but there's no checks on what you put in here."
+                                                },
+                                                default: {
+                                                    required: false,
+                                                    types: "any",
+                                                    description: "The default value (only applies if required is false)"
+                                                }
+                                            },
                                             description: "Same as the \"syntax\" argument for the check function. These checks are only run on original sprites, not clones."
                                         },
                                         cloneArgs: {
@@ -4575,9 +4649,6 @@ Bagel = {
                                                         required: {
                                                             required: false,
                                                             check: (value, ob, index, game, prev) => {
-                                                                // TODO: Not working <==============
-                                                                // It can't adopt the property from the parent because it doesn't exist yet.
-                                                                // TODO: error when parent doesn't have the property <=======
                                                                 if (value == null) {
                                                                     ob[index] = prev.prev.ob.args[prev.prevName].required;
                                                                 }
@@ -4805,12 +4876,6 @@ Bagel = {
                             types: ["object"],
                             description: "Creates new types. (assets and sprites)"
                         },
-                        assets: { // TODO: check
-                            required: false,
-                            default: {},
-                            types: ["object"],
-                            description: "Which assets to load for the plugin."
-                        },
                         methods: {
                             required: false,
                             default: {},
@@ -4983,6 +5048,37 @@ Bagel = {
                                             required: false,
                                             types: ["object"],
                                             description: "Contains categories where the key is the name of the category and their contents have the same syntax as here. Note: These aren't checked."
+                                        },
+                                        apply: {
+                                            required: false,
+                                            subcheck: {
+                                                to: {
+                                                    required: false,
+                                                    default: [],
+                                                    check: value => {
+                                                        if (typeof value != "string") {
+                                                            return "Erm, these can only be a string and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                                        }
+                                                    },
+                                                    checkEach: true,
+                                                    types: ["array"],
+                                                    description: "Which sprite types to apply it to."
+                                                },
+                                                from: {
+                                                    required: false,
+                                                    check: (value, ob, name, game, prev) => {
+                                                        if (prev.ob.to) {
+                                                            if (value == null) {
+                                                                return "Oh, looks like you forgot this argument.";
+                                                            }
+                                                        }
+                                                    },
+                                                    types: ["string"],
+                                                    description: "A sprite type that has the existing method that you want to apply to a new sprite type."
+                                                }
+                                            },
+                                            types: ["object"],
+                                            description: "Allows a pre existing method from another plugin to also be applied to a sprite type created by this plugin. It's an array of the sprite types."
                                         }
                                     },
                                     types: ["object"],
@@ -4998,39 +5094,18 @@ Bagel = {
                             subcheck: {
                                 preload: {
                                     required: false,
-                                    default: [],
-                                    check: fn => {
-                                        if (typeof fn != "function") {
-                                            return "Hmm. Looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
-                                        }
-                                    },
-                                    checkEach: true,
-                                    types: ["array"],
-                                    description: "Preload functions. They run before the plugin is checked or initialised."
+                                    types: ["function"],
+                                    description: "The preload function. It runs before the plugin is checked or initialised making it useful for changing some values before loading."
                                 },
                                 init: {
                                     required: false,
-                                    default: [],
-                                    check: fn => {
-                                        if (typeof fn != "function") {
-                                            return ":/ Looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
-                                        }
-                                    },
-                                    checkEach: true,
-                                    types: ["array"],
-                                    description: "Init functions. They run once the plugin's been checked and mostly initialised. This function finishes it by doing stuff specific to this plugin."
+                                    types: ["function"],
+                                    description: "The init function. It runs once the plugin's been checked and mostly initialised. This function finishes it by doing stuff specific to this plugin."
                                 },
                                 main: {
                                     required: false,
-                                    default: [],
-                                    check: fn => {
-                                        if (typeof fn != "function") {
-                                            return "Hmm, looks like you used the wrong type, it should be a function and you used " + Bagel.internal.an(Bagel.internal.getTypeOf(fn) + ".");
-                                        }
-                                    },
-                                    checkEach: true,
-                                    types: ["array"],
-                                    description: "Main functions. They run on every frame before the rendering."
+                                    types: ["function"],
+                                    description: "The \"main\" function. Runs on every frame before any other scripts run."
                                 },
                                 steps: {
                                     required: false,
@@ -5042,11 +5117,11 @@ Bagel = {
                                     },
                                     checkEach: true,
                                     types: ["object"],
-                                    description: "Mini functions. They can help make your code clearer by spitting functions into the individual steps. Can use them with \"Bagel.step.plugin.scripts\" or the step function provided with the script."
+                                    description: "Mini functions. They can help make your code clearer by spitting functions into the individual steps. Can use them with \"Bagel.step.plugin.scripts\" or the step function provided as an argument to the function."
                                 }
                             },
                             types: ["object"],
-                            description: "Contains the plugin's scripts. \"preload\", \"init\" and \"main\". Steps can also be used."
+                            description: "Contains the plugin's scripts. \"preload\", \"init\" and \"main\". Steps can also be used. The arguments provided are the plugin, the game and then the step function."
                         },
                         listeners: {
                             required: false,
@@ -5198,6 +5273,19 @@ Bagel = {
             let internal = Bagel.internal;
             internal.current = internal.currentStack.pop(); // Load the last state
         },
+        resetCurrent: () => {
+            Bagel.internal.current = {
+                sprite: null,
+                game: null,
+                asset: null,
+                assetType: null,
+                assetTypeName: null,
+                i: null,
+                where: null,
+                plugin: null
+            };
+            Bagel.internal.currentStack = [];
+        },
         currentStack: [],
 
         inputAction: {
@@ -5346,7 +5434,7 @@ Bagel = {
                 }
                 continue;
             }
-            if (syntax == "ignore") { // TODO: is this used? Is it needed?
+            if (syntax == "ignore") {
                 continue;
             }
 
@@ -5362,23 +5450,25 @@ Bagel = {
                 }
             }
             if (! disableChecks.types) {
-                if ((! defaulted) && missing.length == 0) {
-                    if (syntax.types == null) {
-                        console.error("The syntax for " + args.where + "." + argID + " is missing the \"types\" argument.");
-                        console.log("In " + args.where + ".");
-                        console.log("Syntax:");
-                        console.log(syntax);
-                        Bagel.internal.oops(args.game);
-                    }
-                    if (! arrayString.includes(Bagel.internal.getTypeOf(syntax.types))) {
-                        console.error("The syntax for " + args.where + "." + argID + " has the wrong data type for the \"types\" argument. You used " + Bagel.internal.an(Bagel.internal.getTypeOf(syntax.types)) + ".");
-                        console.log("In " + args.where + ".");
-                        console.log("Syntax:");
-                        console.log(syntax);
-                        Bagel.internal.oops(args.game);
-                    }
-                    if ((! syntax.types.includes(Bagel.internal.getTypeOf(arg))) && syntax.types != "any") {
-                        wrongTypes.push(argID);
+                if (! defaulted) {
+                    if (missing.length == 0) {
+                        if (syntax.types == null) {
+                            console.error("The syntax for " + args.where + "." + argID + " is missing the \"types\" argument.");
+                            console.log("In " + args.where + ".");
+                            console.log("Syntax:");
+                            console.log(syntax);
+                            Bagel.internal.oops(args.game);
+                        }
+                        if (! arrayString.includes(Bagel.internal.getTypeOf(syntax.types))) {
+                            console.error("The syntax for " + args.where + "." + argID + " has the wrong data type for the \"types\" argument. You used " + Bagel.internal.an(Bagel.internal.getTypeOf(syntax.types)) + ".");
+                            console.log("In " + args.where + ".");
+                            console.log("Syntax:");
+                            console.log(syntax);
+                            Bagel.internal.oops(args.game);
+                        }
+                        if ((! syntax.types.includes(Bagel.internal.getTypeOf(arg))) && syntax.types != "any") {
+                            wrongTypes.push(argID);
+                        }
                     }
                 }
             }
@@ -5465,7 +5555,7 @@ Bagel = {
                     + JSON.stringify(name)
                     + " -> "
                     + args.syntax[name].description
-                    + "\n  Can use " + Bagel.internal.list(args.syntax[name].types, "or", true)
+                    + "\n  Can " + (args.syntax[name].types.length == 1? "only " : "") + "use " + Bagel.internal.list(args.syntax[name].types, "or", true)
                     + "."
                 ).join("\n\n")
             );
@@ -5594,7 +5684,7 @@ Bagel = {
                     console.error("Oops, this must be run inside a plugin.");
                     Bagel.internal.oops(game);
                 }
-                let step = plugin.scripts.steps[id];
+                let step = plugin.plugin.scripts.steps[id];
                 if (step == null) {
                     console.error("Huh, the step " + JSON.stringify(id) + " doesn't exist in plugin " + plugin.info.id + ".");
                     Bagel.internal.oops(game);
@@ -5602,21 +5692,22 @@ Bagel = {
 
                 return step(plugin, game, Bagel.step.plugin.scripts);
             },
-            spriteListener: id => { // TODO: finish
+            spriteListener: id => {
                 let current = Bagel.internal.current;
+                let sprite = current.sprite;
                 let game = current.game;
                 let plugin = current.plugin;
                 if (plugin == null) {
                     console.error("Oops, this must be run inside a plugin.");
                     Bagel.internal.oops(game);
                 }
-                let step = plugin.scripts.steps[id];
+                let step = plugin.plugin.types.sprites[sprite.type].listeners.steps[id];
                 if (step == null) {
-                    console.error("Huh, the step " + JSON.stringify(id) + " doesn't exist in plugin " + plugin.info.id + ".");
+                    console.error("Huh, the step " + JSON.stringify(id) + " doesn't exist in plugin " + plugin.info.id + ".plugin.types.sprites." + sprite.type + ".listeners.steps. Make sure the id is correct, also remember it's case sensitive.");
                     Bagel.internal.oops(game);
                 }
 
-                return step(plugin, game, Bagel.step.plugin.scripts);
+                return step(plugin, game, Bagel.step.plugin.spriteListener);
             }
         }
     },
