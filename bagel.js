@@ -1,6 +1,7 @@
 /*
 TODO:
-README
+Loading screen is still laggy in firefox
+Resizing is laggy
 Finish the TODO descriptions
 Apple touch icons
 Can you change the type of a clone to be different from the parent?
@@ -17,6 +18,7 @@ Are the errors clear when obArg is false?
 Plugin id handling, prevent duplicates, what about game.internal.plugins?
 
 TESTING
+Negative widths and heights
 Sounds not loading??? Sometimes...?
 Does the overwrite argument work?
 
@@ -47,6 +49,8 @@ Bagel = {
         subFunctions.preload(game);
         if (game.config.loading.skip || document.readyState == "complete") {
             subFunctions.assets(game);
+        }
+        if (! game.loaded) {
             subFunctions.loadingScreen(game);
         }
 
@@ -88,7 +92,6 @@ Bagel = {
                                         ready(snd);
                                     };
                                 })(snd);
-                                hmm = snd; // TODO. Debug. The bug means above doesn't trigger
                                 snd.load();
                                 snd.src = asset.src;
                             },
@@ -223,14 +226,6 @@ Bagel = {
                                     types: ["number"],
                                     description: "The scale of the sprite. If both the width and height are unspecified, the sprite width and height are set to the image width and height multiplied by the scale."
                                 },
-                                visible: {
-                                    required: false,
-                                    default: true,
-                                    types: [
-                                        "boolean"
-                                    ],
-                                    description: "If the sprite is visible or not."
-                                },
                                 alpha: {
                                     required: false,
                                     default: 1,
@@ -283,12 +278,6 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
-                                visible: {
-                                    syntax: {
-                                        description: "Determines if the clone is visible or not."
-                                    },
-                                    mode: "replace"
-                                },
                                 alpha: {
                                     syntax: {
                                         description: "The alpha of the clone. 1 is fully visible, 0.5 is partially and 0's invisible."
@@ -312,7 +301,7 @@ Bagel = {
                                             }
                                         }
                                         if (typeof value == "function") {
-                                            sprite[property] = value(sprite, game); // Avoid the setter
+                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
                                             return;
                                         }
                                         if (typeof value == "number") return;
@@ -331,6 +320,7 @@ Bagel = {
                                                     sprite[property] = 1;
                                                     return;
                                                 }
+                                                if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * scale;
 
                                                 // Update the scale
@@ -341,9 +331,10 @@ Bagel = {
                                             }
                                         }
                                         if (typeof value == "function") {
-                                            sprite[property] = value(sprite, game); // Avoid the setter
+                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
 
                                             let img = Bagel.get.asset.img(triggerSprite.img);
+                                            if (typeof img == "boolean") return ".rerun";
                                             // Update the scale
                                             let scaleX = sprite.width / img.width;
                                             let scaleY = sprite.height / img.height;
@@ -352,6 +343,7 @@ Bagel = {
                                         }
                                         if (typeof value == "number") {
                                             let img = Bagel.get.asset.img(triggerSprite.img);
+                                            if (typeof img == "boolean") return ".rerun";
                                             // Update the scale
                                             let scaleX = sprite.width / img.width;
                                             let scaleY = sprite.height / img.height;
@@ -361,11 +353,8 @@ Bagel = {
                                         if (value == null) {
                                             if (sprite.scale) {
                                                 triggerSprite[property] = sprite.scale + "x"; // It's triggerSprite so it becomes a number
+                                                return;
                                             }
-                                            else {
-                                                triggerSprite[property] = "1x";
-                                            }
-                                            return;
                                         }
 
                                         console.error("Hmm. This can only be a function, a multiple of its image " + property + " (e.g 1x, 2x, 0.3x etc.) or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
@@ -423,7 +412,7 @@ Bagel = {
                                 };
                                 sprite.internal.cache = {};
                             },
-                            render: { // How do I render this type?
+                            render: {
                                 ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
                                     if (sprite.img == null) return; // No image for this sprite
                                     let img = Bagel.get.asset.img(sprite.img, game, true);
@@ -447,7 +436,7 @@ Bagel = {
 
                                     let halfWidth = sprite.width / 2;
                                     let halfHeight = sprite.height / 2;
-                                    if (sprite.angle == 90) { // Don't rotate if we don't need to. TODO: test
+                                    if (sprite.angle == 90) { // Don't rotate if we don't need to
                                         ctx.drawImage(img, sprite.x - halfWidth, sprite.y - halfHeight, sprite.width, sprite.height);
                                     }
                                     else {
@@ -506,12 +495,6 @@ Bagel = {
                                     ],
                                     description: "The height for the canvas. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height * 0.2\""
                                 },
-                                visible: {
-                                    required: false,
-                                    default: true,
-                                    types: ["boolean"],
-                                    description: "If the canvas is visible or not."
-                                },
                                 alpha: {
                                     required: false,
                                     default: 1,
@@ -555,12 +538,6 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
-                                visible: {
-                                    syntax: {
-                                        description: "If the clone is visible or not."
-                                    },
-                                    mode: "replace"
-                                },
                                 alpha: {
                                     syntax: {
                                         description: "The alpha of the clone. 1 is fully visible, 0.5 is partially and 0's invisible."
@@ -587,7 +564,8 @@ Bagel = {
                                             }
                                         }
                                         if (typeof value == "function") {
-                                            sprite[property] = value(sprite, game); // Avoid the setter
+                                            console.log(triggerSprite.id, sprite[property])
+                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
                                             return;
                                         }
                                         if (typeof value == "number") return;
@@ -598,7 +576,7 @@ Bagel = {
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite) => {
                                         if (typeof value == "function") {
-                                            sprite[property] = value(sprite, game); // Avoid the setter
+                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
                                             return;
                                         }
                                         if (typeof value == "number") return;
@@ -642,8 +620,8 @@ Bagel = {
                             render: {
                                 ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
                                     if (sprite.fullRes) {
-                                        sprite.canvas.width = sprite.width * window.devicePixelRatio * scaleX;
-                                        sprite.canvas.height = sprite.height * window.devicePixelRatio * scaleY;
+                                        sprite.canvas.width = sprite.width * scaleX;
+                                        sprite.canvas.height = sprite.height * scaleY;
                                     }
                                     let current = Bagel.internal.current;
                                     Bagel.internal.saveCurrent();
@@ -655,7 +633,178 @@ Bagel = {
                                     ctx.globalAlpha = sprite.alpha;
                                     ctx.scale(scaleX, scaleY);
                                     ctx.drawImage(sprite.canvas, sprite.x - (sprite.width / 2), sprite.y - (sprite.height / 2), sprite.width, sprite.height);
+
                                     ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
+                                    ctx.globalAlpha = 1;
+                                },
+                                clean: true
+                            }
+                        },
+                        text: {
+                            args: {
+                                x: {
+                                    required: false,
+                                    default: "centred",
+                                    types: [
+                                        "number",
+                                        "string",
+                                        "function"
+                                    ],
+                                    description: "The x position for the text. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                },
+                                y: {
+                                    required: false,
+                                    default: "centred",
+                                    types: [
+                                        "number",
+                                        "string",
+                                        "function"
+                                    ],
+                                    description: "The y position for the text. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                },
+                                alpha: {
+                                    required: false,
+                                    default: 1,
+                                    types: ["number"],
+                                    description: "The alpha of the text. 1 is fully visible, 0.5 is partially and 0's invisible."
+                                },
+                                text: {
+                                    required: true,
+                                    types: ["string"],
+                                    description: "The text that this sprite should display."
+                                },
+                                font: {
+                                    required: false,
+                                    default: "30px Helvetica",
+                                    types: ["string"],
+                                    description: "The font to use. Same as ctx.font."
+                                },
+                                colour: {
+                                    required: false,
+                                    default: "black",
+                                    types: ["string"],
+                                    description: "The colour for the text. An HTML colour. (e.g \"red\", \"rgb(1, 2, 3)\" etc.)"
+                                }
+                            },
+                            cloneArgs: {
+                                x: {
+                                    syntax: {
+                                        description: "The x position for the clone. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                    },
+                                    mode: "replace"
+                                },
+                                y: {
+                                    syntax: {
+                                        description: "The y position for the clone. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                    },
+                                    mode: "replace"
+                                },
+                                alpha: {
+                                    syntax: {
+                                        description: "The alpha of the clone. 1 is fully visible, 0.5 is partially and 0's invisible."
+                                    },
+                                    mode: "replace"
+                                },
+                                text: {
+                                    syntax: {
+                                        description: "The text that this clone should display."
+                                    },
+                                    mode: "replace"
+                                },
+                                font: {
+                                    mode: "replace"
+                                },
+                                colour: {
+                                    mode: "replace"
+                                }
+                            },
+                            listeners: {
+                                fns: {
+                                    xy: (sprite, value, property, game, plugin, triggerSprite, step) => {
+                                        if (typeof value == "string") {
+                                            if (value == "centred") {
+                                                sprite[property] = game[property == "x"? "width" : "height"] / 2;
+                                                return;
+                                            }
+                                        }
+                                        if (typeof value == "function") {
+                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
+                                            return;
+                                        }
+                                        if (typeof value == "number") return;
+
+                                        // It's invalid if it wasn't any of those valid values
+                                        console.error("Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        Bagel.internal.oops(game);
+                                    },
+                                    rerender: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                        if (! initialTrigger) {
+                                            triggerSprite.internal.prerender(triggerSprite, game.internal.renderer.canvas);
+                                        }
+                                    }
+                                },
+                                property: {
+                                    x: {
+                                        set: "xy"
+                                    },
+                                    y: {
+                                        set: "xy"
+                                    },
+                                    text: {
+                                        set: "rerender"
+                                    },
+                                    font: {
+                                        set: "rerender"
+                                    },
+                                    colour: {
+                                        set: "rerender"
+                                    }
+                                },
+                                trigger: true
+                            },
+                            description: "A text sprite. Allows you to easily display text onscreen.",
+                            init: (sprite, game) => {
+                                let internal = sprite.internal;
+                                internal.last = {};
+                                internal.canvas = document.createElement("canvas");
+                                internal.ctx = internal.canvas.getContext("2d");
+                                internal.prerender = (sprite, mainCanvas) => {
+                                    let last = sprite.internal.last;
+                                    let canvas = sprite.internal.canvas;
+                                    let ctx = sprite.internal.ctx;
+                                    let scaleX = mainCanvas.width / sprite.game.width;
+                                    let scaleY = mainCanvas.height / sprite.game.height;
+
+                                    ctx.font = sprite.font;
+                                    canvas.width = ctx.measureText(sprite.text).width * scaleX; // It's not affected by scaling
+                                    let size = parseInt(sprite.font.split(" ")[0].split("px")[0]);
+                                    canvas.height = Math.ceil(size) * scaleY;
+                                    ctx.font = sprite.font;
+                                    ctx.textBaseline = "hanging";
+                                    ctx.fillStyle = sprite.colour;
+
+                                    ctx.scale(scaleX, scaleY);
+                                    ctx.fillText(sprite.text, 0, 1);
+                                    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
+
+                                    last.scaleX = scaleX;
+                                    last.scaleY = scaleY;
+                                    sprite.width = Math.round(canvas.width / scaleX);
+                                    sprite.height = Math.round(canvas.height / scaleY);
+                                };
+                                internal.prerender(sprite, game.internal.renderer.canvas);
+                            },
+                            render: {
+                                ctx: (sprite, mainCtx, mainCanvas, game, plugin, scaleX, scaleY) => {
+                                    let last = sprite.internal.last;
+                                    let canvas = sprite.internal.canvas;
+                                    let ctx = sprite.internal.ctx;
+
+                                    if (last.scaleX != scaleX || last.scaleY != scaleY) { // Update the text
+                                        sprite.internal.prerender(sprite, mainCanvas);
+                                    }
+                                    mainCtx.globalAlpha = sprite.alpha;
+                                    mainCtx.drawImage(canvas, (sprite.x * scaleX) - (canvas.width / 2), (sprite.y * scaleY) - (canvas.height / 2));
                                     ctx.globalAlpha = 1;
                                 },
                                 clean: true
@@ -2163,6 +2312,7 @@ Bagel = {
                 if (assets.loading == 0) {
                     if (game.config.loading.skip) {
                         game.loaded = true;
+                        Bagel.internal.subFunctions.init.onload(game);
                     }
                 }
                 if (assets.toLoad[plural]) {
@@ -2220,7 +2370,8 @@ Bagel = {
                     init: [],
                     main: [],
                     all: []
-                }
+                },
+                rerunListeners: []
             };
 
             sprite.cloneIDs = [];
@@ -2293,7 +2444,7 @@ Bagel = {
             })(sprite);
 
             subFunctions.extraChecks(sprite, game, where, idIndex);
-            subFunctions.init(sprite, game);
+            subFunctions.init(sprite, game, subFunctions);
 
             Bagel.internal.loadCurrent();
             return sprite;
@@ -2349,8 +2500,12 @@ Bagel = {
         subFunctions: {
             init: {
                 check: game => {
+                    if (game == null) {
+                        console.log("Hmm, looks like you forgot the first argument for this function: the game JSON. It should be an object.");
+                        Bagel.internal.oops();
+                    }
                     if (typeof game != "object") {
-                        console.error("Oh no! Your game JSON seems to be the wrong type. It must be the type \"object\", you used " + JSON.stringify(Bagel.internal.getTypeOf(game)) + ".");
+                        console.error("Oh no! Your game JSON seems to be the wrong type. It must be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
                         Bagel.internal.oops();
                     }
                     if (game.id == null) {
@@ -2644,6 +2799,7 @@ Bagel = {
                                     }
                                     Bagel.internal.loadCurrent();
                                 }
+                                return sprite;
                             },
                             asset: {}
                         };
@@ -2709,8 +2865,13 @@ Bagel = {
                             Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i, i, false, dontLoad);
                         }
                     }
-                    if (game.internal.assets.loading == 0) {
-                        game.loaded = true;
+                    if (game.internal.assets.loading == 0 && Object.keys(game.internal.assets.toLoad).length == 0) {
+                        (game => {
+                            game.loaded = true;
+                            setTimeout(() => {
+                                Bagel.internal.subFunctions.init.onload(game);
+                            }, 0);
+                        })(game);
                     }
                 },
                 methods: game => {
@@ -2873,9 +3034,12 @@ Bagel = {
                     }
                     if (! game.config.loading.skip) {
                         Bagel.internal.subFunctions.init.assets(game); // The page has to have loaded before loading the assets so as not to delay the page load
-                        if (game.config.loading.mode == "preload") {
-                            Bagel.internal.subFunctions.init.loadingScreen(game);
-                        }
+                    }
+                },
+                onload: game => {
+                    let sprites = game.game.sprites;
+                    for (let i in sprites) {
+                        Bagel.internal.subFunctions.createSprite.triggerListeners(sprites[i], game);
                     }
                 }
             },
@@ -2931,20 +3095,29 @@ Bagel = {
                                     };
                                     combined.types.internal.pluralAssetTypes[typeJSON.get] = newType;
 
-                                    ((newType, typeJSON, boundGame, plugin) => {
+                                    ((newType, boundGame, typeJSON, plugin) => {
                                         Bagel.get.asset[typeJSON.get] = (id, game, check) => {
                                             let current = Bagel.internal.current;
                                             let plural = boundGame.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
+                                            game = game == null? current.game : game;
+                                            if (game == null) {
+                                                console.error("Oops. Looks like you're trying to run this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second argument to this function to fix this issue.");
+                                                Bagel.internal.oops();
+                                            }
+                                            if (id == null) {
+                                                console.error("Huh, looks like you forgot the \"id\" argument (the first argument). That's the id for the asset you want to get.");
+                                                Bagel.internal.oops(game);
+                                            }
 
                                             Bagel.internal.saveCurrent();
 
                                             current.assetType = newType;
                                             current.assetTypeName = typeJSON.get;
-                                            current.game = game == null? current.game : game;
+                                            current.game = game;
                                             current.plugin = plugin;
 
-                                            let assets = boundGame.internal.assets;
-                                            let loadedAssets = assets.assets[current.assetType];
+                                            let assets = game.internal.assets;
+                                            let loadedAssets = assets.assets[newType];
                                             let doesntExist = true;
                                             if (loadedAssets) {
                                                 if (loadedAssets[id]) {
@@ -2980,7 +3153,7 @@ Bagel = {
                                             let plural = game.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
                                             Bagel.internal.loadAsset(asset, boundGame, plural, where, true);
                                         };
-                                    })(newType, typeJSON, game, plugin);
+                                    })(newType, game, typeJSON, plugin);
                                 }
                             }
                         },
@@ -3291,7 +3464,7 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
                 },
-                init: (sprite, game) => {
+                init: (sprite, game, subFunctions) => {
                     let current = Bagel.internal.current;
                     Bagel.internal.saveCurrent();
                     current.sprite = sprite;
@@ -3302,20 +3475,17 @@ Bagel = {
 
 
                     handler.init(sprite, game, current.plugin);
+                    if (game.loaded) subFunctions.triggerListeners(sprite, game);
+                    Bagel.internal.loadCurrent();
+                },
+                triggerListeners: (sprite, game) => {
+                    let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+                    let plugin = handler.internal.plugin;
                     if (handler.listeners.trigger) { // Trigger all the listeners to initialise them
                         for (let property in handler.listeners.property) {
-                            let listener = handler.listeners.property[property];
-                            if (listener.set) { // Only the "set" listeners are triggered
-                                let error = listener.set(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener);
-
-                                if (error) {
-                                    console.error(error);
-                                    Bagel.internal.oops(game);
-                                }
-                            }
+                            Bagel.internal.triggerSpriteListener("set", property, sprite, game, true);
                         }
                     }
-                    Bagel.internal.loadCurrent();
                 },
                 register: {
                     scripts: (type, sprite, game, parent) => {
@@ -3465,36 +3635,12 @@ Bagel = {
                             sprite.internal.properties[property] = sprite[property];
                             ((sprite, property, game, plugin, handlers) => {
                                 let get = () => {
-                                    let current = Bagel.internal.current;
-                                    Bagel.internal.saveCurrent();
-                                    current.sprite = sprite;
-                                    current.game = game;
-                                    current.plugin = plugin;
-
-                                    let error = handlers.get(sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener);
-
-                                    if (error) {
-                                        console.error(error);
-                                        Bagel.internal.oops(game);
-                                    }
-                                    Bagel.internal.loadCurrent();
+                                    Bagel.internal.triggerSpriteListener("get", property, sprite, game);
                                     return sprite.internal.properties[property];
                                 };
                                 let set = value => {
                                     sprite.internal.properties[property] = value;
-                                    let current = Bagel.internal.current;
-                                    Bagel.internal.saveCurrent();
-                                    current.sprite = sprite;
-                                    current.game = game;
-                                    current.plugin = plugin;
-
-                                    let error = handlers.set(sprite.internal.properties, value, property, game, plugin, sprite, Bagel.step.plugin.spriteListener);
-
-                                    if (error) {
-                                        console.error(error);
-                                        Bagel.internal.oops(game);
-                                    }
-                                    Bagel.internal.loadCurrent();
+                                    Bagel.internal.triggerSpriteListener("set", property, sprite, game);
                                 }
                                 if (handlers.get || handlers.set) {
                                     if (handlers.get && handlers.set) {
@@ -3659,6 +3805,17 @@ Bagel = {
                         // TODO
                     }
                 },
+                processSprites: game => {
+                    for (let i in game.game.sprites) {
+                        let sprite = game.game.sprites[i];
+                        if (sprite == null) continue;
+                        let rerun = [...sprite.internal.rerunListeners]; // Clone is so running the listeners doesn't affect which listeners are triggered
+                        sprite.internal.rerunListeners = [];
+                        for (let c in rerun) {
+                            Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game);
+                        }
+                    }
+                },
                 loaded: game => { // Loaded logic
                     let subFunctions = Bagel.internal.subFunctions.tick;
 
@@ -3680,6 +3837,7 @@ Bagel = {
                         }
 
                         subFunctions.pluginScripts(game);
+                        subFunctions.processSprites(game)
                         subFunctions.scripts("main", true, game, state);
                         subFunctions.scripts("main", false, game, state);
                         subFunctions.scripts("all", true, game, state);
@@ -3718,6 +3876,7 @@ Bagel = {
                         ctx.drawImage(loadingScreen.internal.renderer.canvas, 0, 0, canvas.width, canvas.height);
                         if (loadingScreen.vars.loading.done) {
                             game.loaded = true;
+                            Bagel.internal.subFunctions.init.onload(game);
                             loadingScreen.delete();
                         }
                     }
@@ -3725,7 +3884,7 @@ Bagel = {
                 tick: () => {
                     Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
                 },
-                scaleCanvas: (game) => {
+                scaleCanvas: game => {
                     let width = window.innerWidth;
                     let height = window.innerHeight;
                     let ratio = game.internal.renderer.ratio;
@@ -3740,7 +3899,6 @@ Bagel = {
                     }
                     width *= window.devicePixelRatio;
                     height *= window.devicePixelRatio;
-
 
                     let renderer = game.internal.renderer;
                     let canvas = renderer.canvas;
@@ -3856,14 +4014,12 @@ Bagel = {
                     description: "An id for the game canvas so it can be referenced later in the program."
                 },
                 width: {
-                    required: false,
-                    default: 800,
+                    required: true,
                     types: ["number"],
                     description: "The virtual width for the game. Independent from the rendered width."
                 },
                 height: {
-                    required: false,
-                    default: 450,
+                    required: true,
                     types: ["number"],
                     description: "The virtual height for the game. Independent from the rendered height."
                 },
@@ -4136,46 +4292,49 @@ Bagel = {
                                                 },
                                                 {
                                                     id: "Text",
-                                                    type: "canvas",
-                                                    fullRes: true,
+                                                    type: "text",
+                                                    text: "Loading...",
                                                     scripts: {
                                                         init: [
                                                             {
-                                                                code: me => {
+                                                                code: (me, game) => {
                                                                     me.y += Bagel.get.sprite("Bagel").height / 2;
+                                                                    me.font = (Math.min(game.width, game.height) / 20) + "px Helvetica";
                                                                     me.y += me.height / 2;
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
-                                                        ]
-                                                    },
-                                                    render: (me, game, ctx, canvas) => {
-                                                        let backgroundColour = game.vars.loading.game.config.display.backgroundColour;
-                                                        if (backgroundColour == "transparent") {
-                                                            backgroundColour = document.body.bgColor;
+                                                        ],
+                                                        main: [
+                                                            {
+                                                                code: (me, game, step) => {
+                                                                    step("calculateColour");
+                                                                },
+                                                                stateToRun: "loading"
+                                                            }
+                                                        ],
+                                                        steps: {
+                                                            calculateColour: (me, game) => {
+                                                                // A slightly hackish way of converting colours to hex
+                                                                let ctx = me.internal.ctx; // Don't tell the plugin but we're stealing its canvas for a minute
+                                                                let backgroundColour = game.vars.loading.game.config.display.backgroundColour;
+                                                                if (backgroundColour == "transparent") {
+                                                                    backgroundColour = document.body.bgColor;
+                                                                }
+                                                                ctx.fillStyle = backgroundColour;
+                                                                backgroundColour = ctx.fillStyle; // Makes it a hex colour
+
+                                                                let rgb = backgroundColour;
+                                                                let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
+                                                                if (brightness > 127) {
+                                                                    me.colour = "black";
+                                                                }
+                                                                else {
+                                                                    me.colour = "white";
+                                                                }
+                                                            }
                                                         }
-                                                        ctx.fillStyle = backgroundColour;
-                                                        backgroundColour = ctx.fillStyle; // Makes it a hex colour
-
-                                                        let rgb = backgroundColour;
-                                                        let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
-                                                        if (brightness > 127) {
-                                                            ctx.fillStyle = "black";
-                                                        }
-                                                        else {
-                                                            ctx.fillStyle = "white";
-                                                        }
-
-
-                                                        ctx.font = (canvas.height / 2) + "px Helvetica";
-                                                        ctx.textBaseline = "middle";
-
-                                                        let text = "Loading";
-                                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                                                        ctx.fillText(text, (canvas.width / 2) - (ctx.measureText(text).width / 2), canvas.height / 2);
-                                                    },
-                                                    width: (me, game) => game.width,
-                                                    height: (me, game) => game.height / 10,
+                                                    }
                                                 }
                                             ]
                                         },
@@ -4237,6 +4396,10 @@ Bagel = {
                                     }
                                 }
                             }
+
+                            if (game.internal.idIndex[sprite.id]) {
+                                return "Oops, you've used this id before. You might want to check what sprite has this id or if you're adding this sprite to the right game.";
+                            }
                         },
                         types: ["string"],
                         description: "The id for the sprite to be targeted by."
@@ -4245,6 +4408,12 @@ Bagel = {
                         required: true,
                         types: ["string"],
                         description: "The type of sprite."
+                    },
+                    visible: {
+                        required: false,
+                        default: true,
+                        types: ["boolean"],
+                        description: "If the sprite is visible or not."
                     },
                     clones: {
                         required: false,
@@ -4349,24 +4518,22 @@ Bagel = {
                 clones: {
                     syntax: {
                         id: {
-                            required: false,
                             types: ["string"],
                             description: "The id for the clone to be targeted by. Defaults to the parent's id followed by a hashtag and then the lowest number starting from 0 that hasn't already been used."
                         },
                         type: {
-                            required: true,
                             types: ["string"],
                             description: "The type of clone."
                         },
+                        visible: {
+                            types: ["boolean"],
+                            description: "If the clone is visible or not."
+                        },
                         clones: {
-                            required: false,
-                            default: {},
                             types: ["object"],
                             description: "The default data for a clone of this clone.\nAll arguments are optional as the clone will adopt the arguments from the clone function and the parent sprite (in that priority)"
                         },
                         scripts: {
-                            required: false,
-                            default: {},
                             subcheck: {
                                 init: {
                                     required: false,
@@ -4391,8 +4558,6 @@ Bagel = {
                             description: "The clones's scripts."
                         },
                         vars: {
-                            required: false,
-                            default: {},
                             types: ["object"],
                             description: "An object you can use to store data for the clone."
                         }
@@ -4409,6 +4574,12 @@ Bagel = {
                                 required: true,
                                 types: ["string"],
                                 description: "The type of clone."
+                            },
+                            mode: "replace"
+                        },
+                        visible: {
+                            syntax: {
+                                description: "If the clone is visible or not."
                             },
                             mode: "replace"
                         },
@@ -5316,6 +5487,29 @@ Bagel = {
                 Bagel.internal.loadCurrent();
             }
         },
+        triggerSpriteListener: (type, property, sprite, game, initialTrigger) => {
+            let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+            let plugin = handler.internal.plugin;
+
+            let current = Bagel.internal.current;
+            Bagel.internal.saveCurrent();
+            current.sprite = sprite;
+            current.game = game;
+            current.plugin = plugin;
+
+            let error = handler.listeners.property[property][type](sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener, (!! initialTrigger));
+
+            if (error) {
+                if (error = ".rerun") { // Not actually an error, just means it needs to be ran again the next frame
+                    sprite.internal.rerunListeners.push([type, property]);
+                }
+                else {
+                    console.error(error);
+                    Bagel.internal.oops(game);
+                }
+            }
+            Bagel.internal.loadCurrent();
+        },
 
         requestAnimationFrame: window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,
         debug: {
@@ -5444,7 +5638,7 @@ Bagel = {
                     missing.push(argID);
                 }
                 else {
-                    args.ob[argID] = syntax.default;
+                    args.ob[argID] = Bagel.internal.deepClone(syntax.default);
                     arg = args.ob[argID];
                     defaulted = true;
                 }
@@ -5643,19 +5837,33 @@ Bagel = {
                 game = Bagel.internal.current.game;
             }
             if (game == null) {
-                // TODO: Review error
-                console.error("Oops. Looks like you're trying to run this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second parameter to this function to fix this issue.");
-                Bagel.internal.oops(null);
-                return;
+                console.error("Oops. Looks like you're trying to run this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the second argument to this function to fix this issue.");
+                Bagel.internal.oops();
+            }
+            if (id == null) {
+                console.error("Oops, you forgot the first argument: the id. It's the id for the sprite you want to get").
+                Bagel.internal.oops(game);
             }
             if (game.internal.idIndex[id] == null) {
                 if (check) return false;
                 // TODO: Review error
                 console.error("Ah, a problem occured while getting a sprite. There's no sprite with the id " + JSON.stringify(id) + ".");
                 Bagel.internal.oops(game);
-                return;
             }
             return game.game.sprites[game.internal.idIndex[id]];
+        },
+        game: id => {
+            if (id == null) {
+                console.error("Oops, you forgot the first argument: the id. It's the id for the game you want to get.").
+                Bagel.internal.oops(Bagel.internal.current.game);
+            }
+            if (Bagel.internal.games[id] == null) {
+                if (check) return false;
+                // TODO: Review error
+                console.error("Ah, a problem occured while getting a game. There's no game with the id " + JSON.stringify(id) + ".");
+                Bagel.internal.oops(Bagel.internal.current.game);
+            }
+            return Bagel.internal.games[id];
         }
     },
     step: {
