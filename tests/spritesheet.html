@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="A simple animation in Bagel.js">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>
+            Bagel pacman
+        </title>
+    </head>
+    <body bgColor="white"></body>
+    <noscript>
+        Please enable JavaScript for this page to work.
+    </noscript>
+</html>
+<script src="../bagel.js"></script>
+<script>
+
+let game = Bagel.init({
+    id: "Bagel",
+    game: {
+        assets: {
+            spritesheets: [
+                {
+                    id: "Pacman",
+                    src: "../assets/imgs/bagelSpritesheet.png",
+                    frames: [11],
+                    animations: ["Eat"]
+                }
+            ]
+        },
+        sprites: [
+            {
+                id: "Bagel",
+                img: "Pacman.Eat.0",
+                request: {
+                    game: {
+                        spritesheets: ["Pacman"]
+                    }
+                },
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ],
+                    main: [
+                        {
+                            code: me => {
+                                if (me.vars.direction == 1) {
+                                    if (me.vars.frame == 10) {
+                                        me.vars.direction *= -1;
+                                    }
+                                }
+                                else {
+                                    if (me.vars.frame == 0) {
+                                        me.vars.direction *= -1;
+                                    }
+                                }
+                                me.vars.frame += me.vars.direction;
+                                me.img = "Pacman.Eat." + me.vars.frame;
+                            },
+                            stateToRun: "game"
+                        }
+                    ]
+                },
+                vars: {
+                    frame: 0,
+                    direction: 1
+                },
+                width: "5x",
+                height: "5x"
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    state: "game",
+    config: {
+        display: {
+            mode: "fill"
+        },
+        loading: {
+            skip: false,
+            mode: "dynamic"
+        }
+    }
+});
+
+</script>

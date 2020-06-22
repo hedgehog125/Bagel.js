@@ -8,11 +8,11 @@
     <p id="debug"></p>
 </body>
 
-<script src="../beginningJS.js"></script>
+<script src="../bagel.js"></script>
 <script>
 
-Bagels = BeginningJS.init({
-    ID: "Bagel",
+Bagels = Bagel.init({
+    id: "Bagel",
     game: {
         assets: {
             imgs: [
@@ -44,8 +44,8 @@ Bagels = BeginningJS.init({
                                 while (i < count) {
                                     me.clone({
                                         vars: {
-                                            parent: me,
-                                            generation: 1
+                                            generation: 1,
+                                            maxGenerations: 5
                                         }
                                     });
 
@@ -77,33 +77,31 @@ Bagels = BeginningJS.init({
                     scripts: {
                         init: [
                             (gameRef, me) => {
-                                me.width = me.vars.parent.width / 2;
-                                me.height = me.vars.parent.height / 2;
+                                me.width = me.parent.width / 2;
+                                me.height = me.parent.height / 2;
 
                                 me.vars.direction = Math.random() > 0.5 ? 1 : -1;
 
 
-                                me.vars.distance = me.vars.parent.width * ((me.vars.parent.vars.generations + 1) - me.vars.generation);
+                                me.vars.distance = (me.parent.width * 1.5) * me.vars.generation;
 
-                                me.x = me.vars.parent.x;
-                                me.y = me.vars.parent.y;
+                                me.x = me.parent.x;
+                                me.y = me.parent.y;
                                 me.move(me.vars.distance);
 
-
-                                if (me.vars.generation < me.vars.parent.vars.generations) { // Not too many
+                                if (me.vars.generation < me.vars.maxGenerations) { // Not too many
                                     var angleWas = me.angle;
                                     me.angle = 0;
 
-                                    var count = Math.round(Math.random() * 10);
+                                    var count = Math.round(Math.random() * 15);
                                     var i = 0;
                                     while (i < count) {
                                         me.clone({
                                             vars: {
-                                                parent: me,
-                                                generation: me.vars.generation + 1
+                                                generation: me.vars.generation + 1,
+                                                maxGenerations: me.vars.maxGenerations
                                             }
                                         });
-
                                         me.angle += (360 / count);
                                         i++;
                                     }
@@ -114,10 +112,10 @@ Bagels = BeginningJS.init({
                         ],
                         main: [
                             (gameRef, me) => {
-                                me.angle += me.vars.generation * 1 * me.vars.direction;
+                                me.angle += me.vars.direction;
 
-                                me.x = me.vars.parent.x;
-                                me.y = me.vars.parent.y;
+                                me.x = me.parent.x;
+                                me.y = me.parent.y;
                                 me.move(me.vars.distance);
                             }
                         ]

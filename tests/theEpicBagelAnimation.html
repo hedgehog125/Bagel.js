@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="A simple animation in Bagel.js">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>
+            Bagels 🥯!
+        </title>
+    </head>
+    <body bgColor="white">
+        <p id="debug"></p>
+    </body>
+</html>
+<script src="../bagel.js"></script>
+<script>
+
+Bagels = Bagel.init({
+    id: "Bagel",
+    game: {
+        assets: {
+            imgs: [
+                {
+                    id: "THE_Bagel",
+                    src: "../assets/imgs/bagel.png"
+                }
+            ],
+            snds: []
+        },
+        sprites: [
+            {
+                id: "THEWorldsSourceOfBagels",
+                vars: {
+                    debugDisplay: document.getElementById("debug")
+                },
+                visible: false,
+                scripts: {
+                    init: [
+                        { // This just makes sure the bagel loads
+                            code: me => {
+                                me.visible = false;
+                            },
+                            stateToRun: "Hail the bagel overlords"
+                        }
+                    ],
+                    main: [
+                        {
+                            code: me => {
+                                let i = 0;
+                                while (i < 3) {
+                                    me.clone();
+                                    i++;
+                                }
+
+                                me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + me.cloneCount;
+                            },
+                            stateToRun: "Hail the bagel overlords"
+                        }
+                    ]
+                },
+                img: "THE_Bagel",
+                clones: {
+                    visible: true,
+                    scripts: {
+                        init: [
+                            me => {
+                                me.visible = true;
+                                me.scale = 0.75;
+
+                                me.x = Bagels.width / 2;
+                                me.y = Bagels.height / 2;
+
+                                me.angle = (Math.random() * 360) - 180;
+                            }
+                        ],
+                        main: [
+                            me => {
+                                me.move(1);
+                                me.alpha -= 0.002;
+
+                                if (Math.abs(me.x - (Bagels.height)) > Bagels.width + me.width || Math.abs(me.y - (Bagels.height / 2)) > Bagels.height + me.height || me.alpha < 0) {
+                                    me.delete();
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    state: "Hail the bagel overlords",
+    config: {
+        display: {
+            mode: "fill"
+        },
+        loading: {
+            skip: false,
+            mode: "dynamic"
+        }
+    }
+});
+
+</script>

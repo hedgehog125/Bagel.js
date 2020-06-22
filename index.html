@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="A simple animation in Bagel.js">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>
+            Bagels 🥯!
+        </title>
+    </head>
+    <body bgColor="white"></body>
+    <noscript>
+        Please enable JavaScript for this page to work.
+    </noscript>
+</html>
+<script src="bagel.js"></script>
+<script>
+
+let game = Bagel.init({
+    id: "Bagel",
+    game: {
+        assets: {
+            imgs: [
+                {
+                    id: "Bagel",
+                    src: "assets/imgs/bagel.png"
+                }
+            ]
+        },
+        sprites: [
+            {
+                id: "Bagel",
+                img: "Bagel",
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ],
+                    main: [
+                        {
+                            code: me => {
+                                me.angle++;
+                            },
+                            stateToRun: "game"
+                        }
+                    ]
+                },
+                width: "5x",
+                height: "5x"
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    state: "game",
+    config: {
+        display: {
+            mode: "fill"
+        },
+        loading: {
+            skip: false,
+            mode: "dynamic"
+        }
+    }
+});
+Bagel.pwa.init({
+    worker: "worker.js",
+    icons: true,
+    versions: "versions.json",
+    version: "version.txt",
+    versionStorageName: "Bagel.js spinning bagel version",
+    cacheStorageName: "Bagel.js Bagel",
+    multiTabStorageName: "Bagel.js spinning bagel multiTab",
+    manifest: "manifest.json"
+});
+
+</script>
