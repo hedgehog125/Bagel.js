@@ -1,4 +1,7 @@
 /*
+Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License information can be found in license.txt
+Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
+
 TODO:
 Apple touch icons
 WebGL renderer
@@ -9,10 +12,6 @@ TESTING
 Negative widths and heights
 Sounds not loading??? Sometimes...?
 Does the overwrite argument work?
-
-
-CREDITS
-Click, click release and mouse touch from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 */
 
 Bagel = {
