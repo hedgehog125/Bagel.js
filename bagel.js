@@ -3,9 +3,9 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
+Tidy up files included
 Apple touch icons
-WebGL renderer
-Bagel.js vs Phaser (canvas) speed
+WebGL renderer. Don't forget context lost handling
 Gamepad support
 
 TESTING
@@ -15,7 +15,7 @@ Does the overwrite argument work?
 */
 
 Bagel = {
-    init: (game) => {
+    init: game => {
         let internal = Bagel.internal; // A shortcut
         let current = internal.current;
         let subFunctions = Bagel.internal.subFunctions.init;
@@ -42,8 +42,7 @@ Bagel = {
         }
 
         if (Object.keys(Bagel.internal.games).length == 0) {
-            let loading = (game.internal.assets.loading - 1);
-            console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas | " + loading + (loading == 1? " asset" : " assets") + " loading.\nhttps://github.com/hedgehog125/Bagel.js");
+            console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
         }
         Bagel.internal.games[game.id] = game;
         Bagel.internal.loadCurrent();
@@ -306,11 +305,11 @@ Bagel = {
                                             if (value.includes("x")) {
                                                 let scale = parseFloat(value.split("x")[0]);
 
-                                                let img = Bagel.get.asset.img(triggerSprite.img, game, true);
-                                                if (img == null) {
+                                                if (triggerSprite.img == null) {
                                                     sprite[property] = 1;
                                                     return;
                                                 }
+                                                let img = Bagel.get.asset.img(triggerSprite.img);
                                                 if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * scale;
 
@@ -324,21 +323,25 @@ Bagel = {
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
 
-                                            let img = Bagel.get.asset.img(triggerSprite.img);
-                                            if (typeof img == "boolean") return ".rerun";
-                                            // Update the scale
-                                            let scaleX = sprite.width / img.width;
-                                            let scaleY = sprite.height / img.height;
-                                            sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                            if (triggerSprite.img) {
+                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                                if (typeof img == "boolean") return ".rerun";
+                                                // Update the scale
+                                                let scaleX = sprite.width / img.width;
+                                                let scaleY = sprite.height / img.height;
+                                                sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                            }
                                             return;
                                         }
                                         if (typeof value == "number") {
-                                            let img = Bagel.get.asset.img(triggerSprite.img);
-                                            if (typeof img == "boolean") return ".rerun";
-                                            // Update the scale
-                                            let scaleX = sprite.width / img.width;
-                                            let scaleY = sprite.height / img.height;
-                                            sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                            if (triggerSprite.img) {
+                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                                if (typeof img == "boolean") return ".rerun";
+                                                // Update the scale
+                                                let scaleX = sprite.width / img.width;
+                                                let scaleY = sprite.height / img.height;
+                                                sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                            }
                                             return;
                                         };
                                         if (value == null) {
@@ -428,19 +431,16 @@ Bagel = {
                                     let halfWidth = sprite.width / 2;
                                     let halfHeight = sprite.height / 2;
                                     if (sprite.angle == 90) { // Don't rotate if we don't need to
-                                        ctx.drawImage(img, sprite.x - halfWidth, sprite.y - halfHeight, sprite.width, sprite.height);
+                                        ctx.drawImage(img, (sprite.x - halfWidth) * flipX, (sprite.y - halfHeight) * flipY, sprite.width, sprite.height);
                                     }
                                     else {
                                         let angle = Bagel.maths.degToRad(sprite.angle - 90);
                                         let x = sprite.x;
                                         let y = sprite.y;
 
-                                        ctx.translate(x, y);
+                                        ctx.translate(x * flipX, y * flipY);
                                         ctx.rotate(angle);
                                         ctx.drawImage(img, -halfWidth, -halfHeight, sprite.width, sprite.height);
-
-                                        ctx.rotate(-angle);
-                                        ctx.translate(-x, -y);
                                     }
                                     ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
                                     ctx.globalAlpha = 1;
@@ -1725,8 +1725,15 @@ Bagel = {
                                 },
                                 fn: (me, args, game) => {
                                     let cached = me.internal.cache;
-                                    me.x += cached.cos * args.amount;
-                                    me.y += cached.sin * args.amount;
+                                    if (args.angle) {
+                                        let rad = Bagel.maths.degToRad(args.angl + 90);
+                                        me.x += Math.cos(rad) * args.amount;
+                                        me.y += Math.sin(rad) * args.amount;
+                                    }
+                                    else {
+                                        me.x += cached.cos * args.amount;
+                                        me.y += cached.sin * args.amount;
+                                    }
                                 }
                             }
                         },
@@ -2312,15 +2319,15 @@ Bagel = {
                 assets.assets[type][assetJSON.id] = asset;
                 assets.loaded++;
                 assets.loading--;
+                if (assets.toLoad[plural]) {
+                    if (assets.toLoad[plural][assetJSON.id]) {
+                        delete assets.toLoad[plural][assetJSON.id]; // Doesn't need loading anymore
+                    }
+                }
                 if (assets.loading == 0) {
                     if (game.config.loading.skip) {
                         game.loaded = true;
                         Bagel.internal.subFunctions.init.onload(game);
-                    }
-                }
-                if (assets.toLoad[plural]) {
-                    if (assets.toLoad[plural][assetJSON.id]) {
-                        delete assets.toLoad[plural][assetJSON.id]; // Doesn't need loading anymore
                     }
                 }
             })(asset, game); // This is called by the init function once the asset has loaded
@@ -2346,7 +2353,18 @@ Bagel = {
         createSprite: (sprite, game, parent, where, noCheck, idIndex) => {
             let subFunctions = Bagel.internal.subFunctions.createSprite;
             let combined = game.internal.combinedPlugins;
-            sprite.type = sprite.type == null? combined.defaults.sprites.type : sprite.type; // If the sprite type isn't specified, default to default agreed by the plugins
+            if (parent) {
+                if (sprite.type) {
+                    if (sprite.type != parent.type) {
+                        console.error("Oops, clones have to have the same type as the parent. You can fix this by removing the \"type\" argument for this clone. If it needs to be that type, you should make a different parent for creating clones of that type.");
+                        Bagel.internal.oops(game);
+                    }
+                }
+                sprite.type = parent.type; // Their types must be the same
+            }
+            else {
+                sprite.type = sprite.type == null? combined.defaults.sprites.type : sprite.type; // If the sprite type isn't specified, default to default agreed by the plugins
+            }
             let handler = combined.types.sprites[sprite.type];
             if (handler == null) {
                 let spriteTypes = Object.keys(combined.types.sprites);
@@ -3387,14 +3405,6 @@ Bagel = {
                     let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
 
                     if (parent) { // Clone
-                        if (sprite.type) {
-                            if (sprite.type != parent.type) {
-                                console.error("Oops, clones have to have the same type as the parent. You can fix this by removing the \"type\" argument for this clone. If it needs to be that type, you should make a different parent for creating clones of that type.");
-                                Bagel.internal.oops(game);
-                            }
-                        }
-                        sprite.type = parent.type; // Their types must be the same
-
                         sprite = Bagel.check({
                             ob: sprite,
                             where: where,
@@ -5918,13 +5928,17 @@ Bagel = {
         }
     },
     step: {
-        sprite: id => {
+        sprite: (id, sprite, game) => {
             let current = Bagel.internal.current;
-            let game = current.game;
-            let sprite = current.sprite;
+            game = game || current.game;
+            sprite = sprite || current.sprite;
             if (sprite == null) {
                 console.error("Oops, this must be run in a sprite script.");
                 Bagel.internal.oops(game);
+            }
+            if (game == null) {
+                console.error("Huh, this isn't being run inside a game and you didn't specifiy a game. You can fix this either by moving it inside a script or providing the game object as the last argument.");
+                Bagel.internal.oops();
             }
             let step = sprite.scripts.steps[id];
             if (step == null) {
