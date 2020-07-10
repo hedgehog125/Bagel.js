@@ -3,6 +3,7 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
+Plugin import checks
 Tidy up files included
 Apple touch icons
 WebGL renderer. Don't forget context lost handling
@@ -2862,7 +2863,7 @@ Bagel = {
                                 game.internal.assets.loaded++;
                                 plugin = (new Function("return " + plugin))(); // Not entirely sure if this is good practice or not but it allows the functions to be parsed unlike JSON.parse
                                 if (typeof plugin != "object") {
-                                    console.error("Erm, the plugin with the src " + JSON.stringify(src) + "isn't an object, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(plugin))) + ". If you made the plugin, you should check you've written it correctly. If you didn't, make sure the src is for the right file.";
+                                    console.error("Erm, the plugin with the src " + JSON.stringify(src) + " isn't an object, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(plugin))) + ". If you made the plugin, you should check you've written it correctly. If you didn't, make sure the src is for the right file.";
                                     Bagel.internal.oops(game);
                                 }
                                 Bagel.internal.loadPlugin(plugin, game, args);
