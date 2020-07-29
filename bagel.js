@@ -9,7 +9,7 @@ WebGL renderer. Don't forget context lost handling
 Gamepad support
 
 TESTING
-Negative widths and heights
+Negative widths and heights. Partly tested
 Sounds not loading??? Sometimes...?
 Does the overwrite argument work?
 */
@@ -28,18 +28,7 @@ Bagel = {
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
-        subFunctions.plugins(game);
-        subFunctions.methods(game);
-        subFunctions.assets(game, true);
-        subFunctions.initScripts(game);
-        subFunctions.initSprites(game);
         subFunctions.preload(game);
-        if (game.config.loading.skip || document.readyState == "complete") {
-            subFunctions.assets(game);
-        }
-        if (! game.loaded) {
-            subFunctions.loadingScreen(game);
-        }
 
         if (Object.keys(Bagel.internal.games).length == 0) {
             console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
@@ -123,11 +112,18 @@ Bagel = {
                                                 maxWidth = asset.frames[i];
                                             }
                                         }
+
+                                        let warning = false;
                                         if (img.width % maxWidth != 0) {
                                             console.warn("The image width isn't divisible by the \"frames\" argument. You should probably check if both of them're correct.");
+                                            warning = true;
                                         }
                                         if (img.height % asset.animations.length) {
                                             console.warn("The image height isn't divisible by the length of the \"animations\" argument. You should probably check if both of them're correct.");
+                                            warning = true;
+                                        }
+                                        if (warning) {
+                                            console.log("For the image asset " + JSON.stringify(asset.id) + ".");
                                         }
 
                                         let width = img.width / maxWidth;
@@ -152,7 +148,7 @@ Bagel = {
                                             }
                                             y++;
                                         }
-                                        ready();
+                                        ready(asset);
                                     };
                                 })(img, asset, game);
                                 img.src = asset.src;
@@ -428,8 +424,8 @@ Bagel = {
                                     scaleY = scaleY * flipY;
                                     ctx.scale(scaleX, scaleY);
 
-                                    let halfWidth = sprite.width / 2;
-                                    let halfHeight = sprite.height / 2;
+                                    let halfWidth = Math.abs(sprite.width) / 2;
+                                    let halfHeight = Math.abs(sprite.height) / 2;
                                     if (sprite.angle == 90) { // Don't rotate if we don't need to
                                         ctx.drawImage(img, (sprite.x - halfWidth) * flipX, (sprite.y - halfHeight) * flipY, sprite.width, sprite.height);
                                     }
@@ -1926,10 +1922,10 @@ Bagel = {
                                             if (args.box == null) {
                                                 // Make a bounding box
                                                 args.box = {
-                                                    x: me.x - (me.width / 2),
-                                                    y: me.y - (me.height / 2),
-                                                    width: me.width,
-                                                    height: me.height
+                                                    x: me.x - Math.abs(me.width / 2),
+                                                    y: me.y - Math.abs(me.height / 2),
+                                                    width: Math.abs(me.width),
+                                                    height: Math.abs(me.height)
                                                 };
                                             }
                                             else {
@@ -2014,7 +2010,7 @@ Bagel = {
                                             };
                                             if (args.radius == null) {
                                                 // Make a bounding box
-                                                box.radius = Math.max(me.width, me.height) / 2;
+                                                box.radius = Math.max(Math.abs(me.width), Math.abs(me.height)) / 2;
                                             }
                                             else {
                                                 box.radius = args.radius;
@@ -2139,10 +2135,10 @@ Bagel = {
                                             if (args.options.box == null) {
                                                 // Make a bounding box
                                                 args.options.box = {
-                                                    x: me.x - (me.width / 2),
-                                                    y: me.y - (me.height / 2),
-                                                    width: me.width,
-                                                    height: me.height
+                                                    x: me.x - Math.abs(me.width / 2),
+                                                    y: me.y - Math.abs(me.height / 2),
+                                                    width: Math.abs(me.width),
+                                                    height: Math.abs(me.height)
                                                 };
                                             }
                                             else {
@@ -2169,10 +2165,12 @@ Bagel = {
                                                 if (! args.options.include.invisibles) {
                                                     if (! sprite.visible) continue;
                                                 }
-                                                if (box.x < sprite.x + sprite.width) {
-                                                    if (box.x + box.width > sprite.x) {
-                                                        if (box.y < sprite.y + sprite.height) {
-                                                            if (box.y + box.height > sprite.y) {
+                                                let leftX = me.x - Math.abs(me.width / 2);
+                                                let leftY = me.y - Math.abs(me.height / 2);
+                                                if (box.x < leftX + Math.abs(me.width)) {
+                                                    if (box.x + box.width > leftX) {
+                                                        if (box.y < leftY + Math.abs(me.height)) {
+                                                            if (box.y + box.height > leftY) {
                                                                 if (args.check) {
                                                                     passed = args.check(sprite, me, game);
                                                                 }
@@ -2242,19 +2240,20 @@ Bagel = {
                 }
             }
         },
-        loadPlugin: (plugin, game, args) => {
+        loadPlugin: (plugin, game, args, index) => {
             let subFunctions = Bagel.internal.subFunctions.loadPlugin;
             plugin = Bagel.internal.deepClone(plugin); // Create a copy of the plugin
             let current = Bagel.internal.current;
             Bagel.internal.saveCurrent();
             current.plugin = plugin;
 
+            plugin.args = args;
             if (plugin.plugin) {
                 if (plugin.plugin.scripts) {
                     if (plugin.plugin.scripts.preload) plugin.plugin.scripts.preload(plugin, game, Bagel.step.plugin.scripts);
                 }
             }
-            plugin = subFunctions.check(game, plugin);
+            plugin = subFunctions.check(game, plugin, index);
             plugin.args = Bagel.internal.deepClone(args);
 
             // Combine all the plugins into one plugin
@@ -2369,7 +2368,17 @@ Bagel = {
             if (handler == null) {
                 let spriteTypes = Object.keys(combined.types.sprites);
                 if (! spriteTypes.includes(sprite.type)) {
-                    console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + " for the sprite " + JSON.stringify(sprite.id) + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                    if (sprite.id) {
+                        console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + " for the sprite " + JSON.stringify(sprite.id) + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                    }
+                    else {
+                        if (idIndex) {
+                            console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + " for sprite " + idIndex + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                        }
+                        else {
+                            console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                        }
+                    }
                     Bagel.internal.oops(game);
                 }
             }
@@ -2399,6 +2408,7 @@ Bagel = {
             sprite.idIndex = idIndex;
             let register = subFunctions.register;
 
+            subFunctions.extraChecks(sprite, game, where, idIndex);
             register.scripts("init", sprite, game, parent);
             register.scripts("main", sprite, game, parent);
             register.scripts("all", sprite, game, parent);
@@ -2458,7 +2468,6 @@ Bagel = {
                 };
             })(sprite);
 
-            subFunctions.extraChecks(sprite, game, where, idIndex);
             subFunctions.init(sprite, game, subFunctions);
 
             Bagel.internal.loadCurrent();
@@ -2476,25 +2485,34 @@ Bagel = {
 
                     subFunctions.scaleCanvas(game);
 
-                    if (game.state != game.internal.lastPrepState) {
-                        Bagel.internal.triggerPluginListener("prepState", game, game.state);
-                        if (game.internal.assets.loading != 0) { // Something needs to load
-                            if (game.loaded) {
-                                game.loaded = false;
+                    if (game.internal.pluginsDone) {
+                        if (game.state != game.internal.lastPrepState) {
+                            Bagel.internal.triggerPluginListener("prepState", game, game.state);
+                            if (game.internal.assets.loading != 0) { // Something needs to load
+                                if (game.loaded) {
+                                    game.loaded = false;
+                                    Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                                }
+                            }
+                            game.internal.lastPrepState = game.state;
+                        }
+
+
+                        if (game.loaded) {
+                            if (subFunctions.loaded(game)) { // Loading screen triggered
                                 Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                                subFunctions.loading(game);
                             }
                         }
-                        game.internal.lastPrepState = game.state;
-                    }
-
-                    if (game.loaded) {
-                        if (subFunctions.loaded(game)) { // Loading screen triggered
-                            Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                        else {
                             subFunctions.loading(game);
                         }
                     }
                     else {
-                        subFunctions.loading(game);
+                        if (game.internal.pluginsLoading == 0) {
+                            Bagel.internal.subFunctions.init.onPluginsReady(game);
+                            game.internal.pluginsDone = true;
+                        }
                     }
 
                     let now = new Date();
@@ -2580,7 +2598,9 @@ Bagel = {
                         }, // The plugins are combined as they're loaded
                         lastState: (! game.state),
                         lastPrepState: (! game.state),
-                        plugins: {}
+                        plugins: {},
+                        pluginsLoading: 0,
+                        pluginsDone: false
                     };
 
                     game = Bagel.check({
@@ -2596,20 +2616,11 @@ Bagel = {
                         touches: [],
                         mouse: {
                             down: false,
-                            x: 0,
-                            y: 0
+                            x: game.width / 2, // The centre of the game
+                            y: game.height / 2
                         },
                         keys: {
-                            isDown: function(keyCode) {
-                                if (this.internal.game.input.keys.keys[keyCode]) {
-                                    return true;
-                                }
-                                return false;
-                            },
-                            keys: {},
-                            internal: {
-                                game: game
-                            }
+                            keys: {}
                         },
                         lookup: {
                             left: 37,
@@ -2739,6 +2750,13 @@ Bagel = {
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
 
+                        game.input.keys.isDown = keyCode => {
+                            if (game.input.keys.keys[keyCode]) {
+                                return true;
+                            }
+                            return false;
+                        };
+
                         if (document.readyState == "complete") {
                             Bagel.internal.subFunctions.init.documentReady(game);
                         }
@@ -2855,19 +2873,18 @@ Bagel = {
                 plugins: game => {
                     for (let i in game.game.plugins) {
                         let plugin = game.game.plugins[i];
-                        game.internal.assets.loading++; // Not technically an asset but this stops the game loading until its done
-                        ((game, src, args) => {
+                        game.internal.pluginsLoading++;
+                        ((game, src, args, index) => {
                             fetch(src).then(res => res.text().then(plugin => {
-                                game.internal.assets.loading--;
-                                game.internal.assets.loaded++;
+                                game.internal.pluginsLoading--;
                                 plugin = (new Function("return " + plugin))(); // Not entirely sure if this is good practice or not but it allows the functions to be parsed unlike JSON.parse
                                 if (typeof plugin != "object") {
                                     console.error("Erm, the plugin with the src " + JSON.stringify(src) + "isn't an object, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(plugin))) + ". If you made the plugin, you should check you've written it correctly. If you didn't, make sure the src is for the right file.";
                                     Bagel.internal.oops(game);
                                 }
-                                Bagel.internal.loadPlugin(plugin, game, args);
+                                Bagel.internal.loadPlugin(plugin, game, args, index);
                             }));
-                        })(game, plugin.src);
+                        })(game, plugin.src, plugin.args? Bagel.internal.deepClone(plugin.args) : {}, i);
                     }
                 },
                 assets: (game, dontLoad) => {
@@ -2880,13 +2897,18 @@ Bagel = {
                             Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i, i, false, dontLoad);
                         }
                     }
-                    if (game.internal.assets.loading == 0 && Object.keys(game.internal.assets.toLoad).length == 0) {
+                    if (game.internal.assets.loading == 0) {
                         (game => {
                             game.loaded = true;
                             setTimeout(() => {
-                                Bagel.internal.subFunctions.init.onload(game);
+                                if (game.loaded) {
+                                    Bagel.internal.subFunctions.init.onload(game);
+                                }
                             }, 0);
                         })(game);
+                    }
+                    else {
+                        Bagel.internal.subFunctions.init.loadingScreen(game);
                     }
                 },
                 methods: game => {
@@ -3046,19 +3068,25 @@ Bagel = {
                             }
                         }
                     }
-                    if (! game.config.loading.skip) {
-                        Bagel.internal.subFunctions.init.assets(game); // The page has to have loaded before loading the assets so as not to delay the page load
-                    }
+                    Bagel.internal.subFunctions.init.plugins(game);
                 },
                 onload: game => {
                     let sprites = game.game.sprites;
                     for (let i in sprites) {
                         Bagel.internal.subFunctions.createSprite.triggerListeners(sprites[i], game);
                     }
+                },
+                onPluginsReady: game => {
+                    let subFunctions = Bagel.internal.subFunctions.init;
+                    subFunctions.methods(game);
+                    subFunctions.assets(game, true);
+                    subFunctions.initScripts(game);
+                    subFunctions.initSprites(game);
+                    subFunctions.assets(game);
                 }
             },
             loadPlugin: {
-                check: (game, plugin) => {
+                check: (game, plugin, index) => {
                     let current = Bagel.internal.current;
                     Bagel.internal.saveCurrent();
                     current.plugin = plugin;
@@ -3067,7 +3095,7 @@ Bagel = {
                     plugin = Bagel.check({
                         ob: plugin,
                         syntax: Bagel.internal.checks.plugin,
-                        where: "plugin " + plugin.info.id
+                        where: (plugin.info && plugin.info.id)? ("plugin " + plugin.info.id) : "GameJSON.game.plugins item " + index
                     }, Bagel.internal.checks.disableArgCheck);
 
                     Bagel.internal.loadCurrent();
@@ -3196,16 +3224,18 @@ Bagel = {
                                 }
                                 if (merge) {
                                     let syntax = {...Bagel.internal.checks.sprite.clones.syntax}; // Add in the default checks
-                                    for (let i in typeJSON.cloneArgs) {
-                                        syntax[i] = typeJSON.cloneArgs[i].syntax;
+                                    if (typeJSON.cloneArgs) {
+                                        for (let i in typeJSON.cloneArgs) {
+                                            syntax[i] = typeJSON.cloneArgs[i].syntax;
+                                        }
+                                        typeJSON.cloneArgs = {
+                                            ...typeJSON.cloneArgs,
+                                            ...Bagel.internal.checks.sprite.clones.args
+                                        };
                                     }
                                     typeJSON.args = {
                                         ...typeJSON.args,
                                         ...Bagel.internal.checks.sprite.sprite
-                                    };
-                                    typeJSON.cloneArgs = {
-                                        ...typeJSON.cloneArgs,
-                                        ...Bagel.internal.checks.sprite.clones.args
                                     };
                                     typeJSON.internal = {
                                         plugin: plugin,
@@ -3405,6 +3435,11 @@ Bagel = {
                     let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
 
                     if (parent) { // Clone
+                        if (handler.cloneArgs == null) {
+                            console.error("Oops, the sprite type " + JSON.stringify(parent.type) + " doesn't support clones.");
+                            Bagel.internal.oops(game);
+                        }
+
                         sprite = Bagel.check({
                             ob: sprite,
                             where: where,
@@ -3467,13 +3502,6 @@ Bagel = {
                         where: where,
                         syntax: parent? handler.internal.cloneSyntax : handler.args
                     }, Bagel.internal.checks.disableArgCheck);
-                    if (handler.check) {
-                        let error = handler.check(sprite, game, Bagel.check, where);
-                        if (error) {
-                            console.error(error);
-                            Bagel.internal.oops(game);
-                        }
-                    }
 
                     Bagel.internal.loadCurrent();
                     return sprite;
@@ -3501,8 +3529,9 @@ Bagel = {
                     let plugin = handler.internal.plugin;
                     current.plugin = plugin;
 
-
-                    handler.init(sprite, game, current.plugin);
+                    if (handler.init) {
+                        handler.init(sprite, game, current.plugin);
+                    }
                     if (game.loaded) subFunctions.triggerListeners(sprite, game);
                     Bagel.internal.loadCurrent();
                 },
@@ -4189,6 +4218,36 @@ Bagel = {
                                     types: ["string"],
                                     description: "The display mode. e.g static (always the same size) or fill (fills the whole window)."
                                 },
+                                resolution: {
+                                    required: false,
+                                    default: "full",
+                                    types: [
+                                        "string",
+                                        "array"
+                                    ],
+                                    check: value => {
+                                        if (typeof value == "string") {
+                                            if (! ["full", "fixed"].includes(value)) {
+                                                return "Oops, this can only be \"full\", \"fixed\" or a custom resolution using an array.";
+                                            }
+                                        }
+                                        else if (Array.isArray(value)) {
+                                            if (value.length != 2) {
+                                                return "Huh, the array can only have two items: the width and height to render at.";
+                                            }
+                                            if (typeof value[0] != "number") {
+                                                return "Hmm, looks like the first item of the custom resolution isn't a number, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(value[0])) + ".";
+                                            }
+                                            if (typeof value[1] != "number") {
+                                                return "Oops, looks like the second item of the custom resolution isn't a number, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(value[1])) + ".";
+                                            }
+                                        }
+                                        else {
+                                            return "Erm, this can only be a number or an array.";
+                                        }
+                                    },
+                                    description: "The resolution for the game to be rendered at. Either \"full\", \"fixed\" or a custom resolution using an array containing the width and height (in that order). Full renders the game at the full resolution which makes it good for vector graphics. Fixed is good for pixel art because it means that resources aren't wasted rendering extra pixels as it renders at the game's width and height. And custom's good if you want to do something more advanced."
+                                },
                                 renderer: {
                                     required: false,
                                     default: "auto",
@@ -4245,6 +4304,14 @@ Bagel = {
                                                     {
                                                         id: "Bagel",
                                                         src: "data:image/png;base64,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"
+                                                    },
+                                                    {
+                                                        id: "Loading.Black",
+                                                        src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAGCAYAAABAU4emAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AYht+mSou0ONhBRCFDdbIgKuIoVSyChdJWaNXB5NI/aNKQpLg4Cq4FB38Wqw4uzro6uAqC4A+Ik6OToouU+F1SaBHjHcc9vPe9L3ffAUKzylSzZwJQNctIJ+JiLr8qBl4RwAjCNIMSM/VkZjELz/F1Dx/f72I8y7vuzxFWCiYDfCLxHNMNi3iDeGbT0jnvE0dYWVKIz4nHDbog8SPXZZffOJccFnhmxMim54kjxGKpi+UuZmVDJZ4mjiqqRvlCzmWF8xZntVpn7XvyF4YK2kqG67SGkcASkkhBhIw6KqjCQox2jRQTaTqPe/iHHH+KXDK5KmDkWEANKiTHD/4Hv3trFqcm3aRQHOh9se2PUSCwC7Qatv19bNutE8D/DFxpHX+tCcx+kt7oaNEjoH8buLjuaPIecLkDDD7pkiE5kp+WUCwC72f0TXlg4BboW3P71j7H6QOQpV4t3wAHh8BYibLXPd4d7O7bvzXt/v0AOZJykKeF/tkAAAAGYktHRAD/AOwAAJPfVTcAAAAJcEhZcwAALiMAAC4jAXilP3YAAAAHdElNRQfkBx0TEyFitOyDAAAAGXRFWHRDb21tZW50AENyZWF0ZWQgd2l0aCBHSU1QV4EOFwAAAIZJREFUKFPFkUEOQiEMRGeMN5D7n7D/DM8NaEEQXPkSAh0G2rSWBCEr4SJyTMg7jZD1QLbfGtg2+W7qG/JLkot0H8VGe/BRwEx7Jba7giouAmqci9xw2xn+ybJzM8bRntK62YlptKsu/tQ5Qj4ZxxGXBWz/Ii9irRFSPo8eoNdqnO+++ob9Cdg1gf0PGCdvAAAAAElFTkSuQmCC"
+                                                    },
+                                                    {
+                                                        id: "Loading.White",
+                                                        src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAGCAYAAABAU4emAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AYht+mSou0ONhBRCFDdbIgKuIoVSyChdJWaNXB5NI/aNKQpLg4Cq4FB38Wqw4uzro6uAqC4A+Ik6OToouU+F1SaBHjHcc9vPe9L3ffAUKzylSzZwJQNctIJ+JiLr8qBl4RwAjCNIMSM/VkZjELz/F1Dx/f72I8y7vuzxFWCiYDfCLxHNMNi3iDeGbT0jnvE0dYWVKIz4nHDbog8SPXZZffOJccFnhmxMim54kjxGKpi+UuZmVDJZ4mjiqqRvlCzmWF8xZntVpn7XvyF4YK2kqG67SGkcASkkhBhIw6KqjCQox2jRQTaTqPe/iHHH+KXDK5KmDkWEANKiTHD/4Hv3trFqcm3aRQHOh9se2PUSCwC7Qatv19bNutE8D/DFxpHX+tCcx+kt7oaNEjoH8buLjuaPIecLkDDD7pkiE5kp+WUCwC72f0TXlg4BboW3P71j7H6QOQpV4t3wAHh8BYibLXPd4d7O7bvzXt/v0AOZJykKeF/tkAAAAGYktHRAD/AOwAAJPfVTcAAAAJcEhZcwAALiMAAC4jAXilP3YAAAAHdElNRQfkBx0TEjVhdQm/AAAAGXRFWHRDb21tZW50AENyZWF0ZWQgd2l0aCBHSU1QV4EOFwAAAIlJREFUKFPNk8ERwyAMBPcy6cDpv0NquDw0OEKBYP+yLzgECOmQbdMkMoc9zJu01WIOkOMEeFibxdX7Ab3gUcWTJn1tWmkQiTZBJDRemB+Rk5ydl1gn9wc8dwEDtbXXifZmcmsX1btXuU0bbpEtsCAqV41dtV/0uGr00Lv/4HD/HDGe+fBTYdn4DcirSc3L3FGIAAAAAElFTkSuQmCC"
                                                     }
                                                 ]
                                             },
@@ -4333,15 +4400,23 @@ Bagel = {
                                                 },
                                                 {
                                                     id: "Text",
-                                                    type: "text",
-                                                    text: "Loading...",
+                                                    type: "sprite",
+                                                    img: "Loading.Black",
                                                     scripts: {
                                                         init: [
                                                             {
-                                                                code: (me, game) => {
+                                                                code: me => {
+                                                                    let ratio = me.height / me.width;
+                                                                    me.width = Math.min(game.width, game.height) / 2;
+                                                                    me.height = me.width * ratio;
+
                                                                     me.y += Bagel.get.sprite("Bagel").height / 2;
-                                                                    me.font = (Math.min(game.width, game.height) / 20) + "px Helvetica";
-                                                                    me.y += me.height / 2;
+                                                                    me.y += me.height;
+
+                                                                    let canvas = document.createElement("canvas"); // This is used for converting colours
+                                                                    canvas.width = 1;
+                                                                    canvas.height = 1;
+                                                                    me.vars.ctx = canvas.getContext("2d");
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
@@ -4357,7 +4432,7 @@ Bagel = {
                                                         steps: {
                                                             calculateColour: (me, game) => {
                                                                 // A slightly hackish way of converting colours to hex
-                                                                let ctx = me.internal.ctx; // Don't tell the plugin but we're stealing its canvas for a minute
+                                                                let ctx = me.vars.ctx;
                                                                 let backgroundColour = game.vars.loading.game.config.display.backgroundColour;
                                                                 if (backgroundColour == "transparent") {
                                                                     backgroundColour = document.body.bgColor;
@@ -4367,11 +4442,8 @@ Bagel = {
 
                                                                 let rgb = backgroundColour;
                                                                 let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
-                                                                if (brightness > 127) {
-                                                                    me.colour = "black";
-                                                                }
-                                                                else {
-                                                                    me.colour = "white";
+                                                                if (brightness <= 127) {
+                                                                    me.img = "Loading.White";
                                                                 }
                                                             }
                                                         }
@@ -4694,6 +4766,7 @@ Bagel = {
                 },
                 plugin: {
                     required: false,
+                    default: {},
                     subcheck: {
                         types: {
                             required: false,
@@ -4821,6 +4894,12 @@ Bagel = {
                                                     types: ["object"],
                                                     description: "The subcheck. Same as a \"syntax\" argument but there's no checks on what you put in here."
                                                 },
+                                                arrayLike: {
+                                                    required: false,
+                                                    default: false,
+                                                    types: ["boolean"],
+                                                    description: "If each item should be checked or not. Works for both objects and arrays."
+                                                },
                                                 default: {
                                                     required: false,
                                                     types: "any",
@@ -4828,8 +4907,10 @@ Bagel = {
                                                 }
                                             },
                                             check: (value, ob, i, name, game, prev) => {
-                                                if (prev.ob.cloneArgs[i] == null) {
-                                                    return "Oops, there's no matching cloneArg variant for the " + JSON.stringify(i) + " argument. Make sure \"cloneArgs\" exists for this sprite type. Clone arguments are a variant of the arguments for clones, each argument is an object with two items: \"syntax\" and \"mode\". The syntax is in the same format as the syntax in the normal args but anything unspecified defaults to the normal variant and mode is how the value's calculated. Check the syntax for cloneArgs for more info.";
+                                                if (prev.ob.cloneArgs) {
+                                                    if (prev.ob.cloneArgs[i] == null) {
+                                                        return "Oops, there's no matching cloneArg variant for the " + JSON.stringify(i) + " argument. Make sure \"cloneArgs\" exists for this sprite type. Clone arguments are a variant of the arguments for clones, each argument is an object with two items: \"syntax\" and \"mode\". The syntax is in the same format as the syntax in the normal args but anything unspecified defaults to the normal variant and mode is how the value's calculated. Check the syntax for cloneArgs for more info.";
+                                                    }
                                                 }
                                             },
                                             checkEach: true,
@@ -4837,7 +4918,7 @@ Bagel = {
                                         },
                                         cloneArgs: {
                                             required: true,
-                                            types: ["object"],
+                                            types: ["object", "undefined"],
                                             arrayLike: true,
                                             subcheck: {
                                                 syntax: {
@@ -5038,7 +5119,7 @@ Bagel = {
                                                     required: false,
                                                     default: null,
                                                     types: ["function"],
-                                                    description: "The ctx render function. Runs every frame."
+                                                    description: "The ctx render function. Runs every frame. Called with these arguments: sprite, ctx, canvas, game, plugin, scaleX and scaleY."
                                                 },
                                                 webgl: {
                                                     required: false,
@@ -5368,6 +5449,11 @@ Bagel = {
                     default: {},
                     types: ["object"],
                     description: "An object you can use to store data for the sprite."
+                },
+                args: {
+                    required: false,
+                    types: ["object"],
+                    description: "The arguments provided when the plugin was loaded. You shouldn't change any of these values in the plugin, that's what the \"vars\" property is for."
                 }
             },
             assets: {
@@ -5603,7 +5689,7 @@ Bagel = {
         if (! (args.prev || disableChecks.args)) {
             args = Bagel.check({
                 ob: args,
-                where: where? where : "the check function. (Bagel.check)",
+                where: args.where? where : "the check function. (Bagel.check)",
                 syntax: {
                     ob: {
                         required: true,
@@ -5860,7 +5946,7 @@ Bagel = {
                     if (syntax.checkEach) {
                         let prev = args;
                         for (let c in args.ob[argID]) {
-                            let error = syntax.check(args.ob[argID][c], args.ob[argID], c, argID, args.game, prev);
+                            let error = syntax.check(args.ob[argID][c], args.ob[argID], c, argID, args.game, prev, args);
                             if (error) {
                                 console.error(error);
                                 if (isNaN(c)) {
@@ -5876,7 +5962,7 @@ Bagel = {
                         }
                     }
                     else {
-                        let error = syntax.check(args.ob[argID], args.ob, argID, args.game, args.prev);
+                        let error = syntax.check(args.ob[argID], args.ob, argID, args.game, args.prev, args);
                         if (error) {
                             console.error(error);
                             console.log("In " + args.where + "." + argID + ".");
@@ -5905,6 +5991,10 @@ Bagel = {
             }
             if (id == null) {
                 console.error("Oops, you forgot the first argument: the id. It's the id for the sprite you want to get").
+                Bagel.internal.oops(game);
+            }
+            if (typeof id != "string") {
+                console.error("Oops, the id for Bagel.get.sprite can only be a string but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + ".");
                 Bagel.internal.oops(game);
             }
             if (game.internal.idIndex[id] == null) {
@@ -5993,6 +6083,7 @@ Bagel = {
         is: {
             touchscreen: document.ontouchstart === null
         }
-    }
+    },
+    version: "1.2b"
 };
 Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
