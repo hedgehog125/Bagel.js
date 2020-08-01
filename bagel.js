@@ -2908,6 +2908,7 @@ Bagel = {
                         })(game);
                     }
                     else {
+                        game.loaded = false;
                         Bagel.internal.subFunctions.init.loadingScreen(game);
                     }
                 },
@@ -3962,23 +3963,33 @@ Bagel = {
                             width = height * ratio;
                         }
                     }
-                    width *= window.devicePixelRatio;
-                    height *= window.devicePixelRatio;
+                    let renderWidth, renderHeight;
+                    let res = game.config.display.resolution;
+                    if (res == "full") {
+                        renderWidth = width * window.devicePixelRatio;
+                        renderHeight = height * window.devicePixelRatio;
+                    }
+                    else {
+                        if (res == "fixed") {
+                            renderWidth = game.width;
+                            renderHeight = game.height;
+                        }
+                        else {
+                            renderWidth = res[0];
+                            renderHeight = res[1];
+                        }
+                    }
 
                     let renderer = game.internal.renderer;
                     let canvas = renderer.canvas;
-                    if (canvas.width != width || canvas.height != height) {
-                        canvas.width = width;
-                        canvas.height = height;
-
-                        canvas.style.removeProperty("width");
-                        canvas.style.setProperty("width", (width / window.devicePixelRatio) + "px", "important");
-                        canvas.style.removeProperty("height");
-                        canvas.style.setProperty("height", (height / window.devicePixelRatio) + "px", "important");
-
-                        renderer.ctx.imageSmoothingEnabled = false; // It's reset when the canvas is resized
+                    if (canvas.width != renderWidth || canvas.height != renderHeight) {
+                        canvas.width = renderWidth;
+                        canvas.height = renderHeight;
                     }
-                },
+                    canvas.style.width = width + "px";
+                    canvas.style.height = height + "px";
+                    renderer.ctx.imageSmoothingEnabled = false; // It needs to be reset when the canvas is resized
+                }
             },
             delete: {
                 layers: (me, game) => {
