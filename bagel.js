@@ -3,6 +3,10 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
+With function x/y positions, the sprite doesn't have all the properties
+Change renderer description when WegGL is added
+Sprite/plugin tasks while loading
+Fix spelling errors
 Tidy up files included
 Apple touch icons
 WebGL renderer. Don't forget context lost handling
@@ -64,15 +68,18 @@ Bagel = {
                             args: {},
                             description: "Sounds can be played by anything. They're played using game.playSound(<id>)",
                             init: (asset, ready, game, plugin, index) => {
+                                console.log("A", asset.id)
+
                                 let snd = new Audio();
-                                snd.preload = "metadata";
                                 (snd => {
                                     snd.onloadeddata = () => {
+                                        console.log("B", asset.id)
                                         ready(snd);
                                     };
                                 })(snd);
-                                snd.load();
+                                snd.preload = "metadata";
                                 snd.src = asset.src;
+                                snd.load();
                             },
                             get: "snd",
                             forcePreload: true // Only the metadata is loaded anyway
@@ -142,8 +149,10 @@ Bagel = {
                                                 let ctx = canvas.getContext("2d");
                                                 ctx.drawImage(img, -(x * width), -(y * height));
 
-                                                if (assets.imgs == null) assets.imgs = {};
-                                                assets.imgs[id] = canvas;
+                                                if (game.set.asset.img(canvas, id, false, true)) {
+                                                    console.error("Hmm, Bagel.js ran into a problem with the spritesheet " + JSON.stringify(asset.id) + ". The image id " + JSON.stringify(id) + " has already been taken. Double check the ids of your assets.");
+                                                    Bagel.internal.oops(game);
+                                                }
                                                 x++;
                                             }
                                             y++;
@@ -426,15 +435,15 @@ Bagel = {
 
                                     let halfWidth = Math.abs(sprite.width) / 2;
                                     let halfHeight = Math.abs(sprite.height) / 2;
+                                    let roundX = Bagel.internal.roundX;
+                                    let roundY = Bagel.internal.roundY;
                                     if (sprite.angle == 90) { // Don't rotate if we don't need to
-                                        ctx.drawImage(img, (sprite.x - halfWidth) * flipX, (sprite.y - halfHeight) * flipY, sprite.width, sprite.height);
+                                        ctx.drawImage(img, (roundX(sprite.x) - roundX(halfWidth)) * flipX, (roundY(sprite.y) - roundY(halfHeight)) * flipY, roundX(sprite.width), roundY(sprite.height));
                                     }
                                     else {
                                         let angle = Bagel.maths.degToRad(sprite.angle - 90);
-                                        let x = sprite.x;
-                                        let y = sprite.y;
 
-                                        ctx.translate(x * flipX, y * flipY);
+                                        ctx.translate(roundX(sprite.x * flipX), roundY(sprite.y * flipY));
                                         ctx.rotate(angle);
                                         ctx.drawImage(img, -halfWidth, -halfHeight, sprite.width, sprite.height);
                                     }
@@ -629,9 +638,12 @@ Bagel = {
                                     if (sprite.render) sprite.render(sprite, game, sprite.ctx, sprite.canvas);
                                     Bagel.internal.loadCurrent();
 
+                                    let roundX = Bagel.internal.roundX;
+                                    let roundY = Bagel.internal.roundY;
+
                                     ctx.globalAlpha = sprite.alpha;
                                     ctx.scale(scaleX, scaleY);
-                                    ctx.drawImage(sprite.canvas, sprite.x - (sprite.width / 2), sprite.y - (sprite.height / 2), sprite.width, sprite.height);
+                                    ctx.drawImage(sprite.canvas, roundX(sprite.x) - roundX(sprite.width / 2), roundY(sprite.y) - roundY(sprite.height / 2), roundX(sprite.width), roundY(sprite.height));
 
                                     ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
                                     ctx.globalAlpha = 1;
@@ -800,11 +812,14 @@ Bagel = {
                                     let canvas = sprite.internal.canvas;
                                     let ctx = sprite.internal.ctx;
 
+                                    let roundX = Bagel.internal.roundX;
+                                    let roundY = Bagel.internal.roundY;
+
                                     if (last.scaleX != scaleX || last.scaleY != scaleY) { // Update the text
                                         sprite.internal.prerender(sprite, mainCanvas);
                                     }
                                     mainCtx.globalAlpha = sprite.alpha;
-                                    mainCtx.drawImage(canvas, (sprite.x * scaleX) - (canvas.width / 2), (sprite.y * scaleY) - (canvas.height / 2));
+                                    mainCtx.drawImage(canvas, roundX(sprite.x * scaleX) - roundX(canvas.width / 2), roundY(sprite.y * scaleY) - roundX(canvas.height / 2), roundX(canvas.width), roundY(canvas.height));
                                     ctx.globalAlpha = 1;
                                 },
                                 clean: true
@@ -1037,26 +1052,32 @@ Bagel = {
                                             if (args.version) {
                                                 if (navigator.onLine) {
                                                     if (args.versionStorageName && args.versions && args.cacheStorageName) {
-                                                        fetch(args.version).then(res => res.text().then(version => {
-                                                            version = version.split("\n").join("");
-                                                            let installed = localStorage.getItem(args.versionStorageName);
-                                                            if (installed == null) installed = 0;
-                                                            if (installed != version) {
-                                                                fetch(args.versions).then(res => res.json().then(versions => {
-                                                                    caches.open(args.cacheStorageName).then(cache => {
-                                                                        while (installed < versions.versions.length) {
-                                                                            let changed = versions.versions[installed].changed;
-                                                                            for (let i in changed) {
-                                                                                cache.delete(changed[i]);
+                                                        if (typeof caches == "undefined") {
+                                                            console.error("Huh, looks like you're trying to run this on an insecure server (the traffic isn't encrypted). Browsers block cache storage for insecure websites for security reasons. If this is your test server, you can try connecting using the url 127.0.0.0:<port of your current url>. If this is your main server, you should be using HTTPS, it's 2020! :P");
+                                                            Bagel.internal.oops(game);
+                                                        }
+                                                        else {
+                                                            fetch(args.version).then(res => res.text().then(version => {
+                                                                version = version.split("\n").join("");
+                                                                let installed = localStorage.getItem(args.versionStorageName);
+                                                                if (installed == null) installed = 0;
+                                                                if (installed != version) {
+                                                                    fetch(args.versions).then(res => res.json().then(versions => {
+                                                                        caches.open(args.cacheStorageName).then(cache => {
+                                                                            while (installed < versions.versions.length) {
+                                                                                let changed = versions.versions[installed].changed;
+                                                                                for (let i in changed) {
+                                                                                    cache.delete(changed[i]);
+                                                                                }
+                                                                                installed++;
                                                                             }
-                                                                            installed++;
-                                                                        }
-                                                                        localStorage.setItem(args.versionStorageName, installed);
-                                                                        location.reload(); // Reload so all the new assets can be loaded
-                                                                    });
-                                                                }));
-                                                            }
-                                                        }));
+                                                                            localStorage.setItem(args.versionStorageName, installed);
+                                                                            location.reload(); // Reload so all the new assets can be loaded
+                                                                        });
+                                                                    }));
+                                                                }
+                                                            }));
+                                                        }
                                                     }
                                                 }
                                                 else {
@@ -1598,7 +1619,7 @@ Bagel = {
                                                                         pause: me => {
                                                                             let vars = me.vars.plugin.vars;
                                                                             for (let id in game.internal.assets.assets.snds) {
-                                                                                let snd = game.internal.assets.assets.snds[id].snd;
+                                                                                let snd = game.internal.assets.assets.snds[id];
                                                                                 if (! snd.paused) {
                                                                                     snd.pause();
                                                                                     if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
@@ -1721,14 +1742,14 @@ Bagel = {
                                 },
                                 fn: (me, args, game) => {
                                     let cached = me.internal.cache;
-                                    if (args.angle) {
-                                        let rad = Bagel.maths.degToRad(args.angl + 90);
-                                        me.x += Math.cos(rad) * args.amount;
-                                        me.y += Math.sin(rad) * args.amount;
+                                    if (args.angle == null) {
+                                        me.x -= cached.cos * args.amount;
+                                        me.y -= cached.sin * args.amount;
                                     }
                                     else {
-                                        me.x += cached.cos * args.amount;
-                                        me.y += cached.sin * args.amount;
+                                        let rad = Bagel.maths.degToRad(args.angle + 90);
+                                        me.x -= Math.cos(rad) * args.amount;
+                                        me.y -= Math.sin(rad) * args.amount;
                                     }
                                 }
                             }
@@ -2205,19 +2226,21 @@ Bagel = {
                                     Bagel.get.asset.img(sprite.img, game, true); // Requesting it will trigger loading
                                 }
                             }
-                            if (sprite.request[state]) {
-                                for (let type in sprite.request[state]) {
-                                    let singular = game.internal.combinedPlugins.types.assets[type];
-                                    if (singular == null) {
-                                        console.error("Oops, the (plural) asset type " + JSON.stringify(type) + " doesn't exist in this game.");
-                                        console.log("These are the only types:");
-                                        console.log(Object.keys(game.internal.combinedPlugins.types.assets).join("\n"));
-                                        Bagel.internal.oops(game);
-                                    }
+                            if (sprite.request) {
+                                if (sprite.request[state]) {
+                                    for (let type in sprite.request[state]) {
+                                        let singular = game.internal.combinedPlugins.types.assets[type];
+                                        if (singular == null) {
+                                            console.error("Oops, the (plural) asset type " + JSON.stringify(type) + " doesn't exist in this game.");
+                                            console.log("These are the only types:");
+                                            console.log(Object.keys(game.internal.combinedPlugins.types.assets).join("\n"));
+                                            Bagel.internal.oops(game);
+                                        }
 
-                                    singular = singular.get;
-                                    for (let i in sprite.request[state][type]) {
-                                        Bagel.get.asset[singular](sprite.request[state][type][i], game, true); // Requesting it will trigger loading
+                                        singular = singular.get;
+                                        for (let i in sprite.request[state][type]) {
+                                            Bagel.get.asset[singular](sprite.request[state][type][i], game, true); // Requesting it will trigger loading
+                                        }
                                     }
                                 }
                             }
@@ -2637,12 +2660,12 @@ Bagel = {
 
                     (game => {
                         addEventListener("mousemove", e => {
-                            let canvas = game.internal.renderer.canvas;
-                            let rect = canvas.getBoundingClientRect();
+                            let renderer = game.internal.renderer;
+                            let rect = renderer.canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
-                            mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                            mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                            mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
+                            mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
                         }, false);
                         addEventListener("mousedown", e => {
                             Bagel.device.is.touchscreen = false;
@@ -2656,13 +2679,13 @@ Bagel = {
                         addEventListener("touchstart", e => {
                             Bagel.device.is.touchscreen = true;
 
-                            let canvas = game.internal.renderer.canvas;
-                            let rect = canvas.getBoundingClientRect();
+                            let renderer = game.internal.renderer;
+                            let rect = renderer.canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
                             if (e.touches == null) {
-                                mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
+                                mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
                                 game.input.touches = [
                                     {
                                         x: game.input.mouse.x,
@@ -2671,8 +2694,8 @@ Bagel = {
                                 ];
                             }
                             else {
-                                mouse.x = ((e.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((e.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.touches[0].clientX - rect.left) / renderer.styleWidth) * game.width;
+                                mouse.y = ((e.touches[0].clientY  - rect.top) / renderer.styleHeight) * game.height;
 
                                 game.input.touches = [];
                                 for (let i in e.touches) {
@@ -2692,13 +2715,13 @@ Bagel = {
                         addEventListener("touchmove", e => {
                             Bagel.device.is.touchscreen = true;
 
-                            let canvas = game.internal.renderer.canvas;
-                            let rect = canvas.getBoundingClientRect();
+                            let renderer = game.internal.renderer;
+                            let rect = renderer.canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
                             if (e.touches == null) {
-                                mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
+                                mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
                                 game.input.touches = [
                                     {
                                         x: mouse.x,
@@ -2707,8 +2730,8 @@ Bagel = {
                                 ];
                             }
                             else {
-                                mouse.x = ((e.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((e.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.touches[0].clientX - rect.left) / renderer.styleWidth) * game.width;
+                                mouse.y = ((e.touches[0].clientY  - rect.top) / renderer.styleHeight) * game.height;
 
                                 game.input.touches = [];
                                 for (let i in e.touches) {
@@ -2733,7 +2756,6 @@ Bagel = {
                             if (e.cancelable) {
                                 e.preventDefault();
                             }
-                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         document.addEventListener("keydown", e => {
                             for (let i in Bagel.internal.games) {
@@ -2747,7 +2769,6 @@ Bagel = {
                                 let game = Bagel.internal.games[i];
                                 game.input.keys.keys[e.keyCode] = false;
                             }
-                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
 
                         game.input.keys.isDown = keyCode => {
@@ -2796,7 +2817,7 @@ Bagel = {
                     }
                     renderer.canvas.id = "Bagel.js " + game.id;
 
-                    renderer.ctx.imageSmoothingEnabled = false;
+                    renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing;
                     renderer.canvas.width = game.width;
                     renderer.canvas.height = game.height;
                     if (game.config.display.mode == "fill") {
@@ -3035,6 +3056,7 @@ Bagel = {
                                 mode: "preload"
                             },
                             display: {
+                                resolution: "fixed",
                                 dom: false,
                                 backgroundColour: "transparent"
                             }
@@ -3191,10 +3213,49 @@ Bagel = {
                                             Bagel.internal.loadCurrent();
                                             return asset;
                                         };
+                                        boundGame.get.asset[typeJSON.get] = (id, check) => Bagel.get.asset[typeJSON.get](id, boundGame, check); // An alias
                                         boundGame.add.asset[typeJSON.get] = (asset, where) => {
+                                            if (asset == null) {
+                                                console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the arguments for the asset as an object.");
+                                                Bagel.internal.oops(game);
+                                            }
+                                            if (typeof asset == "object") {
+                                                console.error("Huh, looks like you used the wrong type for the \"asset\" argument (the first argument). That's the arguments for the asset as an object. You tried to use " + JSON.stringify(asset) + ".");
+                                                Bagel.internal.oops(game);
+                                            }
                                             if (! where) where = "the function Game.add.asset." + typeJSON.get;
                                             let plural = game.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
                                             Bagel.internal.loadAsset(asset, boundGame, plural, where, true);
+                                        };
+                                        boundGame.set.asset[typeJSON.get] = (asset, id, overwrite, check, where) => {
+                                            if (asset == null) {
+                                                console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the value for this asset to be set to.");
+                                                Bagel.internal.oops(game);
+                                            }
+                                            if (id == null) {
+                                                console.error("Hmm, looks like you forgot the \"id\" argument (the second argument). It's the id of the asset to be changed.");
+                                                Bagel.internal.oops(game);
+                                            }
+                                            if (typeof id == "string") {
+                                                console.error("Oops, looks like you used the wrong type for the \"id\" argument (the second argument). It's the id of the asset to be changed. It's supposed to be a string but you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + ".");
+                                                Bagel.internal.oops(game);
+                                            }
+                                            if (! where) where = "the function Game.set.asset." + typeJSON.get;
+
+                                            let assets = boundGame.internal.assets.assets;
+                                            if (assets[typeJSON.get] == null) assets[typeJSON.get] = {};
+                                            if (assets[typeJSON.get][id]) {
+                                                if (! overwrite) {
+                                                    if (check) {
+                                                        return true;
+                                                    }
+                                                    else {
+                                                        console.error("Huh, looks like that id is already being used. You can try setting the \"overwrite\" argument (the 3rd one) to true if you're happy with overwriting. Otherwise check the id or use the \"check\" argument (the 4th) to return true instead of an error when the asset already exists.");
+                                                        Bagel.internal.oops(game);
+                                                    }
+                                                }
+                                            }
+                                            assets[typeJSON.get][id] = asset;
                                         };
                                     })(newType, game, typeJSON, plugin);
                                 }
@@ -3988,7 +4049,11 @@ Bagel = {
                     }
                     canvas.style.width = width + "px";
                     canvas.style.height = height + "px";
-                    renderer.ctx.imageSmoothingEnabled = false; // It needs to be reset when the canvas is resized
+
+                    renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
+                    renderer.styleHeight = height;
+
+                    renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing; // It needs to be reset when the canvas is resized
                 }
             },
             delete: {
@@ -4209,23 +4274,15 @@ Bagel = {
                             required: false,
                             default: {},
                             types: ["object"],
-                            check: ob => {
-                                if (! ["fill", "static"].includes(ob.mode)) {
-                                    return "Oops! You used an invalid option in GameJSON.config.display.mode. You used " + ob.mode + ", it can only be either \"fill\" or \"static\".";
-                                }
-                                if (! ["auto", "canvas", "webgl"].includes(ob.renderer)) {
-                                    return "Oops. You used an invalid option in GameJSON.config.display.renderer. You used " + ob.renderer + ", it can only be either \"auto\", \"canvas\" or \"webgl\".";
-                                }
-
-                                if (document.getElementById(ob.htmlElementID) == null && ob.htmlElementID != null) { // Make sure the element exists
-                                    return "Oops, you specified the element to add the game canvas to but it doesn't seem to exist.\nThis is specified in \"GameJSON.config.display.htmlElementID\" and is set to " + JSON.stringify(ob.htmlElementID) + ". You might want to check that the HTML that creates the element is before your JavaScript.";
-                                }
-                            },
-                            checkEach: false,
                             subcheck: {
                                 mode: {
                                     required: false,
                                     default: "fill",
+                                    check: value => {
+                                        if (! ["fill", "static"].includes(value)) {
+                                            return "Oops! You used an invalid option. You used " + JSON.stringify(value) + ", it can only be either \"fill\" or \"static\".";
+                                        }
+                                    },
                                     types: ["string"],
                                     description: "The display mode. e.g static (always the same size) or fill (fills the whole window)."
                                 },
@@ -4259,11 +4316,22 @@ Bagel = {
                                     },
                                     description: "The resolution for the game to be rendered at. Either \"full\", \"fixed\" or a custom resolution using an array containing the width and height (in that order). Full renders the game at the full resolution which makes it good for vector graphics. Fixed is good for pixel art because it means that resources aren't wasted rendering extra pixels as it renders at the game's width and height. And custom's good if you want to do something more advanced."
                                 },
+                                antialiasing: {
+                                    required: false,
+                                    default: false,
+                                    types: ["boolean"],
+                                    description: "If antialiasing is used or not. Antialiasing smooths out lower resolution stuff at the a slight cost to performance. However, it doesn't work well with pixel art so should be disabled for that. Disabling it also rounds coordinates during the rendering which removes fuzzy edges but can make motion less smooth."
+                                },
                                 renderer: {
                                     required: false,
                                     default: "auto",
+                                    check: value => {
+                                        if (! ["auto", "canvas", "webgl"].includes(value)) {
+                                            return "Oops. You used an invalid option. You used " + JSON.stringify(value) + ", it can only be either \"auto\", \"canvas\" or \"webgl\".";
+                                        }
+                                    },
                                     types: ["string"],
-                                    description: "The renderer for this game. Either \"auto\", \"canvas\" or \"webgl\". \"auto\" will use WebGL if it's supported by the browser, otherwise it'll use the basic 2d renderer (slower)."
+                                    description: "The renderer for this game. Either \"auto\", \"canvas\" or \"webgl\". \"auto\" will use WebGL if it's supported by the browser, otherwise it'll use the basic 2d renderer (slower). Currently, this input will be ignored as there's no WebGL renderer support yet."
                                 },
                                 dom: {
                                     required: false,
@@ -4273,6 +4341,11 @@ Bagel = {
                                 },
                                 htmlElementID: {
                                     required: false,
+                                    check: value => {
+                                        if (document.getElementById(value) == null && value != null) { // Make sure the element exists
+                                            return "Oops, you specified the element to add the game canvas to but it doesn't seem to exist.\nYou tried to use " + JSON.stringify(value) + ". You might want to check that the HTML that creates the element is before your JavaScript.";
+                                        }
+                                    },
                                     types: ["string"],
                                     description: "An element to append the canvas to. If unspecified, it will be added to the document or body."
                                 },
@@ -5551,7 +5624,7 @@ Bagel = {
             return game.game.sprites.length;
         },
 
-        oops: (game) => { // When something goes wrong
+        oops: game => { // When something goes wrong
             if (game == null) {
                 throw "Critical Bagel.js error, please look at the error above for more info. ^-^";
             }
@@ -5602,6 +5675,26 @@ Bagel = {
             Bagel.internal.currentStack = [];
         },
         currentStack: [],
+
+        roundX: value => {
+            let game = Bagel.internal.current.game;
+            if (game.config.display.antialiasing) {
+                return value;
+            }
+            let scale = game.internal.renderer.ctx.getTransform().a;
+            value *= scale; // Scale it based on the canvas scale
+            // ^ produces the value that will be used on the canvas
+            return Math.round(value) / scale; // Needs to be scaled back down so it produces the right value when it's scaled later
+        },
+        roundY: value => { // Works the same as the above
+            let game = Bagel.internal.current.game;
+            if (game.config.display.antialiasing) {
+                return value;
+            }
+            let scale = game.internal.renderer.ctx.getTransform().d;
+            value *= scale;
+            return Math.round(value) / scale;
+        },
 
         inputAction: {
             queued: [],
