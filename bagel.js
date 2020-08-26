@@ -3,6 +3,7 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
+Make sure the global "game" variable isn't accessed
 With function x/y positions, the sprite doesn't have all the properties
 Change renderer description when WegGL is added
 Sprite/plugin tasks while loading
@@ -33,6 +34,7 @@ Bagel = {
 
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
         subFunctions.preload(game);
+        subFunctions.loadingScreen(game);
 
         if (Object.keys(Bagel.internal.games).length == 0) {
             console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
@@ -947,20 +949,20 @@ Bagel = {
                                     input.style.display = "none";
                                     input.multiple = args.multiple;
 
-                                    let file = 0;
-                                    input.addEventListener("change", () => {
-                                        let reader = new FileReader();
-                                        ((reader, file) => {
+                                    (args => {
+                                        let file = 0;
+                                        input.addEventListener("change", () => {
+                                            let reader = new FileReader();
                                             reader.onload = event => {
-                                                code(event.target.result, file);
+                                                args.handler(event.target.result, file);
                                                 file++;
                                                 if (file < input.files.length) {
                                                     reader.readAsDataURL(input.files[file]);
                                                 }
                                             };
-                                        })(reader, file);
-                                        reader.readAsDataURL(input.files[0]);
-                                    }, false);
+                                            reader.readAsDataURL(input.files[0]);
+                                        }, false);
+                                    })(args);
                                     Bagel.internal.inputAction.queue(input => {input.click()}, input);
                                 }
                             }
@@ -2512,8 +2514,8 @@ Bagel = {
                         if (game.state != game.internal.lastPrepState) {
                             Bagel.internal.triggerPluginListener("prepState", game, game.state);
                             if (game.internal.assets.loading != 0) { // Something needs to load
-                                if (game.loaded) {
-                                    game.loaded = false;
+                                game.loaded = false;
+                                if (game.internal.loadingScreen == null) {
                                     Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
                                 }
                             }
@@ -2533,8 +2535,8 @@ Bagel = {
                     }
                     else {
                         if (game.internal.pluginsLoading == 0) {
-                            Bagel.internal.subFunctions.init.onPluginsReady(game);
                             game.internal.pluginsDone = true;
+                            Bagel.internal.subFunctions.init.onPluginsReady(game);
                         }
                     }
 
@@ -2670,7 +2672,6 @@ Bagel = {
                         addEventListener("mousedown", e => {
                             Bagel.device.is.touchscreen = false;
                             game.input.mouse.down = true;
-                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         addEventListener("mouseup", e => {
                             game.input.mouse.down = false;
@@ -2700,8 +2701,8 @@ Bagel = {
                                 game.input.touches = [];
                                 for (let i in e.touches) {
                                     game.input.touches.push({
-                                        x: ((e.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
-                                        y: ((e.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
+                                        x: ((e.touches[i].clientX - rect.left) / renderer.styleWidth) * game.width,
+                                        y: ((e.touches[i].clientY  - rect.top) / renderer.styleHeight) * game.height
                                     });
                                 }
                             }
@@ -2710,7 +2711,6 @@ Bagel = {
                             if (e.cancelable) {
                                 ctx.preventDefault();
                             }
-                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         addEventListener("touchmove", e => {
                             Bagel.device.is.touchscreen = true;
@@ -2736,8 +2736,8 @@ Bagel = {
                                 game.input.touches = [];
                                 for (let i in e.touches) {
                                     game.input.touches.push({
-                                        x: ((e.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
-                                        y: ((e.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
+                                        x: ((e.touches[i].clientX - rect.left) / renderer.styleWidth) * game.width,
+                                        y: ((e.touches[i].clientY  - rect.top) / renderer.styleHeight) * game.height
                                     });
                                 }
                             }
@@ -2756,19 +2756,7 @@ Bagel = {
                             if (e.cancelable) {
                                 e.preventDefault();
                             }
-                        }, false);
-                        document.addEventListener("keydown", e => {
-                            for (let i in Bagel.internal.games) {
-                                let game = Bagel.internal.games[i];
-                                game.input.keys.keys[e.keyCode] = true;
-                            }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
-                        }, false);
-                        document.addEventListener("keyup", e => {
-                            for (let i in Bagel.internal.games) {
-                                let game = Bagel.internal.games[i];
-                                game.input.keys.keys[e.keyCode] = false;
-                            }
                         }, false);
 
                         game.input.keys.isDown = keyCode => {
@@ -2789,6 +2777,20 @@ Bagel = {
                             });
                         }
                     })(game);
+                    if (Object.keys(Bagel.internal.games).length == 0) { // Only need to do this once
+                        document.addEventListener("keydown", e => {
+                            for (let i in Bagel.internal.games) {
+                                let game = Bagel.internal.games[i];
+                                game.input.keys.keys[e.keyCode] = true;
+                            }
+                        }, false);
+                        document.addEventListener("keyup", e => {
+                            for (let i in Bagel.internal.games) {
+                                let game = Bagel.internal.games[i];
+                                game.input.keys.keys[e.keyCode] = false;
+                            }
+                        }, false);
+                    }
                 },
                 misc: game => {
                     game.loaded = false;
@@ -2857,6 +2859,12 @@ Bagel = {
                             },
                             asset: {}
                         };
+                        game.get = {
+                            asset: {}
+                        };
+                        game.set = {
+                            asset: {}
+                        };
                         game.delete = () => {
                             if (game.config.display.dom) {
                                 game.internal.renderer.canvas.remove();
@@ -2921,16 +2929,16 @@ Bagel = {
                     if (game.internal.assets.loading == 0) {
                         (game => {
                             game.loaded = true;
+                            if (game.internal.loadingScreen) {
+                                game.internal.loadingScreen.delete();
+                                delete game.internal.loadingScreen;
+                            }
                             setTimeout(() => {
                                 if (game.loaded) {
                                     Bagel.internal.subFunctions.init.onload(game);
                                 }
                             }, 0);
                         })(game);
-                    }
-                    else {
-                        game.loaded = false;
-                        Bagel.internal.subFunctions.init.loadingScreen(game);
                     }
                 },
                 methods: game => {
@@ -3102,10 +3110,9 @@ Bagel = {
                 onPluginsReady: game => {
                     let subFunctions = Bagel.internal.subFunctions.init;
                     subFunctions.methods(game);
-                    subFunctions.assets(game, true);
+                    subFunctions.assets(game);
                     subFunctions.initScripts(game);
                     subFunctions.initSprites(game);
-                    subFunctions.assets(game);
                 }
             },
             loadPlugin: {
@@ -3197,7 +3204,7 @@ Bagel = {
                                                     current.i = info.i;
                                                     current.where = info.where;
 
-                                                    info.assetLoader.init(info.asset, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
+                                                    info.assetLoader.init({...info.asset}, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
                                                     info.game.internal.assets.loading++;
                                                     Bagel.internal.loadCurrent();
                                                     return true; // It's loading
@@ -3227,7 +3234,11 @@ Bagel = {
                                             let plural = game.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
                                             Bagel.internal.loadAsset(asset, boundGame, plural, where, true);
                                         };
-                                        boundGame.set.asset[typeJSON.get] = (asset, id, overwrite, check, where) => {
+                                        boundGame.set.asset[typeJSON.get] = (id, asset, overwrite, check, where) => {
+                                            if (Bagel.internal.current.plugin == null) {
+                                                console.error("Oops, looks like you're trying to use this outside of a plugin. This is a plugin only feature as it can be confusing. If you still want to use it though, try making a plugin.");
+                                                Bagel.internal.oops(game);
+                                            }
                                             if (asset == null) {
                                                 console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the value for this asset to be set to.");
                                                 Bagel.internal.oops(game);
@@ -3236,15 +3247,16 @@ Bagel = {
                                                 console.error("Hmm, looks like you forgot the \"id\" argument (the second argument). It's the id of the asset to be changed.");
                                                 Bagel.internal.oops(game);
                                             }
-                                            if (typeof id == "string") {
+                                            if (typeof id != "string") {
                                                 console.error("Oops, looks like you used the wrong type for the \"id\" argument (the second argument). It's the id of the asset to be changed. It's supposed to be a string but you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + ".");
                                                 Bagel.internal.oops(game);
                                             }
                                             if (! where) where = "the function Game.set.asset." + typeJSON.get;
 
                                             let assets = boundGame.internal.assets.assets;
-                                            if (assets[typeJSON.get] == null) assets[typeJSON.get] = {};
-                                            if (assets[typeJSON.get][id]) {
+                                            let plural = boundGame.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
+                                            if (assets[plural] == null) assets[plural] = {};
+                                            if (assets[plural][id]) {
                                                 if (! overwrite) {
                                                     if (check) {
                                                         return true;
@@ -3255,7 +3267,7 @@ Bagel = {
                                                     }
                                                 }
                                             }
-                                            assets[typeJSON.get][id] = asset;
+                                            assets[plural][id] = asset;
                                         };
                                     })(newType, game, typeJSON, plugin);
                                 }
@@ -4005,6 +4017,7 @@ Bagel = {
                             game.loaded = true;
                             Bagel.internal.subFunctions.init.onload(game);
                             loadingScreen.delete();
+                            delete game.internal.loadingScreen;
                         }
                     }
                 },
@@ -4489,7 +4502,7 @@ Bagel = {
                                                     scripts: {
                                                         init: [
                                                             {
-                                                                code: me => {
+                                                                code: (me, game) => {
                                                                     let ratio = me.height / me.width;
                                                                     me.width = Math.min(game.width, game.height) / 2;
                                                                     me.height = me.width * ratio;
@@ -4544,7 +4557,7 @@ Bagel = {
                                         }
                                     },
                                     types: ["object"],
-                                    description: "The loading screen animation. Defaults to a Bagel themed one.\nIt's a game object and works exactly the same as a game except its loading screen is disabled, Game.vars.loading is automatically created and the id, width, height and config given for the game is ignored. Game.vars.loading contains the following:\n  progress -> The percentage of the assets loaded\n  loaded -> The number of assets loaded\n  loading -> The number currently loading\n  done -> Starts as false, set this to true when you're done (loaded should be 0 when you do this)"
+                                    description: "The loading screen animation. Defaults to a Bagel.js themed one.\nIt's a game object and works exactly the same as a game except its loading screen is disabled, Game.vars.loading is automatically created and the id, width, height and config given for the game is ignored. Game.vars.loading contains the following:\n  progress -> The percentage of the assets loaded\n  loaded -> The number of assets loaded\n  loading -> The number currently loading\n  done -> Starts as false, set this to true when you're done (loaded should be 0 when you do this)"
                                 }
                             },
                             types: ["object"],
@@ -4865,16 +4878,14 @@ Bagel = {
                                             required: true,
                                             types: ["object"],
                                             description: [
-                                                "The required and optional arguments for the sprite. Is an object where the key is the argument name. e.g {",
-                                                "    x: {",
+                                                "The required and optional arguments for the asset type. Is an object where the key is the argument name. e.g {",
+                                                "    foo: {",
                                                 "        required: false,",
-                                                "        default: \"centred\",",
+                                                "        default: 1,",
                                                 "        types: [",
-                                                "            \"number\",",
-                                                "            \"string\",",
-                                                "            \"function\",",
+                                                "            \"number\"",
                                                 "        ],",
-                                                "        description: \"The X position for the sprite. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\"",
+                                                "        description: \"The first argument for this asset type.",
                                                 "    }",
                                                 "}"
                                             ].join("\n")
@@ -6079,7 +6090,6 @@ Bagel = {
             }
         }
 
-        //delete args;
         return args.ob;
     },
 
@@ -6188,6 +6198,6 @@ Bagel = {
             touchscreen: document.ontouchstart === null
         }
     },
-    version: "1.2b"
+    version: "1.3b"
 };
 Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
