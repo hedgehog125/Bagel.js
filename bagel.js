@@ -5,6 +5,7 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 TODO:
 Make sure the global "game" variable isn't accessed
 With function x/y positions, the sprite doesn't have all the properties
+The game doesn't render when it's paused?
 Change renderer description when WegGL is added
 Sprite/plugin tasks while loading
 Fix spelling errors
@@ -33,7 +34,6 @@ Bagel = {
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
-        subFunctions.preload(game);
         subFunctions.loadingScreen(game);
 
         if (Object.keys(Bagel.internal.games).length == 0) {
@@ -2601,7 +2601,9 @@ Bagel = {
                             loading: 0,
                             loaded: 0,
                             assets: {},
-                            toLoad: {}
+                            toLoad: {},
+                            ranTasks: false,
+                            assetsLoading: 0
                         },
                         combinedPlugins: {
                             types: {
@@ -2941,6 +2943,15 @@ Bagel = {
                         })(game);
                     }
                 },
+                preloadTasks: game => {
+                    let assets = game.internal.assets;
+                    assets.assetsLoading = assets.loading; // Keep track of which are actually assets
+                    let tasks = game.game.scripts.preload;
+                    assets.loading += tasks.tasks.length; // They aren't assets but it makes it easier to group them
+                    if (tasks.misc) {
+                        assets.loading++;
+                    }
+                },
                 methods: game => {
                     let methods = game.internal.combinedPlugins.methods.game;
 
@@ -3044,11 +3055,6 @@ Bagel = {
                         let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "GameJSON.game.sprites item " + i, false, parseInt(i));
                     }
                 },
-                preload: game => {
-                    if (game.game.scripts.preload != null) {
-                        game.game.scripts.preload(game);
-                    }
-                },
                 loadingScreen: game => {
                     if (! game.config.loading.skip) {
                         Bagel.internal.saveCurrent();
@@ -3111,6 +3117,7 @@ Bagel = {
                     let subFunctions = Bagel.internal.subFunctions.init;
                     subFunctions.methods(game);
                     subFunctions.assets(game);
+                    subFunctions.preloadTasks(game);
                     subFunctions.initScripts(game);
                     subFunctions.initSprites(game);
                 }
@@ -3235,10 +3242,6 @@ Bagel = {
                                             Bagel.internal.loadAsset(asset, boundGame, plural, where, true);
                                         };
                                         boundGame.set.asset[typeJSON.get] = (id, asset, overwrite, check, where) => {
-                                            if (Bagel.internal.current.plugin == null) {
-                                                console.error("Oops, looks like you're trying to use this outside of a plugin. This is a plugin only feature as it can be confusing. If you still want to use it though, try making a plugin.");
-                                                Bagel.internal.oops(game);
-                                            }
                                             if (asset == null) {
                                                 console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the value for this asset to be set to.");
                                                 Bagel.internal.oops(game);
@@ -3994,14 +3997,36 @@ Bagel = {
                         let assets = game.internal.assets;
                         let loading = loadingScreen.vars.loading;
 
-                        if (assets.loaded == 0) {
-                            loading.progress = 0; // 0/0 == NaN
+                        if (assets.loading + assets.loaded == 0) {
+                            loading.progress = 100; // Avoid dividing by 0
                         }
                         else {
                             loading.progress = (assets.loaded / (assets.loading + assets.loaded)) * 100;
                         }
                         loading.loaded = assets.loaded;
                         loading.loading = assets.loading;
+                        if (assets.loading != 0) {
+                            let tasks = game.game.scripts.preload;
+                            if (assets.loaded == assets.assetsLoading) { // The assets are done loading but the tasks need running
+                                if (assets.ranTasks) {
+                                    if (tasks.misc && assets.loading == 1) { // Only the misc funciton left
+                                        tasks.misc(game);
+                                        assets.loaded++;
+                                        assets.loading--;
+                                    }
+                                }
+                                else {
+                                    let ready = (assets => () => {
+                                        assets.loaded++;
+                                        assets.loading--;
+                                    })(assets);
+                                    for (let i in tasks.tasks) {
+                                        tasks.tasks[i](game, ready);
+                                    }
+                                    assets.ranTasks = true;
+                                }
+                            }
+                        }
 
 
                         let clearStyle = game.config.display.backgroundColour;
@@ -4246,6 +4271,31 @@ Bagel = {
                                     checkEach: true,
                                     types: ["array"],
                                     description: "\"All\" scripts. They run every frame regardless of game state."
+                                },
+                                preload: {
+                                    required: false,
+                                    default: {},
+                                    subcheck: {
+                                        tasks: {
+                                            required: false,
+                                            default: [],
+                                            types: ["array"],
+                                            check: value => {
+                                                if (typeof value != "function") {
+                                                    return "Oops, this is supposed to be a function but you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                                }
+                                            },
+                                            checkEach: true,
+                                            description: "Tasks that need to be completed before the game loads (but after the assets have loaded). The arguments provided are the game object followed by a ready function. This function must be called once the task is completed (otherwise the game won't load)."
+                                        },
+                                        misc: {
+                                            required: false,
+                                            types: ["function"],
+                                            description: "A function for performing miscellaneous preload tasks that can be completed asynchronously. The function is called with the game object as its first argument."
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "Code that needs to be run before the game can load. \"tasks\" and \"misc\"."
                                 }
                             },
                             types: ["object"],
@@ -6198,6 +6248,6 @@ Bagel = {
             touchscreen: document.ontouchstart === null
         }
     },
-    version: "1.3b"
+    version: "1.4b"
 };
 Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
