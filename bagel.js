@@ -70,18 +70,14 @@ Bagel = {
                             args: {},
                             description: "Sounds can be played by anything. They're played using game.playSound(<id>)",
                             init: (asset, ready, game, plugin, index) => {
-                                console.log("A", asset.id)
-
                                 let snd = new Audio();
                                 (snd => {
-                                    snd.onloadeddata = () => {
-                                        console.log("B", asset.id)
+                                    snd.onloadedmetadata = () => {
                                         ready(snd);
                                     };
                                 })(snd);
                                 snd.preload = "metadata";
                                 snd.src = asset.src;
-                                snd.load();
                             },
                             get: "snd",
                             forcePreload: true // Only the metadata is loaded anyway
@@ -1532,173 +1528,7 @@ Bagel = {
 
                                                     plugin.vars.audio.autoPlay = false;
                                                     if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                        if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
-                                                            // Create one instead
-                                                            let where = "plugin Internal's function \"game.playSound\"";
-                                                            game.add.asset.img({
-                                                                id: ".Internal.unmuteButtonMuted",
-                                                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgYpH/xRLwAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAFGSURBVEhLpVbbtcMwCCs9d4brjbJzvVGmcD9clQBRIY4+mtgRWBZ+VB5LGCNjnEMkY1DMIdnA6PfPKtbjw4wg9HyusXeMMSrDiYhotI/gzpIPOugMPaauCcowBedCXUcM0NKPcfTVDiCyKjwT+vQBnqDCZqLzhDkQZ0uNimjPtm/7tof8cfHCEesM3q/wbTvje55zMD8GwKh66B1jmEKjk3/nRLY2FFaols4PdBdkDdaBXa7bpeZYFbcFAt7RX9wroAJtqXJPwPeO3oUTGNPaXZZD1zDa+vsLbM0/8dkSPe364l91dO5ebZMS83RrQvF2vJkmmHO99dabCD0Hs2PmqlAF4mx+7xyQXnU1oexrBPKxAx/OffmPEtjmyR1kE/SOvf57603P1W+8D2TA1TNnmLEjWAm9Y3rgf54xpAbyryOFF8SAzG9tVk73YdUDkgAAAABJRU5ErkJggg=="
-                                                            }, where); // Load its image
-                                                            game.add.asset.img({
-                                                                id: ".Internal.unmuteButton",
-                                                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgoeC/S7LAAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAElSURBVEhLrZbREYQgDETNFaEdac3akTaR+2D2lODOBs/3w4gbWEJAbXiEu1LcY6YUkWRAa2je533e9YTbtE3bxBak44XgHJgZWsd1XMfY27Icy7EczDA3Sl5wY1lDCjMzM230Uz/mjWGC0g7duLu7x8i2FILBvLEYp2ALikbL/M346HAvAgSebdTVLdffx2fHv2Qweyp7yZZAMdpmstlibGm9JXpLs7peGoP/ks1YltcNvg01WNeEzkmsobf4GWSfpPqUaXr1gNXwB6/RgU9SpDdDvXqAa45w3kPIBGtrPdfdx/H7L17UoQbPFatro0zQnyEYi+OzzKX/Zp4aiihj5SxcEjWkYIdHG2Y7oYwBOQFAbZSBlLqFbSEzBtIGI+SvQ6IMRb66bmr2BeoT1QAAAABJRU5ErkJggg=="
-                                                            }, where); // Load its image
-
-                                                            game.add.asset.snd({
-                                                                id: ".Internal.unmuteButtonClick",
-                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAAAwAABBIAYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBg0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ////////////////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQCzSEAAeAAAAQSSYAuqwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEnACyvdAAACoh3exu8jLeoIAgcKAgCAYLggCAIHCgIAhggGIPv5cEFg+D+sH/Lg4CHDHKHP/E4PghrBwMcEAQygY//BB3//+UBAEAx/KAhlAQcmYqIp0mTVUZDWGgyrJEUQYImG/BhWy0KoEQVVjZUyyAxi+zMxAcDuX+WiWnPTQwFZ4BkIgoSlO0HWRLRa6sZiyXtxgTnQ+IAlwFSpHstGDFzlpJ1J2pzS2mZiuluTRlbS2DUE23jTFgFMVrERfV4GUv7edHTZbTQ3CYA37KYccp4lAmlpzMpkEOspbRYs7LIi8j8MQbxBMzxd8NvvB7KbTgw4yl1W5P67sEQS7sYhl3Zx/ZbS7xUzi6X+TZJFYkkYszmT+NETCdJdz7uFIpTWyjsNSdyauojEpdBNNLm408Oz/87DE4loUgqsfmMAkgxuzs47j+VGWS1u8Uf913bjdZa8ehyAaaIu7EXJhhwZC4VK+0ifZr0F/j++Y/vHW6WVZwzAUWZ7FrTIbUonIxGL0OUt+9G5e5cXmm3gp+aBnEQfaROjKqF/Zl/ZQ+smaVSuk8zSmJNFZVG2Gv9BMO/dpccfkF6/er5y/LC67MYfWchq4/0fVrKAIu7lfHLva4zAQE2q//1VFBQEBKMzKuGAhVCgJqs+qAnVAVL/6vxmKMx///9VTqr/V9VXjMUZvgYCAQNP9YKrBX8S8ShsSgrEVZ0RBwRPg1Bp5U7rBUeGpUNiU78RBwRPUIoilTusFR4KqTEFNRTMuOTkuM6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqv/zYMTZGtmybx/DGACqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg=="
-                                                            }, where);
-                                                            game.add.asset.snd({
-                                                                id: ".Internal.unmuteButtonClickUp",
-                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABMkATk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDLCEAAeAAAATJpqKjmQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAFogGux9BAAC6qruoVWtAv0iG8oCDgQcUBA4Jz8pLg+D+IAQd5cHwfB/rP/BAEDkoGPxACYPg+D5+GPUCAIA+/8HwQBAEAQBMH/h/8EAQBB3UCAPg+H/wQDH8HwfD8uD4Pg+qushml2hmlAYBrCAMEjTYbZgXKSJMQKAAkRyGgr9CoNCahLjLRnVAAhorQiAL13knoq8qAdYdH1rCt6FqmTC2dsHT1HCMoc2jWLUjdBRNoyJv4RMO0+0ZrvFNRFbrNnkWi/kVZar+lnZySwWwG4+ixJ1YkCQ+8pbp5BEMtK0x06WUrt+hjNymv+3B3YjhSwzfl+pU8dytnvDLdWPVbMpuUdPNWprdLVi9irfi0sqU17Ofj8Oyrct1AT9y2td13+c+7WpqbfJqlpatarGeX5Xf7rD/86DE0Up0bqMfmsAAw5zWN6btVKDKzU7yzzKbyps6amyrU1/uWWOOP8paa13k1DVLjTV7tumz7llnhjZyws6t1pfMyHcons7H42c6avS27mprVaNVbUzS/vdL3u/5l3+5fv7N/qaMNZRoSaM02g0LO2aTFcDsQUEAsfvVoGoStQqLLLRgFURCVLcDdYiz5huShkdWIiu/qVSyzERIxDHQ0pUtZNFTUECvRA6UymyVysMPMABBJfQHFAUZwC8TIEEyk3udBhrpMhGCRxJYZOULpBco1Sk7HGyX0/l6VsgUOZnGH2U2MI0A8GLUeKwWfCoQ8E0F/6BprcYalVlOdmj4tNyf6VXuLTLIuC/LorRbMhlMYw1BN2yzJs8dd2zGcZmTN3lUWlUzOQ3H4CpuPEw6G8qsZxtNxgFx//OwxNNQVC56/5jICGCqtSrclTdpucj0tjkRoKGIwTcd2njO6CtVptyqNXJuK0t2kpst61lv+a139Y6nN092prC19Ncls5QzfIlc3CL8BS+tasZXvm3RityJRaIxGw+0pj0Na7jvWWst/v//////UpprXcqYjJN1BQCkqkxBTUUzLjk5LjOqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqr/8xDE8QAAA/wBwAAAqqqqqqqqqqqqqqqqqg=="
-                                                            }, where);
-                                                            game.add.asset.snd({
-                                                                id: ".Internal.unmuteButtonMouseTouch",
-                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABP0ASkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDKiEAAeAAAAT9uAw0pwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEjkqnedDMACyMBL0ufxEQvkRC3REREKgYACCEe7JpkEIy7Jp3Ed7Jp3vezyad7+9nkyd7BMmH8uf8Tg+8uD4f/l///Ln/5d//h///rB9//g+z7q7iFlKYTSjQDSknrKLQgSoGlObS2JMhgJeYvuY7AQqCdmwWOKDMmn7BoHzfVVVDBTsLMmppKqLp0vOKCTvSCZkpdHXbYjEnpVuWSqo6TdY6z5ur2PA3FrEqV1EYgu8tyumPPoyarCXtXFGr8QhiZqr8pX8uxX4koFKn9eB8HDaw7rWJFKXioqVfzRW6vxFrMeu5RKAaDjxU8JmvtRDCV2s7eEsvZyCV49gGxGsaOrQvzT1XFsZczpYai2PYeyq3GyRSXSh3n8sSyN237rWKSKdhqLdhtiVC9kzIIlEpq69DRb/86DE406karb/mMAFHbtWq4NWxKsdSq9Wpq3JuxT27ff5X7T3+U+X2/yntXm4vk5WpFjMzsGWX6qVJdG5dlTRyHoL7Wz/Gl7rKm3KvrV8cfpr8Zw5vm+/vt/G9V5re6lXCtV5KptKs5xLtdN7LRLNNperiCirq5ChNOZN0QkNyLgShrjSgaOXwEQpl1LzMZFtXeJAWG2ugwCMCNzUA833wAgJFXiAwSlUnkYugAJmMGF1gGAPCykUA0eGnu4YEOjRSYWOGAildqzYmsuUy5iUvmJQAQcyg7MCIzJAUw00r8huy/cNv9U28b9Oy0iBBCHGPhRiiWYIThCaZeuGOoyQ7WYu15yXHdWd9Z6msOrSf+Mpywm2TF6mlNJAaDCEAQJmBCbMc6sImYkzqn5TydmE5FtTFmXQHCpN//PAxNRcDG6O/5nYDVKDH5bfR9WU0pr5ggqBA8oDTAQqCi/xcpSpqVz8LlBLOfbs5VZXujdmZpdX5qLSKjpb0upn9qw66lmtflMqp05X1a6/rouqyKIwwBQqKvq+Evp6ksmbcY7m78VoYzhVr5T7cG3l0W5dptdpH/ll+zVtWfx5LUJyri9r6yHdWgjThQG12U2M5TSRrGgXNn3///3/P////99pfGdgs1VMQU1FVUxBTUUzLjk5LjNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//MQxPIAAAP8AcAAAFVVVVVVVVVVVVVVVVU="
-                                                            }, where);
-
-                                                            let size = Math.min(game.width, game.height) / 10;
-                                                            game.add.sprite({
-                                                                id: ".Internal.unmute", // We can use this as we're that plugin
-                                                                type: "sprite",
-                                                                img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
-                                                                visible: false,
-                                                                scripts: {
-                                                                    steps: {
-                                                                        appearAnimation: me => {
-                                                                            if (me.vars.delay < 30) {
-                                                                                me.vars.delay++;
-                                                                            }
-                                                                            else {
-                                                                                me.visible = true;
-                                                                                if (me.width != me.vars.size) {
-                                                                                    me.width *= 1.4;
-
-                                                                                    if (me.width >= me.vars.size) {
-                                                                                        me.width = me.vars.size;
-                                                                                        me.vars.appearAnimation = false;
-                                                                                    }
-                                                                                    me.height = me.width;
-                                                                                }
-                                                                            }
-                                                                        },
-                                                                        deleteAnimation: me => {
-                                                                            me.width /= 1.4;
-                                                                            me.height = me.width;
-                                                                            if (me.width < 1) {
-                                                                                me.delete(); // Bye
-                                                                            }
-                                                                        },
-                                                                        expandAnimation: me => {
-                                                                            me.width *= 1.025;
-                                                                            if (me.width > me.vars.expandedSize) {
-                                                                                me.width = me.vars.expandedSize;
-                                                                            }
-                                                                            me.height = me.width;
-                                                                        },
-                                                                        shrinkAnimation: me => {
-                                                                            if (me.width != me.vars.size) {
-                                                                                me.width /= 1.025;
-                                                                                if (me.width < me.vars.size) {
-                                                                                    me.width = me.vars.size;
-                                                                                }
-                                                                                me.height = me.width;
-                                                                            }
-                                                                            if (me.vars.plugin.vars.audio.autoPlay) { // Unmuted
-                                                                                me.vars.delete = true;
-                                                                            }
-                                                                        },
-                                                                        play: me => {
-                                                                            let vars = me.vars.plugin.vars;
-                                                                            for (let i in vars.audio.queue) {
-                                                                                let snd = Bagel.get.asset.snd(vars.audio.queue[i], game);
-                                                                                snd.play().then().catch(); // Play it
-                                                                            }
-                                                                            vars.audio.autoPlay = true;
-                                                                            vars.audio.queue = []; // Clear the queue
-                                                                            me.img = ".Internal.unmuteButton"; // Change to the unmuted image
-                                                                        },
-                                                                        pause: me => {
-                                                                            let vars = me.vars.plugin.vars;
-                                                                            for (let id in game.internal.assets.assets.snds) {
-                                                                                let snd = game.internal.assets.assets.snds[id];
-                                                                                if (! snd.paused) {
-                                                                                    snd.pause();
-                                                                                    if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                                                        vars.audio.queue.push(id);
-                                                                                    }
-                                                                                    else {
-                                                                                        snd.currentTime = 0;
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                            vars.audio.autoPlay = false;
-                                                                            me.img = ".Internal.unmuteButtonMuted"; // Change to the unmuted image
-                                                                        }
-                                                                    },
-                                                                    all: [
-                                                                        (me, game, step) => {
-                                                                            me.layer.bringToFront();
-                                                                            if (me.vars.appearAnimation) {
-                                                                                step("appearAnimation");
-                                                                            }
-                                                                            else {
-                                                                                if (! game.input.mouse.down) {
-                                                                                    if (me.vars.clicked) {
-                                                                                        game.playSound(".Internal.unmuteButtonClickUp");
-                                                                                    }
-                                                                                    me.vars.clicked = false;
-                                                                                }
-
-                                                                                let vars = me.vars.plugin.vars;
-                                                                                if (me.vars.delete) {
-                                                                                    step("deleteAnimation");
-                                                                                }
-                                                                                else {
-                                                                                    if (me.touching.mouseCircles()) {
-                                                                                        if (! me.vars.touching) {
-                                                                                            game.playSound(".Internal.unmuteButtonMouseTouch");
-                                                                                            me.vars.touching = true;
-                                                                                        }
-                                                                                        if (me.width != me.vars.expandedSize) {
-                                                                                            step("expandAnimation");
-                                                                                        }
-                                                                                        if (game.input.mouse.down && (! me.vars.clicked)) {
-                                                                                            game.playSound(".Internal.unmuteButtonClick");
-                                                                                            if (vars.audio.autoPlay) {
-                                                                                                step("pause");
-                                                                                            }
-                                                                                            else {
-                                                                                                step("play");
-                                                                                            }
-                                                                                            me.vars.clicked = true;
-                                                                                        }
-                                                                                    }
-                                                                                    else {
-                                                                                        me.vars.touching = false;
-                                                                                        step("shrinkAnimation");
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    ]
-                                                                },
-                                                                vars: {
-                                                                    plugin: plugin,
-                                                                    size: size,
-                                                                    expandedSize: size * 1.1,
-                                                                    delay: 0,
-                                                                    clicked: false,
-                                                                    delete: false,
-                                                                    touching: false,
-                                                                    appearAnimation: true
-                                                                },
-                                                                x: size,
-                                                                y: game.height - size,
-                                                                width: 1,
-                                                                height: 1,
-                                                            }, "plugin Internal, function \"game.playSound\" (via Game.add.sprite)");
-                                                        }
+                                                        plugin.vars.audio.createUnmute(plugin, game);
                                                         plugin.vars.audio.queue.push(args.id);
                                                     }
                                                     Bagel.internal.loadCurrent();
@@ -2261,7 +2091,176 @@ Bagel = {
             vars: {
                 audio: {
                     autoPlay: true, // We probably don't have it but assume we do for now
-                    queue: []
+                    queue: [],
+                    createUnmute: (plugin, game) => {
+                        if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
+                            // Create one instead
+                            let where = "plugin Internal's function \"game.playSound\"";
+                            game.add.asset.img({
+                                id: ".Internal.unmuteButtonMuted",
+                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgYpH/xRLwAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAFGSURBVEhLpVbbtcMwCCs9d4brjbJzvVGmcD9clQBRIY4+mtgRWBZ+VB5LGCNjnEMkY1DMIdnA6PfPKtbjw4wg9HyusXeMMSrDiYhotI/gzpIPOugMPaauCcowBedCXUcM0NKPcfTVDiCyKjwT+vQBnqDCZqLzhDkQZ0uNimjPtm/7tof8cfHCEesM3q/wbTvje55zMD8GwKh66B1jmEKjk3/nRLY2FFaols4PdBdkDdaBXa7bpeZYFbcFAt7RX9wroAJtqXJPwPeO3oUTGNPaXZZD1zDa+vsLbM0/8dkSPe364l91dO5ebZMS83RrQvF2vJkmmHO99dabCD0Hs2PmqlAF4mx+7xyQXnU1oexrBPKxAx/OffmPEtjmyR1kE/SOvf57603P1W+8D2TA1TNnmLEjWAm9Y3rgf54xpAbyryOFF8SAzG9tVk73YdUDkgAAAABJRU5ErkJggg=="
+                            }, where); // Load its image
+                            game.add.asset.img({
+                                id: ".Internal.unmuteButton",
+                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgoeC/S7LAAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAElSURBVEhLrZbREYQgDETNFaEdac3akTaR+2D2lODOBs/3w4gbWEJAbXiEu1LcY6YUkWRAa2je533e9YTbtE3bxBak44XgHJgZWsd1XMfY27Icy7EczDA3Sl5wY1lDCjMzM230Uz/mjWGC0g7duLu7x8i2FILBvLEYp2ALikbL/M346HAvAgSebdTVLdffx2fHv2Qweyp7yZZAMdpmstlibGm9JXpLs7peGoP/ks1YltcNvg01WNeEzkmsobf4GWSfpPqUaXr1gNXwB6/RgU9SpDdDvXqAa45w3kPIBGtrPdfdx/H7L17UoQbPFatro0zQnyEYi+OzzKX/Zp4aiihj5SxcEjWkYIdHG2Y7oYwBOQFAbZSBlLqFbSEzBtIGI+SvQ6IMRb66bmr2BeoT1QAAAABJRU5ErkJggg=="
+                            }, where); // Load its image
+
+                            game.add.asset.snd({
+                                id: ".Internal.unmuteButtonClick",
+                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAAAwAABBIAYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBg0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ////////////////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQCzSEAAeAAAAQSSYAuqwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEnACyvdAAACoh3exu8jLeoIAgcKAgCAYLggCAIHCgIAhggGIPv5cEFg+D+sH/Lg4CHDHKHP/E4PghrBwMcEAQygY//BB3//+UBAEAx/KAhlAQcmYqIp0mTVUZDWGgyrJEUQYImG/BhWy0KoEQVVjZUyyAxi+zMxAcDuX+WiWnPTQwFZ4BkIgoSlO0HWRLRa6sZiyXtxgTnQ+IAlwFSpHstGDFzlpJ1J2pzS2mZiuluTRlbS2DUE23jTFgFMVrERfV4GUv7edHTZbTQ3CYA37KYccp4lAmlpzMpkEOspbRYs7LIi8j8MQbxBMzxd8NvvB7KbTgw4yl1W5P67sEQS7sYhl3Zx/ZbS7xUzi6X+TZJFYkkYszmT+NETCdJdz7uFIpTWyjsNSdyauojEpdBNNLm408Oz/87DE4loUgqsfmMAkgxuzs47j+VGWS1u8Uf913bjdZa8ehyAaaIu7EXJhhwZC4VK+0ifZr0F/j++Y/vHW6WVZwzAUWZ7FrTIbUonIxGL0OUt+9G5e5cXmm3gp+aBnEQfaROjKqF/Zl/ZQ+smaVSuk8zSmJNFZVG2Gv9BMO/dpccfkF6/er5y/LC67MYfWchq4/0fVrKAIu7lfHLva4zAQE2q//1VFBQEBKMzKuGAhVCgJqs+qAnVAVL/6vxmKMx///9VTqr/V9VXjMUZvgYCAQNP9YKrBX8S8ShsSgrEVZ0RBwRPg1Bp5U7rBUeGpUNiU78RBwRPUIoilTusFR4KqTEFNRTMuOTkuM6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqv/zYMTZGtmybx/DGACqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg=="
+                            }, where);
+                            game.add.asset.snd({
+                                id: ".Internal.unmuteButtonClickUp",
+                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABMkATk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDLCEAAeAAAATJpqKjmQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAFogGux9BAAC6qruoVWtAv0iG8oCDgQcUBA4Jz8pLg+D+IAQd5cHwfB/rP/BAEDkoGPxACYPg+D5+GPUCAIA+/8HwQBAEAQBMH/h/8EAQBB3UCAPg+H/wQDH8HwfD8uD4Pg+qushml2hmlAYBrCAMEjTYbZgXKSJMQKAAkRyGgr9CoNCahLjLRnVAAhorQiAL13knoq8qAdYdH1rCt6FqmTC2dsHT1HCMoc2jWLUjdBRNoyJv4RMO0+0ZrvFNRFbrNnkWi/kVZar+lnZySwWwG4+ixJ1YkCQ+8pbp5BEMtK0x06WUrt+hjNymv+3B3YjhSwzfl+pU8dytnvDLdWPVbMpuUdPNWprdLVi9irfi0sqU17Ofj8Oyrct1AT9y2td13+c+7WpqbfJqlpatarGeX5Xf7rD/86DE0Up0bqMfmsAAw5zWN6btVKDKzU7yzzKbyps6amyrU1/uWWOOP8paa13k1DVLjTV7tumz7llnhjZyws6t1pfMyHcons7H42c6avS27mprVaNVbUzS/vdL3u/5l3+5fv7N/qaMNZRoSaM02g0LO2aTFcDsQUEAsfvVoGoStQqLLLRgFURCVLcDdYiz5huShkdWIiu/qVSyzERIxDHQ0pUtZNFTUECvRA6UymyVysMPMABBJfQHFAUZwC8TIEEyk3udBhrpMhGCRxJYZOULpBco1Sk7HGyX0/l6VsgUOZnGH2U2MI0A8GLUeKwWfCoQ8E0F/6BprcYalVlOdmj4tNyf6VXuLTLIuC/LorRbMhlMYw1BN2yzJs8dd2zGcZmTN3lUWlUzOQ3H4CpuPEw6G8qsZxtNxgFx//OwxNNQVC56/5jICGCqtSrclTdpucj0tjkRoKGIwTcd2njO6CtVptyqNXJuK0t2kpst61lv+a139Y6nN092prC19Ncls5QzfIlc3CL8BS+tasZXvm3RityJRaIxGw+0pj0Na7jvWWst/v//////UpprXcqYjJN1BQCkqkxBTUUzLjk5LjOqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqr/8xDE8QAAA/wBwAAAqqqqqqqqqqqqqqqqqg=="
+                            }, where);
+                            game.add.asset.snd({
+                                id: ".Internal.unmuteButtonMouseTouch",
+                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABP0ASkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDKiEAAeAAAAT9uAw0pwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEjkqnedDMACyMBL0ufxEQvkRC3REREKgYACCEe7JpkEIy7Jp3Ed7Jp3vezyad7+9nkyd7BMmH8uf8Tg+8uD4f/l///Ln/5d//h///rB9//g+z7q7iFlKYTSjQDSknrKLQgSoGlObS2JMhgJeYvuY7AQqCdmwWOKDMmn7BoHzfVVVDBTsLMmppKqLp0vOKCTvSCZkpdHXbYjEnpVuWSqo6TdY6z5ur2PA3FrEqV1EYgu8tyumPPoyarCXtXFGr8QhiZqr8pX8uxX4koFKn9eB8HDaw7rWJFKXioqVfzRW6vxFrMeu5RKAaDjxU8JmvtRDCV2s7eEsvZyCV49gGxGsaOrQvzT1XFsZczpYai2PYeyq3GyRSXSh3n8sSyN237rWKSKdhqLdhtiVC9kzIIlEpq69DRb/86DE406karb/mMAFHbtWq4NWxKsdSq9Wpq3JuxT27ff5X7T3+U+X2/yntXm4vk5WpFjMzsGWX6qVJdG5dlTRyHoL7Wz/Gl7rKm3KvrV8cfpr8Zw5vm+/vt/G9V5re6lXCtV5KptKs5xLtdN7LRLNNperiCirq5ChNOZN0QkNyLgShrjSgaOXwEQpl1LzMZFtXeJAWG2ugwCMCNzUA833wAgJFXiAwSlUnkYugAJmMGF1gGAPCykUA0eGnu4YEOjRSYWOGAildqzYmsuUy5iUvmJQAQcyg7MCIzJAUw00r8huy/cNv9U28b9Oy0iBBCHGPhRiiWYIThCaZeuGOoyQ7WYu15yXHdWd9Z6msOrSf+Mpywm2TF6mlNJAaDCEAQJmBCbMc6sImYkzqn5TydmE5FtTFmXQHCpN//PAxNRcDG6O/5nYDVKDH5bfR9WU0pr5ggqBA8oDTAQqCi/xcpSpqVz8LlBLOfbs5VZXujdmZpdX5qLSKjpb0upn9qw66lmtflMqp05X1a6/rouqyKIwwBQqKvq+Evp6ksmbcY7m78VoYzhVr5T7cG3l0W5dptdpH/ll+zVtWfx5LUJyri9r6yHdWgjThQG12U2M5TSRrGgXNn3///3/P////99pfGdgs1VMQU1FVUxBTUUzLjk5LjNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//MQxPIAAAP8AcAAAFVVVVVVVVVVVVVVVVU="
+                            }, where);
+
+                            let size = Math.min(game.width, game.height) / 10;
+                            game.add.sprite({
+                                id: ".Internal.unmute", // We can use this as we're that plugin
+                                type: "sprite",
+                                img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
+                                visible: false,
+                                scripts: {
+                                    steps: {
+                                        appearAnimation: me => {
+                                            if (me.vars.delay < 30) {
+                                                me.vars.delay++;
+                                            }
+                                            else {
+                                                me.visible = true;
+                                                if (me.width != me.vars.size) {
+                                                    me.width *= 1.4;
+
+                                                    if (me.width >= me.vars.size) {
+                                                        me.width = me.vars.size;
+                                                        me.vars.appearAnimation = false;
+                                                    }
+                                                    me.height = me.width;
+                                                }
+                                            }
+                                        },
+                                        deleteAnimation: me => {
+                                            me.width /= 1.4;
+                                            me.height = me.width;
+                                            if (me.width < 1) {
+                                                me.delete(); // Bye
+                                            }
+                                        },
+                                        expandAnimation: me => {
+                                            me.width *= 1.025;
+                                            if (me.width > me.vars.expandedSize) {
+                                                me.width = me.vars.expandedSize;
+                                            }
+                                            me.height = me.width;
+                                        },
+                                        shrinkAnimation: me => {
+                                            if (me.width != me.vars.size) {
+                                                me.width /= 1.025;
+                                                if (me.width < me.vars.size) {
+                                                    me.width = me.vars.size;
+                                                }
+                                                me.height = me.width;
+                                            }
+                                            if (me.vars.plugin.vars.audio.autoPlay) { // Unmuted
+                                                me.vars.delete = true;
+                                            }
+                                        },
+                                        play: me => {
+                                            let vars = me.vars.plugin.vars;
+                                            for (let i in vars.audio.queue) {
+                                                let snd = Bagel.get.asset.snd(vars.audio.queue[i], game);
+                                                snd.play().then().catch(); // Play it
+                                            }
+                                            vars.audio.autoPlay = true;
+                                            vars.audio.queue = []; // Clear the queue
+                                            me.img = ".Internal.unmuteButton"; // Change to the unmuted image
+                                        },
+                                        pause: me => {
+                                            let vars = me.vars.plugin.vars;
+                                            for (let id in game.internal.assets.assets.snds) {
+                                                let snd = game.internal.assets.assets.snds[id];
+                                                if (! snd.paused) {
+                                                    snd.pause();
+                                                    if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
+                                                        vars.audio.queue.push(id);
+                                                    }
+                                                    else {
+                                                        snd.currentTime = 0;
+                                                    }
+                                                }
+                                            }
+                                            vars.audio.autoPlay = false;
+                                            me.img = ".Internal.unmuteButtonMuted"; // Change to the unmuted image
+                                        }
+                                    },
+                                    all: [
+                                        (me, game, step) => {
+                                            me.layer.bringToFront();
+                                            if (me.vars.appearAnimation) {
+                                                step("appearAnimation");
+                                            }
+                                            else {
+                                                if (! game.input.mouse.down) {
+                                                    if (me.vars.clicked) {
+                                                        game.playSound(".Internal.unmuteButtonClickUp");
+                                                    }
+                                                    me.vars.clicked = false;
+                                                }
+
+                                                let vars = me.vars.plugin.vars;
+                                                if (me.vars.delete) {
+                                                    step("deleteAnimation");
+                                                }
+                                                else {
+                                                    if (me.touching.mouseCircles()) {
+                                                        if (! me.vars.touching) {
+                                                            game.playSound(".Internal.unmuteButtonMouseTouch");
+                                                            me.vars.touching = true;
+                                                        }
+                                                        if (me.width != me.vars.expandedSize) {
+                                                            step("expandAnimation");
+                                                        }
+                                                        if (game.input.mouse.down && (! me.vars.clicked)) {
+                                                            game.playSound(".Internal.unmuteButtonClick");
+                                                            if (vars.audio.autoPlay) {
+                                                                step("pause");
+                                                            }
+                                                            else {
+                                                                step("play");
+                                                            }
+                                                            me.vars.clicked = true;
+                                                        }
+                                                    }
+                                                    else {
+                                                        me.vars.touching = false;
+                                                        step("shrinkAnimation");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                },
+                                vars: {
+                                    plugin: plugin,
+                                    size: size,
+                                    expandedSize: size * 1.1,
+                                    delay: 0,
+                                    clicked: false,
+                                    delete: false,
+                                    touching: false,
+                                    appearAnimation: true
+                                },
+                                x: size,
+                                y: game.height - size,
+                                width: 1,
+                                height: 1,
+                            }, "plugin Internal, function \"game.playSound\" (via Game.add.sprite)");
+                        }
+                    }
                 }
             }
         },
@@ -2340,14 +2339,10 @@ Bagel = {
                 let combinedPlugins = game.internal.combinedPlugins;
                 let plural = combinedPlugins.types.internal.pluralAssetTypes[combinedPlugins.types.assets[type].get];
 
+                assets.loadingIDs[type][assetJSON.id] = false; // Not loading anymore
                 assets.assets[type][assetJSON.id] = asset;
                 assets.loaded++;
                 assets.loading--;
-                if (assets.toLoad[plural]) {
-                    if (assets.toLoad[plural][assetJSON.id]) {
-                        delete assets.toLoad[plural][assetJSON.id]; // Doesn't need loading anymore
-                    }
-                }
                 if (assets.loading == 0) {
                     if (game.config.loading.skip) {
                         game.loaded = true;
@@ -2357,7 +2352,9 @@ Bagel = {
             })(asset, game); // This is called by the init function once the asset has loaded
             if (loadNow) {
                 assetLoader.init(asset, ready, game, assetLoader.internal.plugin, i);
-                game.internal.assets.loading++;
+                assets.loading++;
+                if (assets.loadingIDs[type] == null) assets.loadingIDs[type] = {};
+                assets.loadingIDs[type][asset.id] = true; // It's currently loading
             }
             else {
                 let toLoad = game.internal.assets.toLoad;
@@ -2602,6 +2599,7 @@ Bagel = {
                             loaded: 0,
                             assets: {},
                             toLoad: {},
+                            loadingIDs: {},
                             ranTasks: false,
                             assetsLoading: 0
                         },
@@ -3206,6 +3204,15 @@ Bagel = {
                                             if (doesntExist) { // Invalid id
                                                 let exists = assets.toLoad[plural];
                                                 if (exists) exists = exists[id];
+                                                if (! exists) {
+                                                    if (assets.loadingIDs[plural]) {
+                                                        if (assets.loadingIDs[plural][id]) {
+                                                            Bagel.internal.loadCurrent();
+                                                            return true; // It's already loading
+                                                        }
+                                                    }
+                                                }
+
                                                 if (exists) {
                                                     let info = exists;
                                                     current.i = info.i;
@@ -3213,6 +3220,16 @@ Bagel = {
 
                                                     info.assetLoader.init({...info.asset}, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
                                                     info.game.internal.assets.loading++;
+
+                                                    if (assets.loadingIDs[type] == null) assets.loadingIDs[type] = {};
+                                                    assets.loadingIDs[type][info.asset.id] = true; // It's currently loading
+
+                                                    if (assets.toLoad[plural]) {
+                                                        if (assets.toLoad[plural][id]) {
+                                                            delete assets.toLoad[plural][id]; // It's loading so it should be removed from the list of assets to load
+                                                        }
+                                                    }
+
                                                     Bagel.internal.loadCurrent();
                                                     return true; // It's loading
                                                 }
@@ -3233,7 +3250,7 @@ Bagel = {
                                                 console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the arguments for the asset as an object.");
                                                 Bagel.internal.oops(game);
                                             }
-                                            if (typeof asset == "object") {
+                                            if (typeof asset != "object") {
                                                 console.error("Huh, looks like you used the wrong type for the \"asset\" argument (the first argument). That's the arguments for the asset as an object. You tried to use " + JSON.stringify(asset) + ".");
                                                 Bagel.internal.oops(game);
                                             }
