@@ -5,7 +5,6 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 TODO:
 Make sure the global "game" variable isn't accessed
 With function x/y positions, the sprite doesn't have all the properties
-The game doesn't render when it's paused?
 Change renderer description when WegGL is added
 Sprite/plugin tasks while loading
 Fix spelling errors
@@ -308,11 +307,11 @@ Bagel = {
                                             if (value.includes("x")) {
                                                 let scale = parseFloat(value.split("x")[0]);
 
-                                                if (triggerSprite.img == null) {
+                                                if (sprite.img == null) {
                                                     sprite[property] = 1;
                                                     return;
                                                 }
-                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                                let img = Bagel.get.asset.img(sprite.img);
                                                 if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * scale;
 
@@ -326,8 +325,8 @@ Bagel = {
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
 
-                                            if (triggerSprite.img) {
-                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                            if (sprite.img) {
+                                                let img = Bagel.get.asset.img(sprite.img);
                                                 if (typeof img == "boolean") return ".rerun";
                                                 // Update the scale
                                                 let scaleX = sprite.width / img.width;
@@ -337,8 +336,8 @@ Bagel = {
                                             return;
                                         }
                                         if (typeof value == "number") {
-                                            if (triggerSprite.img) {
-                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                            if (sprite.img) {
+                                                let img = Bagel.get.asset.img(sprite.img);
                                                 if (typeof img == "boolean") return ".rerun";
                                                 // Update the scale
                                                 let scaleX = sprite.width / img.width;
@@ -364,6 +363,18 @@ Bagel = {
                                     },
                                     y: {
                                         set: "xy"
+                                    },
+                                    img: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                if (sprite.img) {
+                                                    let img = Bagel.get.asset.img(sprite.img);
+                                                    if (typeof img == "boolean") return ".rerun";
+                                                    triggerSprite.width = img.width;
+                                                    triggerSprite.height = img.height;
+                                                }
+                                            }
+                                        }
                                     },
                                     width: {
                                         set: "dimensions"
@@ -2860,7 +2871,8 @@ Bagel = {
                             asset: {}
                         };
                         game.get = {
-                            asset: {}
+                            asset: {},
+                            sprite: (id, check) => Bagel.get.sprite(id, game, check)
                         };
                         game.set = {
                             asset: {}
@@ -3784,13 +3796,13 @@ Bagel = {
                             sprite.internal.properties[property] = sprite[property];
                             ((sprite, property, game, plugin, handlers) => {
                                 let get = () => {
-                                    Bagel.internal.triggerSpriteListener("get", property, sprite, game);
+                                    Bagel.internal.triggerSpriteListener("get", property, sprite, game, false);
                                     return sprite.internal.properties[property];
                                 };
                                 let set = value => {
                                     if (sprite.internal.properties[property] != value) { // Don't trigger it if it hasn't actually changed
                                         sprite.internal.properties[property] = value;
-                                        Bagel.internal.triggerSpriteListener("set", property, sprite, game);
+                                        Bagel.internal.triggerSpriteListener("set", property, sprite, game, false);
                                     }
                                 }
                                 if (handlers.get || handlers.set) {
@@ -3971,7 +3983,7 @@ Bagel = {
                         let rerun = [...sprite.internal.rerunListeners]; // Clone is so running the listeners doesn't affect which listeners are triggered
                         sprite.internal.rerunListeners = [];
                         for (let c in rerun) {
-                            Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game);
+                            Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game, false);
                         }
                     }
                 },
@@ -3996,7 +4008,7 @@ Bagel = {
                         }
 
                         subFunctions.pluginScripts(game);
-                        subFunctions.processSprites(game)
+                        subFunctions.processSprites(game);
                         subFunctions.scripts("main", true, game, state);
                         subFunctions.scripts("main", false, game, state);
                         subFunctions.scripts("all", true, game, state);
@@ -4095,6 +4107,9 @@ Bagel = {
                             renderHeight = res[1];
                         }
                     }
+
+                    renderWidth = Math.ceil(renderWidth); // The canvas width has to be a whole number
+                    renderHeight = Math.ceil(renderHeight);
 
                     let renderer = game.internal.renderer;
                     let canvas = renderer.canvas;
@@ -5812,7 +5827,7 @@ Bagel = {
             current.game = game;
             current.plugin = plugin;
 
-            let error = handler.listeners.property[property][type](sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener, (!! initialTrigger));
+            let error = handler.listeners.property[property][type](sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener, initialTrigger);
 
             if (error) {
                 if (error = ".rerun") { // Not actually an error, just means it needs to be ran again the next frame
