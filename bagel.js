@@ -3,6 +3,7 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
+Make full pwa instructions, including how to set the startURL and scope properly
 Make sure the global "game" variable isn't accessed
 With function x/y positions, the sprite doesn't have all the properties
 Change renderer description when WegGL is added
@@ -1177,11 +1178,17 @@ Bagel = {
                                                     let toCache = args.extraFiles;
                                                     for (let assetType in game.game.assets) {
                                                         for (let i in game.game.assets[assetType]) {
-                                                            toCache.push(game.game.assets[assetType][i].src);
+                                                            let src = game.game.assets[assetType][i].src;
+                                                            if (src.split(":")[0] != "data") { // Data url, don't cache
+                                                                toCache.push(src);
+                                                            }
                                                         }
                                                     }
                                                     for (let plugin in game.game.plugins) {
-                                                        toCache.push(game.game.plugins[plugin].src);
+                                                        let src = game.game.plugins[plugin].src;
+                                                        if (src.split(":")[0] != "data") { // Data url, don't cache
+                                                            toCache.push(src);
+                                                        }
                                                     }
 
                                                     if (args.icons[args.icons.length - 1] != "/") {
