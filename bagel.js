@@ -3,15 +3,16 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
+Mask icon audit problem in lighthouse ???? One of the ways to improve in last section
+Safari audio doesn't work. Even after clicking unmute. Should also assume muted videos might not play. (make sure this is true with audio too). What about firefox? Is it the same as chrome's? Mobile PWAs (Chrome) are supposed to always allow auto play but this seems inconsistent
 Make full pwa instructions, including how to set the startURL and scope properly
+WebGL renderer. The firefox performance is 392x the canvas performance! Don't forget context lost handling
 Make sure the global "game" variable isn't accessed
 With function x/y positions, the sprite doesn't have all the properties
 Change renderer description when WegGL is added
 Sprite/plugin tasks while loading
 Fix spelling errors
 Tidy up files included
-Apple touch icons
-WebGL renderer. Don't forget context lost handling
 Gamepad support
 
 TESTING
@@ -36,9 +37,7 @@ Bagel = {
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
         subFunctions.loadingScreen(game);
 
-        if (Object.keys(Bagel.internal.games).length == 0) {
-            console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
-        }
+        console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
         Bagel.internal.games[game.id] = game;
         Bagel.internal.loadCurrent();
         return game;
@@ -997,6 +996,11 @@ Bagel = {
                                                 types: ["string"],
                                                 description: "The src of the manifest. Generate one using Bagel.pwa.generate.manifest."
                                             },
+                                            debugManifest: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "The src of your debug manifest. It allows you to test your PWA without putting it on a production server. (don't test things on production! :P)"
+                                            },
                                             versions: {
                                                 required: false,
                                                 types: ["string"],
@@ -1027,7 +1031,13 @@ Bagel = {
                                                 default: false,
                                                 types: ["boolean"],
                                                 description: "If you've minified your main JavaScript file. You should also use the minified version of Bagel.js."
-                                            }
+                                            },
+                                            debug: {
+                                                required: false,
+                                                default: true,
+                                                types: ["boolean"],
+                                                description: "If debug mode should be enabled. This disables the service worker so the page updates properly when reloading. Make sure you disable this before you put this game online though."
+                                            },
                                         },
                                         fn: args => {
                                             if (Bagel.internal.pwaInitialised) {
@@ -1035,7 +1045,16 @@ Bagel = {
                                             }
                                             if (args.worker) {
                                                 if (navigator.serviceWorker) {
-                                                    navigator.serviceWorker.register(args.worker);
+                                                    if (args.debug) {
+                                                        navigator.serviceWorker.getRegistrations().then(workers => {
+                                                            for (let worker of workers) {
+                                                                worker.unregister();
+                                                            }
+                                                        });
+                                                    }
+                                                    else {
+                                                        navigator.serviceWorker.register(args.worker);
+                                                    }
                                                 }
                                             }
                                             else {
@@ -1047,11 +1066,17 @@ Bagel = {
                                                 console.warn("The Bagel.js icons are missing. Generate the icons using Bagel.pwa.generate.icons.");
                                             }
                                             if (args.manifest) {
-                                                // <link rel="manifest" href="/manifest.webmanifest">
-                                                let link = document.createElement("link");
-                                                link.rel = "manifest";
-                                                link.href = args.manifest;
-                                                document.head.appendChild(link);
+                                                let manifest = args.debug? args.debugManifest : args.manifest;
+                                                if (args.debugManifest == null) {
+                                                    console.warn("No debug manifest specified. One should have been generated by Bagel.pwa.generate.manifest. Once you've got it, link it to your game by setting the \"debugManifest\" argument in this function to its src.");
+                                                }
+
+                                                if (args.debugManifest || (! args.debug)) {
+                                                    let link = document.createElement("link");
+                                                    link.rel = "manifest";
+                                                    link.href = manifest;
+                                                    document.head.appendChild(link);
+                                                }
                                             }
                                             else {
                                                 console.warn("The Bagel.js manifest is missing. Generate one using Bagel.pwa.generate.manifest once you've generated the icons using Bagel.pwa.generate.icons.");
@@ -1071,9 +1096,12 @@ Bagel = {
                                                                 version = version.split("\n").join("");
                                                                 let installed = localStorage.getItem(args.versionStorageName);
                                                                 if (installed == null) installed = 0;
+
+                                                                Bagel.pwa.version = installed;
                                                                 if (installed != version) {
                                                                     fetch(args.versions).then(res => res.json().then(versions => {
                                                                         caches.open(args.cacheStorageName).then(cache => {
+                                                                            let oldVersion = installed;
                                                                             while (installed < versions.versions.length) {
                                                                                 let changed = versions.versions[installed].changed;
                                                                                 for (let i in changed) {
@@ -1082,7 +1110,16 @@ Bagel = {
                                                                                 installed++;
                                                                             }
                                                                             localStorage.setItem(args.versionStorageName, installed);
-                                                                            location.reload(); // Reload so all the new assets can be loaded
+
+                                                                            Bagel.pwa.version = installed;
+
+                                                                            let blockReload = false;
+                                                                            if (Bagel.events.pwaUpdate) {
+                                                                                blockReload = Bagel.events.pwaUpdate(installed, oldVersion, versions);
+                                                                            }
+                                                                            if (! blockReload) {
+                                                                                location.reload(); // Reload so all the new assets can be loaded
+                                                                            }
                                                                         });
                                                                     }));
                                                                 }
@@ -1129,6 +1166,9 @@ Bagel = {
                                             if (! args.minified) {
                                                 console.warn("Your code isn't minified. Look up an online tool to help. Once you're done, set \"minified\" in Bagel.pwa.init to true. Also, make sure to run lighthouse or an equivalent so you can follow the best practices :)");
                                             }
+                                            if (args.debug) {
+                                                console.warn("PWA debug mode is enabled, make sure you disable it before releasing by setting \"debug\" in Bagel.pwa.init to false.");
+                                            }
 
                                             Bagel.internal.pwaInitialised = true;
                                         }
@@ -1151,8 +1191,7 @@ Bagel = {
                                                         description: "The src of the folder containing the icons. Generate them with Bagel.pwa.generate.icons."
                                                     },
                                                     extraFiles: {
-                                                        required: false,
-                                                        default: [],
+                                                        required: true,
                                                         types: ["array"],
                                                         description: "Any extra files that aren't assets but are needed. e.g index.html, main.js, bagel.js etc."
                                                     },
@@ -1165,7 +1204,7 @@ Bagel = {
                                                         required: false,
                                                         default: "manifest.json",
                                                         types: ["string"],
-                                                        description: "The src of your manifest or what will be the src."
+                                                        description: "The src of your manifest or what will be the src when the website is properly online."
                                                     },
                                                     fileName: {
                                                         required: false,
@@ -1217,7 +1256,7 @@ Bagel = {
                                                         "});",
                                                         "self.addEventListener(\"fetch\",e=>{",
                                                         "e.respondWith(",
-                                                        "caches.match(e.request).then(response=>response||fetch(e.request))",
+                                                        "caches.open(<NAME>).then(cache=>cache.match(e.request).then(response=>response||fetch(e.request)))",
                                                         ")",
                                                         "});"
                                                     ].join("");
@@ -1225,11 +1264,13 @@ Bagel = {
                                                     if (args.storageID == null) {
                                                         args.storageID = "Bagel.js " + args.game.id;
                                                     }
-                                                    worker = worker.replace("<NAME>", JSON.stringify(args.storageID));
+                                                    worker = worker.split("<NAME>").join( JSON.stringify(args.storageID));
                                                     Bagel.download(worker, args.fileName, false, "application/javascript");
 
                                                     console.log("Your service worker has been generated. Make sure to place this in the root directory of your project, also make sure that this page is in the root directory. You should also make sure that the array provided for the second argument contains your JavaScript (including the Bagel.js file) files and your HTML file.\nA new worker will need to be generated for each version (unless there's no new files) (versions can be generated using Bagel.pwa.generate.version)");
                                                     console.log("Make sure you enable the worker by setting the \"worker\" argument to " + JSON.stringify(args.fileName) + " and by setting \"cacheStorageName\" to " + JSON.stringify(args.storageID) + " in Bagel.pwa.init. You should also generate a version using Bagel.pwa.generate.version if you haven't already.");
+
+                                                    console.log("\nAlso make sure to save the code you used so you can generate the next worker more easilly.");
                                                 }
                                             }
                                         },
@@ -1240,7 +1281,7 @@ Bagel = {
                                                     src: {
                                                         required: true,
                                                         types: ["string"],
-                                                        description: "The src of the 512x512 resolution icon."
+                                                        description: "The src of the 512x512 resolution icon. (it can be any resolution if it's pixel art)"
                                                     },
                                                     pixelArt: {
                                                         required: true,
@@ -1254,11 +1295,11 @@ Bagel = {
                                                     (img => {
                                                         img.onload = () => {
                                                             if (img.width != img.height) {
-                                                                console.warn("Image width doesn't match image height.");
+                                                                console.warn("Huh, the image width doesn't match image height.");
                                                             }
                                                             if (! args.pixelArt) {
                                                                 if (img.width != 512 || img.height != 512) {
-                                                                    console.warn("Image isn't 512x512.");
+                                                                    console.warn("Hmm, the image isn't 512x512 and it's not pixel art.");
                                                                 }
                                                             }
 
@@ -1283,7 +1324,7 @@ Bagel = {
                                                                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                                                                 Bagel.download(canvas.toDataURL("image/png"), resolution + "x" + resolution + ".png", true);
                                                             }
-                                                            console.log("128, 144, 152, 192, 256 and 512 pixel resolutions have been generated. You may need to enable automatic downloads. These should be in a folder in your project directory (or subfolder). You can add them to your PWA by setting the \"icons\" argument in Bagel.pwa.init to the src of the folder containing them. e.g if you put them in assets/imgs/icons then it should be \"assets/imgs/icons/\".");
+                                                            console.log("128, 144, 152, 192, 256 and 512 pixel resolutions have been generated. You may need to enable automatic downloads. These should be in a folder in your project directory (or subfolder). You can add them to your PWA by generating a manifest. You should also make sure to set the \"icons\" argument in Bagel.pwa.init to true.");
                                                         };
                                                     })(img);
                                                     img.src = args.src;
@@ -1309,6 +1350,11 @@ Bagel = {
                                                         required: true,
                                                         types: ["string"],
                                                         description: "A shorter name."
+                                                    },
+                                                    startURL: {
+                                                        required: true,
+                                                        types: ["string"],
+                                                        description: "The URL for the PWA to start at when it's opened."
                                                     },
 
                                                     backgroundColour: {
@@ -1368,22 +1414,15 @@ Bagel = {
                                                         types: ["array"],
                                                         description: "See https://developer.mozilla.org/en-US/docs/Web/Manifest/related_applications"
                                                     },
-                                                    scope: {
-                                                        required: false,
-                                                        default: location.href,
-                                                        types: ["string"],
-                                                        description: "The different URLs that the manifest applies to. Defaults to just the page where this generator was run."
-                                                    },
                                                     screenshots: {
                                                         required: false,
                                                         types: ["array"],
                                                         description: "Intended to be used by PWA stores. See https://developer.mozilla.org/en-US/docs/Web/Manifest/screenshots"
                                                     },
-                                                    startURL: {
+                                                    scope: {
                                                         required: false,
-                                                        default: location.href,
                                                         types: ["string"],
-                                                        description: "The URL for the PWA to start at when it's opened."
+                                                        description: "The different URLs that the manifest applies to. Defaults to your argument for the start URL, which is probably what you want most of the time."
                                                     }
                                                 },
                                                 fn: args => {
@@ -1413,6 +1452,9 @@ Bagel = {
                                                                 if (document.body) {
                                                                     newArgs[map[i]] = document.body.bgColor;
                                                                 }
+                                                            }
+                                                            else if (i == "scope") {
+                                                                newArgs[map[i]] = args.startURL;
                                                             }
                                                         }
                                                         else {
@@ -1444,8 +1486,38 @@ Bagel = {
                                                     }
                                                     args.icons = icons;
 
+                                                    // Some of the urls won't work on a test server, so it needs a separate manifest
+                                                    let debugManifest = Bagel.internal.deepClone(args);
+                                                    debugManifest.start_url = location.href;
+                                                    debugManifest.scope = location.href;
+
                                                     Bagel.download(JSON.stringify(args), "manifest.json", false, "application/json");
-                                                    console.log("Manifest generated. Put it in the root directory of your project and set the \"manifest\" argument in Bagel.init.pwa to its src.");
+                                                    Bagel.download(JSON.stringify(debugManifest), "debugManifest.json", false, "application/json");
+
+                                                    console.log("Manifests generated. Put them in the root directory of your project and set the \"manifest\" argument in Bagel.init.pwa to normal manifest src. You should also set the \"debugManifest\" argument to the other manifest's src if you want to be able to test your PWA.");
+                                                    console.log("(You might need to enable automatic downloads to get both the files)");
+                                                    console.log("Tip: you should also save the code you just ran so you can update your manifest more easily.");
+
+
+                                                    console.log("\nYou should also add these elements to your HTML \"head\" tag if you haven't already...");
+                                                    let icon = icons[icons.length - 1].src;
+                                                    let link = document.createElement("link");
+                                                    link.rel = "icon";
+                                                    link.type = "image/png";
+                                                    link.href = icon;
+                                                    let p = document.createElement("p");
+                                                    p.appendChild(link);
+                                                    console.log(p.innerHTML);
+
+                                                    // Apple doesn't seem to like the idea of PWAs so we have to use an old solution for icons that's existed since the first Safari (I think?) (argh)
+                                                    link = document.createElement("link");
+                                                    link.rel = "apple-touch-icon";
+                                                    link.sizes = "512x512"; // This resolution is way overkill but it gets downscaled anyway
+                                                    link.type = "image/png";
+                                                    link.href = icon;
+                                                    p = document.createElement("p");
+                                                    p.appendChild(link);
+                                                    console.log(p.innerHTML);
                                                 }
                                             }
                                         },
@@ -1499,6 +1571,14 @@ Bagel = {
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+                                },
+                                help: {
+                                    fn: {
+                                        normal: true,
+                                        fn: () => {
+                                            console.log("Full tutorial here: https://github.com/hedgehog125/Bagel.js/wiki/PWA-Tutorial :)");
                                         }
                                     }
                                 }
@@ -2727,7 +2807,7 @@ Bagel = {
 
                             mouse.down = true;
                             if (e.cancelable) {
-                                ctx.preventDefault();
+                                e.preventDefault();
                             }
                         }, false);
                         addEventListener("touchmove", e => {
@@ -3359,7 +3439,7 @@ Bagel = {
                             }
                         }
                     },
-                    method: (game, plugin, type, spriteType, position, method, methodName, bagelPosition) => {
+                    method: (game, plugin, type, spriteType, position, method, methodName, bagelPosition, positionName) => {
                         let merge = false;
                         if (position[methodName] == null) {
                             merge = true;
@@ -3388,7 +3468,7 @@ Bagel = {
                                     bagelPosition[methodName] = method.fn.fn; // No bindings needed
                                 }
                                 else {
-                                    ((position, methodName, plugin, method) => {
+                                    ((position, methodName, plugin, method, positionName) => {
                                         if (method.fn.obArg) {
                                             bagelPosition[methodName] = args => {
                                                 if (args == null) args = {};
@@ -3400,7 +3480,7 @@ Bagel = {
                                                 args = Bagel.check({
                                                     ob: args,
                                                     syntax: method.fn.args,
-                                                    where: "Bagel.js method " + JSON.stringify(methodName)
+                                                    where: "the Bagel.js method " + JSON.stringify(positionName + "." + methodName)
                                                 }, Bagel.internal.checks.disableArgCheck);
                                                 // Passed the argument checks
 
@@ -3430,7 +3510,7 @@ Bagel = {
                                                 newArgs = Bagel.check({
                                                     ob: newArgs,
                                                     syntax: method.fn.args,
-                                                    where: "Bagel.js method " + JSON.stringify(methodName)
+                                                    where: "the Bagel.js method " + JSON.stringify(positionName + "." + methodName)
                                                 }, Bagel.internal.checks.disableArgCheck, false, "Btw, the arguments go in this order: " + keys.join(", ") + ".");
                                                 // Passed the argument checks
 
@@ -3443,7 +3523,7 @@ Bagel = {
                                                 return output;
                                             };
                                         }
-                                    })(position, methodName, plugin, method);
+                                    })(position, methodName, plugin, method, positionName);
                                 }
                             }
                             else {
@@ -3451,21 +3531,29 @@ Bagel = {
                             }
                         }
                     },
-                    subMethods: (game, plugin, type, method, methodName, position, oldPosition, combinedPosition, bagelPosition) => {
+                    subMethods: (game, plugin, type, method, methodName, position, oldPosition, combinedPosition, bagelPosition, positionName) => {
                         let subFunctions = Bagel.internal.subFunctions.loadPlugin.merge;
                         if (method.category) {
                             let oldPosition = position;
                             if (type == "bagel") {
                                 if (! bagelPosition[methodName]) bagelPosition[methodName] = {};
                                 bagelPosition = bagelPosition[methodName];
+                                if (positionName != "") {
+                                    positionName += ".";
+                                }
+                                positionName += methodName;
                             }
-                            if (type != "sprite") {
+                            else if (type != "sprite") {
                                 if (! position[methodName]) position[methodName] = {};
                                 position = position[methodName];
+                                if (positionName != "") {
+                                    positionName += ".";
+                                }
+                                positionName += methodName;
                             }
                             combinedPosition.push(methodName);
                             for (let i in method.category) {
-                                subFunctions.subMethods(game, plugin, type, method.category[i], i, position, oldPosition, combinedPosition, bagelPosition);
+                                subFunctions.subMethods(game, plugin, type, method.category[i], i, position, oldPosition, combinedPosition, bagelPosition, positionName);
                             }
                         }
                         else {
@@ -3507,7 +3595,7 @@ Bagel = {
                                 }
                             }
                             else {
-                                subFunctions.method(game, plugin, type, null, position, method, methodName, bagelPosition);
+                                subFunctions.method(game, plugin, type, null, position, method, methodName, bagelPosition, positionName);
                             }
                         }
                     },
@@ -3523,7 +3611,7 @@ Bagel = {
                                 let method = methods[methodName];
 
                                 let position = combined.methods[type];
-                                Bagel.internal.subFunctions.loadPlugin.merge.subMethods(game, plugin, type, method, methodName, position, position, [], Bagel);
+                                Bagel.internal.subFunctions.loadPlugin.merge.subMethods(game, plugin, type, method, methodName, position, position, [], Bagel, "");
                             }
                         }
                     },
@@ -4043,7 +4131,7 @@ Bagel = {
                         loading.loading = assets.loading;
                         if (assets.loading != 0) {
                             let tasks = game.game.scripts.preload;
-                            if (assets.loaded == assets.assetsLoading) { // The assets are done loading but the tasks need running
+                            if (assets.loading <= assets.assetsLoading) { // The assets are done loading but the tasks need running
                                 if (assets.ranTasks) {
                                     if (tasks.misc && assets.loading == 1) { // Only the misc funciton left
                                         tasks.misc(game);
@@ -4591,18 +4679,16 @@ Bagel = {
                                                     scripts: {
                                                         init: [
                                                             {
-                                                                code: (me, game) => {
-                                                                    let ratio = me.height / me.width;
-                                                                    me.width = Math.min(game.width, game.height) / 2;
-                                                                    me.height = me.width * ratio;
-
-                                                                    me.y += Bagel.get.sprite("Bagel").height / 2;
-                                                                    me.y += me.height;
-
+                                                                code: (me, game, step) => {
                                                                     let canvas = document.createElement("canvas"); // This is used for converting colours
                                                                     canvas.width = 1;
                                                                     canvas.height = 1;
                                                                     me.vars.ctx = canvas.getContext("2d");
+
+                                                                    me.vars.halfBagelHeight = Bagel.get.sprite("Bagel").height / 2;
+
+                                                                    step("calculateSize");
+                                                                    step("calculateColour");
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
@@ -4611,11 +4697,21 @@ Bagel = {
                                                             {
                                                                 code: (me, game, step) => {
                                                                     step("calculateColour");
+                                                                    step("calculateSize");
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
                                                         ],
                                                         steps: {
+                                                            calculateSize: (me, game) => {
+                                                                let ratio = me.height / me.width;
+                                                                me.width = Math.min(game.width, game.height) / 2;
+                                                                me.height = me.width * ratio;
+
+
+                                                                me.y = (game.height / 2) + me.vars.halfBagelHeight;
+                                                                me.y += me.height;
+                                                            },
                                                             calculateColour: (me, game) => {
                                                                 // A slightly hackish way of converting colours to hex
                                                                 let ctx = me.vars.ctx;
@@ -6287,6 +6383,9 @@ Bagel = {
             touchscreen: document.ontouchstart === null
         }
     },
-    version: "1.4b"
+    events: {
+        pwaUpdate: null
+    },
+    version: "1.5b"
 };
 Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
