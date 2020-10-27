@@ -37,7 +37,9 @@ Bagel = {
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
         subFunctions.loadingScreen(game);
 
-        console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
+        if (! game.config.disableBagelJSMessage) {
+            console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
+        }
         Bagel.internal.games[game.id] = game;
         Bagel.internal.loadCurrent();
         return game;
@@ -3173,7 +3175,8 @@ Bagel = {
                                 resolution: "fixed",
                                 dom: false,
                                 backgroundColour: "transparent"
-                            }
+                            },
+                            disableBagelJSMessage: true // Otherwise there would be 2 per game
                         };
                         if (loadingScreen.vars == null) {
                             loadingScreen.vars = {};
@@ -4750,6 +4753,12 @@ Bagel = {
                             },
                             types: ["object"],
                             description: "A few options for how Bagel.js should handle loading assets."
+                        },
+                        disableBagelJSMessage: {
+                            required: false,
+                            default: false,
+                            types: ["boolean"],
+                            description: "Disables the console message when the game is initialised. As crediting is required to use Bagel.js, please put a link to the GitHub page somewhere else in your program. e.g in the credits."
                         }
                     },
                     types: ["object"],
