@@ -2437,8 +2437,8 @@ Bagel = {
                 let combinedPlugins = game.internal.combinedPlugins;
                 let plural = combinedPlugins.types.internal.pluralAssetTypes[combinedPlugins.types.assets[type].get];
 
-                assets.loadingIDs[type][assetJSON.id] = false; // Not loading anymore
-                assets.assets[type][assetJSON.id] = asset;
+                assets.loadingIDs[plural][assetJSON.id] = false; // Not loading anymore
+                assets.assets[plural][assetJSON.id] = asset;
                 assets.loaded++;
                 assets.loading--;
                 if (assets.loading == 0) {
@@ -2449,10 +2449,13 @@ Bagel = {
                 }
             })(asset, game); // This is called by the init function once the asset has loaded
             if (loadNow) {
+                let combinedPlugins = game.internal.combinedPlugins;
+                let plural = combinedPlugins.types.internal.pluralAssetTypes[combinedPlugins.types.assets[type].get];
+
                 assetLoader.init(asset, ready, game, assetLoader.internal.plugin, i);
                 assets.loading++;
-                if (assets.loadingIDs[type] == null) assets.loadingIDs[type] = {};
-                assets.loadingIDs[type][asset.id] = true; // It's currently loading
+                if (assets.loadingIDs[plural] == null) assets.loadingIDs[plural] = {};
+                assets.loadingIDs[plural][asset.id] = true; // It's currently loading
             }
             else {
                 let toLoad = game.internal.assets.toLoad;
@@ -3320,8 +3323,8 @@ Bagel = {
                                                     info.assetLoader.init({...info.asset}, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
                                                     info.game.internal.assets.loading++;
 
-                                                    if (assets.loadingIDs[type] == null) assets.loadingIDs[type] = {};
-                                                    assets.loadingIDs[type][info.asset.id] = true; // It's currently loading
+                                                    if (assets.loadingIDs[plural] == null) assets.loadingIDs[plural] = {};
+                                                    assets.loadingIDs[plural][info.asset.id] = true; // It's currently loading
 
                                                     if (assets.toLoad[plural]) {
                                                         if (assets.toLoad[plural][id]) {
