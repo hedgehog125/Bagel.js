@@ -3,6 +3,8 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
+Fetch errors. The urls are wrong? Can't seem to replicate in test server. Something to do with slashes on the end?
+Lag causes wrong/no frame to be extracted in rickroll PWA (e.g Firefox)
 Mask icon audit problem in lighthouse ???? One of the ways to improve in last section
 Safari audio doesn't work. Even after clicking unmute. Should also assume muted videos might not play. (make sure this is true with audio too). What about firefox? Is it the same as chrome's? Mobile PWAs (Chrome) are supposed to always allow auto play but this seems inconsistent
 Make full pwa instructions, including how to set the startURL and scope properly
@@ -1220,14 +1222,16 @@ Bagel = {
                                                     for (let assetType in game.game.assets) {
                                                         for (let i in game.game.assets[assetType]) {
                                                             let src = game.game.assets[assetType][i].src;
-                                                            if (src.split(":")[0] != "data") { // Data url, don't cache
+                                                            let protocol = src.split(":")[0];
+                                                            if (protocol != "data" && protocol != "blob") { // Data url, don't cache
                                                                 toCache.push(src);
                                                             }
                                                         }
                                                     }
                                                     for (let plugin in game.game.plugins) {
                                                         let src = game.game.plugins[plugin].src;
-                                                        if (src.split(":")[0] != "data") { // Data url, don't cache
+                                                        let protocol = src.split(":")[0];
+                                                        if (protocol != "data" && protocol != "blob") { // Data url, don't cache
                                                             toCache.push(src);
                                                         }
                                                     }
@@ -1258,7 +1262,7 @@ Bagel = {
                                                         "});",
                                                         "self.addEventListener(\"fetch\",e=>{",
                                                         "e.respondWith(",
-                                                        "caches.open(<NAME>).then(cache=>cache.match(e.request).then(response=>response||fetch(e.request)))",
+                                                        "caches.open(<NAME>).then(cache=>cache.match(e.request).then(response=>response||fetch(e.request).catch(_ => {console.warn(\"Bagel.js service worker failed to fetch \" + JSON.stringify(e.request) + \".\")})))",
                                                         ")",
                                                         "});"
                                                     ].join("");
