@@ -3,7 +3,6 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
-Fetch errors. The urls are wrong? Can't seem to replicate in test server. Something to do with slashes on the end?
 Lag causes wrong/no frame to be extracted in rickroll PWA (e.g Firefox)
 Mask icon audit problem in lighthouse ???? One of the ways to improve in last section
 Safari audio doesn't work. Even after clicking unmute. Should also assume muted videos might not play. (make sure this is true with audio too). What about firefox? Is it the same as chrome's? Mobile PWAs (Chrome) are supposed to always allow auto play but this seems inconsistent
@@ -1252,28 +1251,16 @@ Bagel = {
                                                     }
                                                     toCache.push(args.manifest);
 
-                                                    let template = [
-                                                        "let toCache = <CACHE>;",
-                                                        "self.addEventListener(\"install\",e=>{",
-                                                        "self.skipWaiting();",
-                                                        "e.waitUntil(",
-                                                        "caches.open(<NAME>).then(cache=>cache.addAll(toCache))",
-                                                        ")",
-                                                        "});",
-                                                        "self.addEventListener(\"fetch\",e=>{",
-                                                        "e.respondWith(",
-                                                        "caches.open(<NAME>).then(cache=>cache.match(e.request).then(response=>response||fetch(e.request).catch(_ => {console.warn(\"Bagel.js service worker failed to fetch \" + JSON.stringify(e.request) + \".\")})))",
-                                                        ")",
-                                                        "});"
-                                                    ].join("");
+                                                    let template = 'let index=location.href.split("/");index.pop();const toCache=[index=index.join("/")+"/",...<CACHE>];self.addEventListener("install",e=>{self.skipWaiting()});const useCache=e=>cache?e():caches.open(<NAME>).then(s=>(cache=s,e()));let cache;self.addEventListener("fetch",e=>{e.respondWith(useCache(s=>cache.match(e.request).then(s=>{if(s)return s;{let s=fetch(e.request);return s.then(s=>{let t=e.request.url,n=t.replace(index,"");(t==index||toCache.includes(n))&&cache.put(e.request,s.clone())}),s.catch(s=>{console.warn("A Bagel.js service worker failed to fetch "+e.request.url+". Request:"),console.log({...e.request})}),s}})))});';
+
                                                     let worker = template.replace("<CACHE>", JSON.stringify(toCache));
                                                     if (args.storageID == null) {
                                                         args.storageID = "Bagel.js " + args.game.id;
                                                     }
-                                                    worker = worker.split("<NAME>").join( JSON.stringify(args.storageID));
+                                                    worker = worker.replace("<NAME>", JSON.stringify(args.storageID));
                                                     Bagel.download(worker, args.fileName, false, "application/javascript");
 
-                                                    console.log("Your service worker has been generated. Make sure to place this in the root directory of your project, also make sure that this page is in the root directory. You should also make sure that the array provided for the second argument contains your JavaScript (including the Bagel.js file) files and your HTML file.\nA new worker will need to be generated for each version (unless there's no new files) (versions can be generated using Bagel.pwa.generate.version)");
+                                                    console.log("Your service worker has been generated. Make sure to place this in the root directory of your project, also make sure that this page is in the root directory. You should also make sure that the array provided for the second argument contains the SRCs (not URLs!) of your JavaScript files (including the Bagel.js file).\nA new worker will need to be generated for each version (unless there's no new files) (versions can be generated using Bagel.pwa.generate.version)");
                                                     console.log("Make sure you enable the worker by setting the \"worker\" argument to " + JSON.stringify(args.fileName) + " and by setting \"cacheStorageName\" to " + JSON.stringify(args.storageID) + " in Bagel.pwa.init. You should also generate a version using Bagel.pwa.generate.version if you haven't already.");
 
                                                     console.log("\nAlso make sure to save the code you used so you can generate the next worker more easilly.");
@@ -6402,6 +6389,6 @@ Bagel = {
     events: {
         pwaUpdate: null
     },
-    version: "1.5b"
+    version: "1.5.1b"
 };
 Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
