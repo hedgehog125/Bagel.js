@@ -986,7 +986,7 @@ Bagel = {
                                             worker: {
                                                 required: false,
                                                 types: ["string"],
-                                                description: "The URL of the service worker. They can be generated using Bagel.pwa.generate.worker. Its arguments are the game, extra files (e.g index.html, js files) and an optional fileName for the worker that will be downloaded by it."
+                                                description: "The URL of the service worker. They can be generated using Bagel.pwa.generate.worker. Its arguments are the game, extra files (e.g js files) and an optional fileName for the worker that will be downloaded by it."
                                             },
                                             icons: {
                                                 required: false,
@@ -1196,7 +1196,7 @@ Bagel = {
                                                     extraFiles: {
                                                         required: true,
                                                         types: ["array"],
-                                                        description: "Any extra files that aren't assets but are needed. e.g index.html, main.js, bagel.js etc."
+                                                        description: "Any extra files that aren't assets but are needed. e.g main.js, bagel.js etc. The index.html file is automatically included"
                                                     },
                                                     storageID: {
                                                         required: false,
