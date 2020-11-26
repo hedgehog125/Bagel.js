@@ -1209,11 +1209,11 @@ Bagel = {
                                                         types: ["string"],
                                                         description: "The src of your manifest or what will be the src when the website is properly online."
                                                     },
-                                                    fileName: {
+                                                    worker: {
                                                         required: false,
                                                         default: "worker.js",
                                                         types: ["string"],
-                                                        description: "The file name for the worker JavaScript file."
+                                                        description: "The file name for the worker JavaScript file. Determines the name when it's downloaded but also the src of the file so it can be cached."
                                                     }
                                                 },
                                                 fn: args => {
@@ -1249,7 +1249,12 @@ Bagel = {
                                                     for (let i in resolutions) {
                                                         toCache.push(args.icons + resolutions[i] + "x" + resolutions[i] + ".png");
                                                     }
-                                                    toCache.push(args.manifest);
+                                                    if (! toCache.includes(args.manifest)) {
+                                                        toCache.push(args.manifest);
+                                                    }
+                                                    if (! toCache.includes(args.worker)) {
+                                                        toCache.push(args.worker);
+                                                    }
 
                                                     let template = 'let index=location.href.split("/");index.pop();const toCache=[index=index.join("/")+"/",...<CACHE>];self.addEventListener("install",e=>{self.skipWaiting()});const useCache=e=>cache?e():caches.open(<NAME>).then(s=>(cache=s,e()));let cache;self.addEventListener("fetch",e=>{e.respondWith(useCache(s=>cache.match(e.request).then(s=>{if(s)return s;{let s=fetch(e.request);return s.then(s=>{let t=e.request.url,n=t.replace(index,"");(t==index||toCache.includes(n))&&cache.put(e.request,s.clone())}),s.catch(s=>{console.warn("A Bagel.js service worker failed to fetch "+e.request.url+". Request:"),console.log({...e.request})}),s}})))});';
 
@@ -1258,7 +1263,7 @@ Bagel = {
                                                         args.storageID = "Bagel.js " + args.game.id;
                                                     }
                                                     worker = worker.replace("<NAME>", JSON.stringify(args.storageID));
-                                                    Bagel.download(worker, args.fileName, false, "application/javascript");
+                                                    Bagel.download(worker, args.worker, false, "application/javascript");
 
                                                     console.log("Your service worker has been generated. Make sure to place this in the root directory of your project, also make sure that this page is in the root directory. You should also make sure that the array provided for the second argument contains the SRCs (not URLs!) of your JavaScript files (including the Bagel.js file).\nA new worker will need to be generated for each version (unless there's no new files) (versions can be generated using Bagel.pwa.generate.version)");
                                                     console.log("Make sure you enable the worker by setting the \"worker\" argument to " + JSON.stringify(args.fileName) + " and by setting \"cacheStorageName\" to " + JSON.stringify(args.storageID) + " in Bagel.pwa.init. You should also generate a version using Bagel.pwa.generate.version if you haven't already.");
@@ -1526,7 +1531,7 @@ Bagel = {
                                                     changed: {
                                                         required: true,
                                                         types: ["array"],
-                                                        description: "The srcs of files that have changed. This should include removed files but not new files. A rename should be treated as a removed file and then a new file. If this is your first version, this should be empty."
+                                                        description: "The srcs of files that have changed. This should include removed files but not new files. A rename should be treated as a removed file and then a new file. If you regenerated your worker file or manifest, it should also be included. If this is your first version, this should be empty."
                                                     },
                                                     versions: {
                                                         required: false,
