@@ -18,8 +18,8 @@ This lead to me making Beginning.js, not a perfect framework but still better th
  * A PWA creation tool ([example](http://hedgehog125.github.io/Bagel-PWA/))
  * Scales the resolution for any device while keeping the aspect ratio
 
- * A game (by me) will soon be in development using it
- * Named after my favourite type of bread (fun fact: I also used to have bagels at a coding club before they stopped selling them :( )
+ * Named after my favourite type of bread (fun fact: I also used to have bagels at a coding club before they stopped selling them :(, probably inspired the name)
+ (now can't go to said coding club because of the pandemic :/)
 
  # Getting started
  Check out the wiki [here](https://github.com/hedgehog125/Bagel.js/wiki).

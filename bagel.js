@@ -3,14 +3,21 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
-Plugin import checks
+Lag causes wrong/no frame to be extracted in rickroll PWA (e.g Firefox)
+Mask icon audit problem in lighthouse ???? One of the ways to improve in last section
+Safari audio doesn't work. Even after clicking unmute. Should also assume muted videos might not play. (make sure this is true with audio too). What about firefox? Is it the same as chrome's? Mobile PWAs (Chrome) are supposed to always allow auto play but this seems inconsistent
+Make full pwa instructions, including how to set the startURL and scope properly
+WebGL renderer. The firefox performance is 392x the canvas performance! Don't forget context lost handling
+Make sure the global "game" variable isn't accessed
+With function x/y positions, the sprite doesn't have all the properties
+Change renderer description when WegGL is added
+Sprite/plugin tasks while loading
+Fix spelling errors
 Tidy up files included
-Apple touch icons
-WebGL renderer. Don't forget context lost handling
 Gamepad support
 
 TESTING
-Negative widths and heights
+Negative widths and heights. Partly tested
 Sounds not loading??? Sometimes...?
 Does the overwrite argument work?
 */
@@ -29,20 +36,9 @@ Bagel = {
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
-        subFunctions.plugins(game);
-        subFunctions.methods(game);
-        subFunctions.assets(game, true);
-        subFunctions.initScripts(game);
-        subFunctions.initSprites(game);
-        subFunctions.preload(game);
-        if (game.config.loading.skip || document.readyState == "complete") {
-            subFunctions.assets(game);
-        }
-        if (! game.loaded) {
-            subFunctions.loadingScreen(game);
-        }
+        subFunctions.loadingScreen(game);
 
-        if (Object.keys(Bagel.internal.games).length == 0) {
+        if (! game.config.disableBagelJSMessage) {
             console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
         }
         Bagel.internal.games[game.id] = game;
@@ -77,13 +73,12 @@ Bagel = {
                             description: "Sounds can be played by anything. They're played using game.playSound(<id>)",
                             init: (asset, ready, game, plugin, index) => {
                                 let snd = new Audio();
-                                snd.preload = "metadata";
                                 (snd => {
-                                    snd.onloadeddata = () => {
+                                    snd.onloadedmetadata = () => {
                                         ready(snd);
                                     };
                                 })(snd);
-                                snd.load();
+                                snd.preload = "metadata";
                                 snd.src = asset.src;
                             },
                             get: "snd",
@@ -124,11 +119,18 @@ Bagel = {
                                                 maxWidth = asset.frames[i];
                                             }
                                         }
+
+                                        let warning = false;
                                         if (img.width % maxWidth != 0) {
                                             console.warn("The image width isn't divisible by the \"frames\" argument. You should probably check if both of them're correct.");
+                                            warning = true;
                                         }
                                         if (img.height % asset.animations.length) {
                                             console.warn("The image height isn't divisible by the length of the \"animations\" argument. You should probably check if both of them're correct.");
+                                            warning = true;
+                                        }
+                                        if (warning) {
+                                            console.log("For the image asset " + JSON.stringify(asset.id) + ".");
                                         }
 
                                         let width = img.width / maxWidth;
@@ -147,13 +149,15 @@ Bagel = {
                                                 let ctx = canvas.getContext("2d");
                                                 ctx.drawImage(img, -(x * width), -(y * height));
 
-                                                if (assets.imgs == null) assets.imgs = {};
-                                                assets.imgs[id] = canvas;
+                                                if (game.set.asset.img(canvas, id, false, true)) {
+                                                    console.error("Hmm, Bagel.js ran into a problem with the spritesheet " + JSON.stringify(asset.id) + ". The image id " + JSON.stringify(id) + " has already been taken. Double check the ids of your assets.");
+                                                    Bagel.internal.oops(game);
+                                                }
                                                 x++;
                                             }
                                             y++;
                                         }
-                                        ready();
+                                        ready(asset);
                                     };
                                 })(img, asset, game);
                                 img.src = asset.src;
@@ -306,11 +310,11 @@ Bagel = {
                                             if (value.includes("x")) {
                                                 let scale = parseFloat(value.split("x")[0]);
 
-                                                if (triggerSprite.img == null) {
+                                                if (sprite.img == null) {
                                                     sprite[property] = 1;
                                                     return;
                                                 }
-                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                                let img = Bagel.get.asset.img(sprite.img);
                                                 if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * scale;
 
@@ -324,8 +328,8 @@ Bagel = {
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
 
-                                            if (triggerSprite.img) {
-                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                            if (sprite.img) {
+                                                let img = Bagel.get.asset.img(sprite.img);
                                                 if (typeof img == "boolean") return ".rerun";
                                                 // Update the scale
                                                 let scaleX = sprite.width / img.width;
@@ -335,8 +339,8 @@ Bagel = {
                                             return;
                                         }
                                         if (typeof value == "number") {
-                                            if (triggerSprite.img) {
-                                                let img = Bagel.get.asset.img(triggerSprite.img);
+                                            if (sprite.img) {
+                                                let img = Bagel.get.asset.img(sprite.img);
                                                 if (typeof img == "boolean") return ".rerun";
                                                 // Update the scale
                                                 let scaleX = sprite.width / img.width;
@@ -362,6 +366,18 @@ Bagel = {
                                     },
                                     y: {
                                         set: "xy"
+                                    },
+                                    img: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                if (sprite.img) {
+                                                    let img = Bagel.get.asset.img(sprite.img);
+                                                    if (typeof img == "boolean") return ".rerun";
+                                                    triggerSprite.width = img.width;
+                                                    triggerSprite.height = img.height;
+                                                }
+                                            }
+                                        }
                                     },
                                     width: {
                                         set: "dimensions"
@@ -429,17 +445,17 @@ Bagel = {
                                     scaleY = scaleY * flipY;
                                     ctx.scale(scaleX, scaleY);
 
-                                    let halfWidth = sprite.width / 2;
-                                    let halfHeight = sprite.height / 2;
+                                    let halfWidth = Math.abs(sprite.width) / 2;
+                                    let halfHeight = Math.abs(sprite.height) / 2;
+                                    let roundX = Bagel.internal.roundX;
+                                    let roundY = Bagel.internal.roundY;
                                     if (sprite.angle == 90) { // Don't rotate if we don't need to
-                                        ctx.drawImage(img, (sprite.x - halfWidth) * flipX, (sprite.y - halfHeight) * flipY, sprite.width, sprite.height);
+                                        ctx.drawImage(img, (roundX(sprite.x) - roundX(halfWidth)) * flipX, (roundY(sprite.y) - roundY(halfHeight)) * flipY, roundX(sprite.width), roundY(sprite.height));
                                     }
                                     else {
                                         let angle = Bagel.maths.degToRad(sprite.angle - 90);
-                                        let x = sprite.x;
-                                        let y = sprite.y;
 
-                                        ctx.translate(x * flipX, y * flipY);
+                                        ctx.translate(roundX(sprite.x * flipX), roundY(sprite.y * flipY));
                                         ctx.rotate(angle);
                                         ctx.drawImage(img, -halfWidth, -halfHeight, sprite.width, sprite.height);
                                     }
@@ -634,9 +650,12 @@ Bagel = {
                                     if (sprite.render) sprite.render(sprite, game, sprite.ctx, sprite.canvas);
                                     Bagel.internal.loadCurrent();
 
+                                    let roundX = Bagel.internal.roundX;
+                                    let roundY = Bagel.internal.roundY;
+
                                     ctx.globalAlpha = sprite.alpha;
                                     ctx.scale(scaleX, scaleY);
-                                    ctx.drawImage(sprite.canvas, sprite.x - (sprite.width / 2), sprite.y - (sprite.height / 2), sprite.width, sprite.height);
+                                    ctx.drawImage(sprite.canvas, roundX(sprite.x) - roundX(sprite.width / 2), roundY(sprite.y) - roundY(sprite.height / 2), roundX(sprite.width), roundY(sprite.height));
 
                                     ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
                                     ctx.globalAlpha = 1;
@@ -805,11 +824,14 @@ Bagel = {
                                     let canvas = sprite.internal.canvas;
                                     let ctx = sprite.internal.ctx;
 
+                                    let roundX = Bagel.internal.roundX;
+                                    let roundY = Bagel.internal.roundY;
+
                                     if (last.scaleX != scaleX || last.scaleY != scaleY) { // Update the text
                                         sprite.internal.prerender(sprite, mainCanvas);
                                     }
                                     mainCtx.globalAlpha = sprite.alpha;
-                                    mainCtx.drawImage(canvas, (sprite.x * scaleX) - (canvas.width / 2), (sprite.y * scaleY) - (canvas.height / 2));
+                                    mainCtx.drawImage(canvas, roundX(sprite.x * scaleX) - roundX(canvas.width / 2), roundY(sprite.y * scaleY) - roundX(canvas.height / 2), roundX(canvas.width), roundY(canvas.height));
                                     ctx.globalAlpha = 1;
                                 },
                                 clean: true
@@ -937,20 +959,20 @@ Bagel = {
                                     input.style.display = "none";
                                     input.multiple = args.multiple;
 
-                                    let file = 0;
-                                    input.addEventListener("change", () => {
-                                        let reader = new FileReader();
-                                        ((reader, file) => {
+                                    (args => {
+                                        let file = 0;
+                                        input.addEventListener("change", () => {
+                                            let reader = new FileReader();
                                             reader.onload = event => {
-                                                code(event.target.result, file);
+                                                args.handler(event.target.result, file);
                                                 file++;
                                                 if (file < input.files.length) {
                                                     reader.readAsDataURL(input.files[file]);
                                                 }
                                             };
-                                        })(reader, file);
-                                        reader.readAsDataURL(input.files[0]);
-                                    }, false);
+                                            reader.readAsDataURL(input.files[0]);
+                                        }, false);
+                                    })(args);
                                     Bagel.internal.inputAction.queue(input => {input.click()}, input);
                                 }
                             }
@@ -964,7 +986,7 @@ Bagel = {
                                             worker: {
                                                 required: false,
                                                 types: ["string"],
-                                                description: "The URL of the service worker. They can be generated using Bagel.pwa.generate.worker. Its arguments are the game, extra files (e.g index.html, js files) and an optional fileName for the worker that will be downloaded by it."
+                                                description: "The URL of the service worker. They can be generated using Bagel.pwa.generate.worker. Its arguments are the game, extra files (e.g js files) and an optional fileName for the worker that will be downloaded by it."
                                             },
                                             icons: {
                                                 required: false,
@@ -976,6 +998,11 @@ Bagel = {
                                                 required: false,
                                                 types: ["string"],
                                                 description: "The src of the manifest. Generate one using Bagel.pwa.generate.manifest."
+                                            },
+                                            debugManifest: {
+                                                required: false,
+                                                types: ["string"],
+                                                description: "The src of your debug manifest. It allows you to test your PWA without putting it on a production server. (don't test things on production! :P)"
                                             },
                                             versions: {
                                                 required: false,
@@ -1007,7 +1034,13 @@ Bagel = {
                                                 default: false,
                                                 types: ["boolean"],
                                                 description: "If you've minified your main JavaScript file. You should also use the minified version of Bagel.js."
-                                            }
+                                            },
+                                            debug: {
+                                                required: false,
+                                                default: true,
+                                                types: ["boolean"],
+                                                description: "If debug mode should be enabled. This disables the service worker so the page updates properly when reloading. Make sure you disable this before you put this game online though."
+                                            },
                                         },
                                         fn: args => {
                                             if (Bagel.internal.pwaInitialised) {
@@ -1015,7 +1048,16 @@ Bagel = {
                                             }
                                             if (args.worker) {
                                                 if (navigator.serviceWorker) {
-                                                    navigator.serviceWorker.register(args.worker);
+                                                    if (args.debug) {
+                                                        navigator.serviceWorker.getRegistrations().then(workers => {
+                                                            for (let worker of workers) {
+                                                                worker.unregister();
+                                                            }
+                                                        });
+                                                    }
+                                                    else {
+                                                        navigator.serviceWorker.register(args.worker);
+                                                    }
                                                 }
                                             }
                                             else {
@@ -1027,11 +1069,17 @@ Bagel = {
                                                 console.warn("The Bagel.js icons are missing. Generate the icons using Bagel.pwa.generate.icons.");
                                             }
                                             if (args.manifest) {
-                                                // <link rel="manifest" href="/manifest.webmanifest">
-                                                let link = document.createElement("link");
-                                                link.rel = "manifest";
-                                                link.href = args.manifest;
-                                                document.head.appendChild(link);
+                                                let manifest = args.debug? args.debugManifest : args.manifest;
+                                                if (args.debugManifest == null) {
+                                                    console.warn("No debug manifest specified. One should have been generated by Bagel.pwa.generate.manifest. Once you've got it, link it to your game by setting the \"debugManifest\" argument in this function to its src.");
+                                                }
+
+                                                if (args.debugManifest || (! args.debug)) {
+                                                    let link = document.createElement("link");
+                                                    link.rel = "manifest";
+                                                    link.href = manifest;
+                                                    document.head.appendChild(link);
+                                                }
                                             }
                                             else {
                                                 console.warn("The Bagel.js manifest is missing. Generate one using Bagel.pwa.generate.manifest once you've generated the icons using Bagel.pwa.generate.icons.");
@@ -1042,26 +1090,44 @@ Bagel = {
                                             if (args.version) {
                                                 if (navigator.onLine) {
                                                     if (args.versionStorageName && args.versions && args.cacheStorageName) {
-                                                        fetch(args.version).then(res => res.text().then(version => {
-                                                            version = version.split("\n").join("");
-                                                            let installed = localStorage.getItem(args.versionStorageName);
-                                                            if (installed == null) installed = 0;
-                                                            if (installed != version) {
-                                                                fetch(args.versions).then(res => res.json().then(versions => {
-                                                                    caches.open(args.cacheStorageName).then(cache => {
-                                                                        while (installed < versions.versions.length) {
-                                                                            let changed = versions.versions[installed].changed;
-                                                                            for (let i in changed) {
-                                                                                cache.delete(changed[i]);
+                                                        if (typeof caches == "undefined") {
+                                                            console.error("Huh, looks like you're trying to run this on an insecure server (the traffic isn't encrypted). Browsers block cache storage for insecure websites for security reasons. If this is your test server, you can try connecting using the url 127.0.0.0:<port of your current url>. If this is your main server, you should be using HTTPS, it's 2020! :P");
+                                                            Bagel.internal.oops(game);
+                                                        }
+                                                        else {
+                                                            fetch(args.version).then(res => res.text().then(version => {
+                                                                version = version.split("\n").join("");
+                                                                let installed = localStorage.getItem(args.versionStorageName);
+                                                                if (installed == null) installed = 0;
+
+                                                                Bagel.pwa.version = installed;
+                                                                if (installed != version) {
+                                                                    fetch(args.versions).then(res => res.json().then(versions => {
+                                                                        caches.open(args.cacheStorageName).then(cache => {
+                                                                            let oldVersion = installed;
+                                                                            while (installed < versions.versions.length) {
+                                                                                let changed = versions.versions[installed].changed;
+                                                                                for (let i in changed) {
+                                                                                    cache.delete(changed[i]);
+                                                                                }
+                                                                                installed++;
                                                                             }
-                                                                            installed++;
-                                                                        }
-                                                                        localStorage.setItem(args.versionStorageName, installed);
-                                                                        location.reload(); // Reload so all the new assets can be loaded
-                                                                    });
-                                                                }));
-                                                            }
-                                                        }));
+                                                                            localStorage.setItem(args.versionStorageName, installed);
+
+                                                                            Bagel.pwa.version = installed;
+
+                                                                            let blockReload = false;
+                                                                            if (Bagel.events.pwaUpdate) {
+                                                                                blockReload = Bagel.events.pwaUpdate(installed, oldVersion, versions);
+                                                                            }
+                                                                            if (! blockReload) {
+                                                                                location.reload(); // Reload so all the new assets can be loaded
+                                                                            }
+                                                                        });
+                                                                    }));
+                                                                }
+                                                            }));
+                                                        }
                                                     }
                                                 }
                                                 else {
@@ -1103,6 +1169,9 @@ Bagel = {
                                             if (! args.minified) {
                                                 console.warn("Your code isn't minified. Look up an online tool to help. Once you're done, set \"minified\" in Bagel.pwa.init to true. Also, make sure to run lighthouse or an equivalent so you can follow the best practices :)");
                                             }
+                                            if (args.debug) {
+                                                console.warn("PWA debug mode is enabled, make sure you disable it before releasing by setting \"debug\" in Bagel.pwa.init to false.");
+                                            }
 
                                             Bagel.internal.pwaInitialised = true;
                                         }
@@ -1125,10 +1194,9 @@ Bagel = {
                                                         description: "The src of the folder containing the icons. Generate them with Bagel.pwa.generate.icons."
                                                     },
                                                     extraFiles: {
-                                                        required: false,
-                                                        default: [],
+                                                        required: true,
                                                         types: ["array"],
-                                                        description: "Any extra files that aren't assets but are needed. e.g index.html, main.js, bagel.js etc."
+                                                        description: "Any extra files that aren't assets but are needed. e.g main.js, bagel.js etc. The index.html file is automatically included"
                                                     },
                                                     storageID: {
                                                         required: false,
@@ -1139,24 +1207,32 @@ Bagel = {
                                                         required: false,
                                                         default: "manifest.json",
                                                         types: ["string"],
-                                                        description: "The src of your manifest or what will be the src."
+                                                        description: "The src of your manifest or what will be the src when the website is properly online."
                                                     },
-                                                    fileName: {
+                                                    worker: {
                                                         required: false,
                                                         default: "worker.js",
                                                         types: ["string"],
-                                                        description: "The file name for the worker JavaScript file."
+                                                        description: "The file name for the worker JavaScript file. Determines the name when it's downloaded but also the src of the file so it can be cached."
                                                     }
                                                 },
                                                 fn: args => {
                                                     let toCache = args.extraFiles;
                                                     for (let assetType in game.game.assets) {
                                                         for (let i in game.game.assets[assetType]) {
-                                                            toCache.push(game.game.assets[assetType][i].src);
+                                                            let src = game.game.assets[assetType][i].src;
+                                                            let protocol = src.split(":")[0];
+                                                            if (protocol != "data" && protocol != "blob") { // Data url, don't cache
+                                                                toCache.push(src);
+                                                            }
                                                         }
                                                     }
                                                     for (let plugin in game.game.plugins) {
-                                                        toCache.push(game.game.plugins[plugin].src);
+                                                        let src = game.game.plugins[plugin].src;
+                                                        let protocol = src.split(":")[0];
+                                                        if (protocol != "data" && protocol != "blob") { // Data url, don't cache
+                                                            toCache.push(src);
+                                                        }
                                                     }
 
                                                     if (args.icons[args.icons.length - 1] != "/") {
@@ -1173,31 +1249,26 @@ Bagel = {
                                                     for (let i in resolutions) {
                                                         toCache.push(args.icons + resolutions[i] + "x" + resolutions[i] + ".png");
                                                     }
-                                                    toCache.push(args.manifest);
+                                                    if (! toCache.includes(args.manifest)) {
+                                                        toCache.push(args.manifest);
+                                                    }
+                                                    if (! toCache.includes(args.worker)) {
+                                                        toCache.push(args.worker);
+                                                    }
 
-                                                    let template = [
-                                                        "let toCache = <CACHE>;",
-                                                        "self.addEventListener(\"install\",e=>{",
-                                                        "self.skipWaiting();",
-                                                        "e.waitUntil(",
-                                                        "caches.open(<NAME>).then(cache=>cache.addAll(toCache))",
-                                                        ")",
-                                                        "});",
-                                                        "self.addEventListener(\"fetch\",e=>{",
-                                                        "e.respondWith(",
-                                                        "caches.match(e.request).then(response=>response||fetch(e.request))",
-                                                        ")",
-                                                        "});"
-                                                    ].join("");
+                                                    let template = 'let index=location.href.split("/");index.pop();const toCache=[index=index.join("/")+"/",...<CACHE>];self.addEventListener("install",e=>{self.skipWaiting()});const useCache=e=>cache?e():caches.open(<NAME>).then(s=>(cache=s,e()));let cache;self.addEventListener("fetch",e=>{e.respondWith(useCache(s=>cache.match(e.request).then(s=>{if(s)return s;{let s=fetch(e.request);return s.then(s=>{let t=e.request.url,n=t.replace(index,"");(t==index||toCache.includes(n))&&cache.put(e.request,s.clone())}),s.catch(s=>{console.warn("A Bagel.js service worker failed to fetch "+e.request.url+". Request:"),console.log({...e.request})}),s}})))});';
+
                                                     let worker = template.replace("<CACHE>", JSON.stringify(toCache));
                                                     if (args.storageID == null) {
                                                         args.storageID = "Bagel.js " + args.game.id;
                                                     }
                                                     worker = worker.replace("<NAME>", JSON.stringify(args.storageID));
-                                                    Bagel.download(worker, args.fileName, false, "application/javascript");
+                                                    Bagel.download(worker, args.worker, false, "application/javascript");
 
-                                                    console.log("Your service worker has been generated. Make sure to place this in the root directory of your project, also make sure that this page is in the root directory. You should also make sure that the array provided for the second argument contains your JavaScript (including the Bagel.js file) files and your HTML file.\nA new worker will need to be generated for each version (unless there's no new files) (versions can be generated using Bagel.pwa.generate.version)");
+                                                    console.log("Your service worker has been generated. Make sure to place this in the root directory of your project, also make sure that this page is in the root directory. You should also make sure that the array provided for the second argument contains the SRCs (not URLs!) of your JavaScript files (including the Bagel.js file).\nA new worker will need to be generated for each version (unless there's no new files) (versions can be generated using Bagel.pwa.generate.version)");
                                                     console.log("Make sure you enable the worker by setting the \"worker\" argument to " + JSON.stringify(args.fileName) + " and by setting \"cacheStorageName\" to " + JSON.stringify(args.storageID) + " in Bagel.pwa.init. You should also generate a version using Bagel.pwa.generate.version if you haven't already.");
+
+                                                    console.log("\nAlso make sure to save the code you used so you can generate the next worker more easilly.");
                                                 }
                                             }
                                         },
@@ -1208,7 +1279,7 @@ Bagel = {
                                                     src: {
                                                         required: true,
                                                         types: ["string"],
-                                                        description: "The src of the 512x512 resolution icon."
+                                                        description: "The src of the 512x512 resolution icon. (it can be any resolution if it's pixel art)"
                                                     },
                                                     pixelArt: {
                                                         required: true,
@@ -1222,11 +1293,11 @@ Bagel = {
                                                     (img => {
                                                         img.onload = () => {
                                                             if (img.width != img.height) {
-                                                                console.warn("Image width doesn't match image height.");
+                                                                console.warn("Huh, the image width doesn't match image height.");
                                                             }
                                                             if (! args.pixelArt) {
                                                                 if (img.width != 512 || img.height != 512) {
-                                                                    console.warn("Image isn't 512x512.");
+                                                                    console.warn("Hmm, the image isn't 512x512 and it's not pixel art.");
                                                                 }
                                                             }
 
@@ -1251,7 +1322,7 @@ Bagel = {
                                                                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                                                                 Bagel.download(canvas.toDataURL("image/png"), resolution + "x" + resolution + ".png", true);
                                                             }
-                                                            console.log("128, 144, 152, 192, 256 and 512 pixel resolutions have been generated. You may need to enable automatic downloads. These should be in a folder in your project directory (or subfolder). You can add them to your PWA by setting the \"icons\" argument in Bagel.pwa.init to the src of the folder containing them. e.g if you put them in assets/imgs/icons then it should be \"assets/imgs/icons/\".");
+                                                            console.log("128, 144, 152, 192, 256 and 512 pixel resolutions have been generated. You may need to enable automatic downloads. These should be in a folder in your project directory (or subfolder). You can add them to your PWA by generating a manifest. You should also make sure to set the \"icons\" argument in Bagel.pwa.init to true.");
                                                         };
                                                     })(img);
                                                     img.src = args.src;
@@ -1277,6 +1348,11 @@ Bagel = {
                                                         required: true,
                                                         types: ["string"],
                                                         description: "A shorter name."
+                                                    },
+                                                    startURL: {
+                                                        required: true,
+                                                        types: ["string"],
+                                                        description: "The URL for the PWA to start at when it's opened."
                                                     },
 
                                                     backgroundColour: {
@@ -1336,22 +1412,15 @@ Bagel = {
                                                         types: ["array"],
                                                         description: "See https://developer.mozilla.org/en-US/docs/Web/Manifest/related_applications"
                                                     },
-                                                    scope: {
-                                                        required: false,
-                                                        default: location.href,
-                                                        types: ["string"],
-                                                        description: "The different URLs that the manifest applies to. Defaults to just the page where this generator was run."
-                                                    },
                                                     screenshots: {
                                                         required: false,
                                                         types: ["array"],
                                                         description: "Intended to be used by PWA stores. See https://developer.mozilla.org/en-US/docs/Web/Manifest/screenshots"
                                                     },
-                                                    startURL: {
+                                                    scope: {
                                                         required: false,
-                                                        default: location.href,
                                                         types: ["string"],
-                                                        description: "The URL for the PWA to start at when it's opened."
+                                                        description: "The different URLs that the manifest applies to. Defaults to your argument for the start URL, which is probably what you want most of the time."
                                                     }
                                                 },
                                                 fn: args => {
@@ -1381,6 +1450,9 @@ Bagel = {
                                                                 if (document.body) {
                                                                     newArgs[map[i]] = document.body.bgColor;
                                                                 }
+                                                            }
+                                                            else if (i == "scope") {
+                                                                newArgs[map[i]] = args.startURL;
                                                             }
                                                         }
                                                         else {
@@ -1412,8 +1484,38 @@ Bagel = {
                                                     }
                                                     args.icons = icons;
 
+                                                    // Some of the urls won't work on a test server, so it needs a separate manifest
+                                                    let debugManifest = Bagel.internal.deepClone(args);
+                                                    debugManifest.start_url = location.href;
+                                                    debugManifest.scope = location.href;
+
                                                     Bagel.download(JSON.stringify(args), "manifest.json", false, "application/json");
-                                                    console.log("Manifest generated. Put it in the root directory of your project and set the \"manifest\" argument in Bagel.init.pwa to its src.");
+                                                    Bagel.download(JSON.stringify(debugManifest), "debugManifest.json", false, "application/json");
+
+                                                    console.log("Manifests generated. Put them in the root directory of your project and set the \"manifest\" argument in Bagel.init.pwa to normal manifest src. You should also set the \"debugManifest\" argument to the other manifest's src if you want to be able to test your PWA.");
+                                                    console.log("(You might need to enable automatic downloads to get both the files)");
+                                                    console.log("Tip: you should also save the code you just ran so you can update your manifest more easily.");
+
+
+                                                    console.log("\nYou should also add these elements to your HTML \"head\" tag if you haven't already...");
+                                                    let icon = icons[icons.length - 1].src;
+                                                    let link = document.createElement("link");
+                                                    link.rel = "icon";
+                                                    link.type = "image/png";
+                                                    link.href = icon;
+                                                    let p = document.createElement("p");
+                                                    p.appendChild(link);
+                                                    console.log(p.innerHTML);
+
+                                                    // Apple doesn't seem to like the idea of PWAs so we have to use an old solution for icons that's existed since the first Safari (I think?) (argh)
+                                                    link = document.createElement("link");
+                                                    link.rel = "apple-touch-icon";
+                                                    link.sizes = "512x512"; // This resolution is way overkill but it gets downscaled anyway
+                                                    link.type = "image/png";
+                                                    link.href = icon;
+                                                    p = document.createElement("p");
+                                                    p.appendChild(link);
+                                                    console.log(p.innerHTML);
                                                 }
                                             }
                                         },
@@ -1429,7 +1531,7 @@ Bagel = {
                                                     changed: {
                                                         required: true,
                                                         types: ["array"],
-                                                        description: "The srcs of files that have changed. This should include removed files but not new files. A rename should be treated as a removed file and then a new file. If this is your first version, this should be empty."
+                                                        description: "The srcs of files that have changed. This should include removed files but not new files. A rename should be treated as a removed file and then a new file. If you regenerated your worker file or manifest, it should also be included. If this is your first version, this should be empty."
                                                     },
                                                     versions: {
                                                         required: false,
@@ -1467,6 +1569,14 @@ Bagel = {
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+                                },
+                                help: {
+                                    fn: {
+                                        normal: true,
+                                        fn: () => {
+                                            console.log("Full tutorial here: https://github.com/hedgehog125/Bagel.js/wiki/PWA-Tutorial :)");
                                         }
                                     }
                                 }
@@ -1514,173 +1624,7 @@ Bagel = {
 
                                                     plugin.vars.audio.autoPlay = false;
                                                     if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                        if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
-                                                            // Create one instead
-                                                            let where = "plugin Internal's function \"game.playSound\"";
-                                                            game.add.asset.img({
-                                                                id: ".Internal.unmuteButtonMuted",
-                                                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgYpH/xRLwAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAFGSURBVEhLpVbbtcMwCCs9d4brjbJzvVGmcD9clQBRIY4+mtgRWBZ+VB5LGCNjnEMkY1DMIdnA6PfPKtbjw4wg9HyusXeMMSrDiYhotI/gzpIPOugMPaauCcowBedCXUcM0NKPcfTVDiCyKjwT+vQBnqDCZqLzhDkQZ0uNimjPtm/7tof8cfHCEesM3q/wbTvje55zMD8GwKh66B1jmEKjk3/nRLY2FFaols4PdBdkDdaBXa7bpeZYFbcFAt7RX9wroAJtqXJPwPeO3oUTGNPaXZZD1zDa+vsLbM0/8dkSPe364l91dO5ebZMS83RrQvF2vJkmmHO99dabCD0Hs2PmqlAF4mx+7xyQXnU1oexrBPKxAx/OffmPEtjmyR1kE/SOvf57603P1W+8D2TA1TNnmLEjWAm9Y3rgf54xpAbyryOFF8SAzG9tVk73YdUDkgAAAABJRU5ErkJggg=="
-                                                            }, where); // Load its image
-                                                            game.add.asset.img({
-                                                                id: ".Internal.unmuteButton",
-                                                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgoeC/S7LAAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAElSURBVEhLrZbREYQgDETNFaEdac3akTaR+2D2lODOBs/3w4gbWEJAbXiEu1LcY6YUkWRAa2je533e9YTbtE3bxBak44XgHJgZWsd1XMfY27Icy7EczDA3Sl5wY1lDCjMzM230Uz/mjWGC0g7duLu7x8i2FILBvLEYp2ALikbL/M346HAvAgSebdTVLdffx2fHv2Qweyp7yZZAMdpmstlibGm9JXpLs7peGoP/ks1YltcNvg01WNeEzkmsobf4GWSfpPqUaXr1gNXwB6/RgU9SpDdDvXqAa45w3kPIBGtrPdfdx/H7L17UoQbPFatro0zQnyEYi+OzzKX/Zp4aiihj5SxcEjWkYIdHG2Y7oYwBOQFAbZSBlLqFbSEzBtIGI+SvQ6IMRb66bmr2BeoT1QAAAABJRU5ErkJggg=="
-                                                            }, where); // Load its image
-
-                                                            game.add.asset.snd({
-                                                                id: ".Internal.unmuteButtonClick",
-                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAAAwAABBIAYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBg0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ////////////////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQCzSEAAeAAAAQSSYAuqwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEnACyvdAAACoh3exu8jLeoIAgcKAgCAYLggCAIHCgIAhggGIPv5cEFg+D+sH/Lg4CHDHKHP/E4PghrBwMcEAQygY//BB3//+UBAEAx/KAhlAQcmYqIp0mTVUZDWGgyrJEUQYImG/BhWy0KoEQVVjZUyyAxi+zMxAcDuX+WiWnPTQwFZ4BkIgoSlO0HWRLRa6sZiyXtxgTnQ+IAlwFSpHstGDFzlpJ1J2pzS2mZiuluTRlbS2DUE23jTFgFMVrERfV4GUv7edHTZbTQ3CYA37KYccp4lAmlpzMpkEOspbRYs7LIi8j8MQbxBMzxd8NvvB7KbTgw4yl1W5P67sEQS7sYhl3Zx/ZbS7xUzi6X+TZJFYkkYszmT+NETCdJdz7uFIpTWyjsNSdyauojEpdBNNLm408Oz/87DE4loUgqsfmMAkgxuzs47j+VGWS1u8Uf913bjdZa8ehyAaaIu7EXJhhwZC4VK+0ifZr0F/j++Y/vHW6WVZwzAUWZ7FrTIbUonIxGL0OUt+9G5e5cXmm3gp+aBnEQfaROjKqF/Zl/ZQ+smaVSuk8zSmJNFZVG2Gv9BMO/dpccfkF6/er5y/LC67MYfWchq4/0fVrKAIu7lfHLva4zAQE2q//1VFBQEBKMzKuGAhVCgJqs+qAnVAVL/6vxmKMx///9VTqr/V9VXjMUZvgYCAQNP9YKrBX8S8ShsSgrEVZ0RBwRPg1Bp5U7rBUeGpUNiU78RBwRPUIoilTusFR4KqTEFNRTMuOTkuM6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqv/zYMTZGtmybx/DGACqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg=="
-                                                            }, where);
-                                                            game.add.asset.snd({
-                                                                id: ".Internal.unmuteButtonClickUp",
-                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABMkATk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDLCEAAeAAAATJpqKjmQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAFogGux9BAAC6qruoVWtAv0iG8oCDgQcUBA4Jz8pLg+D+IAQd5cHwfB/rP/BAEDkoGPxACYPg+D5+GPUCAIA+/8HwQBAEAQBMH/h/8EAQBB3UCAPg+H/wQDH8HwfD8uD4Pg+qushml2hmlAYBrCAMEjTYbZgXKSJMQKAAkRyGgr9CoNCahLjLRnVAAhorQiAL13knoq8qAdYdH1rCt6FqmTC2dsHT1HCMoc2jWLUjdBRNoyJv4RMO0+0ZrvFNRFbrNnkWi/kVZar+lnZySwWwG4+ixJ1YkCQ+8pbp5BEMtK0x06WUrt+hjNymv+3B3YjhSwzfl+pU8dytnvDLdWPVbMpuUdPNWprdLVi9irfi0sqU17Ofj8Oyrct1AT9y2td13+c+7WpqbfJqlpatarGeX5Xf7rD/86DE0Up0bqMfmsAAw5zWN6btVKDKzU7yzzKbyps6amyrU1/uWWOOP8paa13k1DVLjTV7tumz7llnhjZyws6t1pfMyHcons7H42c6avS27mprVaNVbUzS/vdL3u/5l3+5fv7N/qaMNZRoSaM02g0LO2aTFcDsQUEAsfvVoGoStQqLLLRgFURCVLcDdYiz5huShkdWIiu/qVSyzERIxDHQ0pUtZNFTUECvRA6UymyVysMPMABBJfQHFAUZwC8TIEEyk3udBhrpMhGCRxJYZOULpBco1Sk7HGyX0/l6VsgUOZnGH2U2MI0A8GLUeKwWfCoQ8E0F/6BprcYalVlOdmj4tNyf6VXuLTLIuC/LorRbMhlMYw1BN2yzJs8dd2zGcZmTN3lUWlUzOQ3H4CpuPEw6G8qsZxtNxgFx//OwxNNQVC56/5jICGCqtSrclTdpucj0tjkRoKGIwTcd2njO6CtVptyqNXJuK0t2kpst61lv+a139Y6nN092prC19Ncls5QzfIlc3CL8BS+tasZXvm3RityJRaIxGw+0pj0Na7jvWWst/v//////UpprXcqYjJN1BQCkqkxBTUUzLjk5LjOqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqr/8xDE8QAAA/wBwAAAqqqqqqqqqqqqqqqqqg=="
-                                                            }, where);
-                                                            game.add.asset.snd({
-                                                                id: ".Internal.unmuteButtonMouseTouch",
-                                                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABP0ASkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDKiEAAeAAAAT9uAw0pwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEjkqnedDMACyMBL0ufxEQvkRC3REREKgYACCEe7JpkEIy7Jp3Ed7Jp3vezyad7+9nkyd7BMmH8uf8Tg+8uD4f/l///Ln/5d//h///rB9//g+z7q7iFlKYTSjQDSknrKLQgSoGlObS2JMhgJeYvuY7AQqCdmwWOKDMmn7BoHzfVVVDBTsLMmppKqLp0vOKCTvSCZkpdHXbYjEnpVuWSqo6TdY6z5ur2PA3FrEqV1EYgu8tyumPPoyarCXtXFGr8QhiZqr8pX8uxX4koFKn9eB8HDaw7rWJFKXioqVfzRW6vxFrMeu5RKAaDjxU8JmvtRDCV2s7eEsvZyCV49gGxGsaOrQvzT1XFsZczpYai2PYeyq3GyRSXSh3n8sSyN237rWKSKdhqLdhtiVC9kzIIlEpq69DRb/86DE406karb/mMAFHbtWq4NWxKsdSq9Wpq3JuxT27ff5X7T3+U+X2/yntXm4vk5WpFjMzsGWX6qVJdG5dlTRyHoL7Wz/Gl7rKm3KvrV8cfpr8Zw5vm+/vt/G9V5re6lXCtV5KptKs5xLtdN7LRLNNperiCirq5ChNOZN0QkNyLgShrjSgaOXwEQpl1LzMZFtXeJAWG2ugwCMCNzUA833wAgJFXiAwSlUnkYugAJmMGF1gGAPCykUA0eGnu4YEOjRSYWOGAildqzYmsuUy5iUvmJQAQcyg7MCIzJAUw00r8huy/cNv9U28b9Oy0iBBCHGPhRiiWYIThCaZeuGOoyQ7WYu15yXHdWd9Z6msOrSf+Mpywm2TF6mlNJAaDCEAQJmBCbMc6sImYkzqn5TydmE5FtTFmXQHCpN//PAxNRcDG6O/5nYDVKDH5bfR9WU0pr5ggqBA8oDTAQqCi/xcpSpqVz8LlBLOfbs5VZXujdmZpdX5qLSKjpb0upn9qw66lmtflMqp05X1a6/rouqyKIwwBQqKvq+Evp6ksmbcY7m78VoYzhVr5T7cG3l0W5dptdpH/ll+zVtWfx5LUJyri9r6yHdWgjThQG12U2M5TSRrGgXNn3///3/P////99pfGdgs1VMQU1FVUxBTUUzLjk5LjNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//MQxPIAAAP8AcAAAFVVVVVVVVVVVVVVVVU="
-                                                            }, where);
-
-                                                            let size = Math.min(game.width, game.height) / 10;
-                                                            game.add.sprite({
-                                                                id: ".Internal.unmute", // We can use this as we're that plugin
-                                                                type: "sprite",
-                                                                img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
-                                                                visible: false,
-                                                                scripts: {
-                                                                    steps: {
-                                                                        appearAnimation: me => {
-                                                                            if (me.vars.delay < 30) {
-                                                                                me.vars.delay++;
-                                                                            }
-                                                                            else {
-                                                                                me.visible = true;
-                                                                                if (me.width != me.vars.size) {
-                                                                                    me.width *= 1.4;
-
-                                                                                    if (me.width >= me.vars.size) {
-                                                                                        me.width = me.vars.size;
-                                                                                        me.vars.appearAnimation = false;
-                                                                                    }
-                                                                                    me.height = me.width;
-                                                                                }
-                                                                            }
-                                                                        },
-                                                                        deleteAnimation: me => {
-                                                                            me.width /= 1.4;
-                                                                            me.height = me.width;
-                                                                            if (me.width < 1) {
-                                                                                me.delete(); // Bye
-                                                                            }
-                                                                        },
-                                                                        expandAnimation: me => {
-                                                                            me.width *= 1.025;
-                                                                            if (me.width > me.vars.expandedSize) {
-                                                                                me.width = me.vars.expandedSize;
-                                                                            }
-                                                                            me.height = me.width;
-                                                                        },
-                                                                        shrinkAnimation: me => {
-                                                                            if (me.width != me.vars.size) {
-                                                                                me.width /= 1.025;
-                                                                                if (me.width < me.vars.size) {
-                                                                                    me.width = me.vars.size;
-                                                                                }
-                                                                                me.height = me.width;
-                                                                            }
-                                                                            if (me.vars.plugin.vars.audio.autoPlay) { // Unmuted
-                                                                                me.vars.delete = true;
-                                                                            }
-                                                                        },
-                                                                        play: me => {
-                                                                            let vars = me.vars.plugin.vars;
-                                                                            for (let i in vars.audio.queue) {
-                                                                                let snd = Bagel.get.asset.snd(vars.audio.queue[i], game);
-                                                                                snd.play().then().catch(); // Play it
-                                                                            }
-                                                                            vars.audio.autoPlay = true;
-                                                                            vars.audio.queue = []; // Clear the queue
-                                                                            me.img = ".Internal.unmuteButton"; // Change to the unmuted image
-                                                                        },
-                                                                        pause: me => {
-                                                                            let vars = me.vars.plugin.vars;
-                                                                            for (let id in game.internal.assets.assets.snds) {
-                                                                                let snd = game.internal.assets.assets.snds[id].snd;
-                                                                                if (! snd.paused) {
-                                                                                    snd.pause();
-                                                                                    if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                                                        vars.audio.queue.push(id);
-                                                                                    }
-                                                                                    else {
-                                                                                        snd.currentTime = 0;
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                            vars.audio.autoPlay = false;
-                                                                            me.img = ".Internal.unmuteButtonMuted"; // Change to the unmuted image
-                                                                        }
-                                                                    },
-                                                                    all: [
-                                                                        (me, game, step) => {
-                                                                            me.layer.bringToFront();
-                                                                            if (me.vars.appearAnimation) {
-                                                                                step("appearAnimation");
-                                                                            }
-                                                                            else {
-                                                                                if (! game.input.mouse.down) {
-                                                                                    if (me.vars.clicked) {
-                                                                                        game.playSound(".Internal.unmuteButtonClickUp");
-                                                                                    }
-                                                                                    me.vars.clicked = false;
-                                                                                }
-
-                                                                                let vars = me.vars.plugin.vars;
-                                                                                if (me.vars.delete) {
-                                                                                    step("deleteAnimation");
-                                                                                }
-                                                                                else {
-                                                                                    if (me.touching.mouseCircles()) {
-                                                                                        if (! me.vars.touching) {
-                                                                                            game.playSound(".Internal.unmuteButtonMouseTouch");
-                                                                                            me.vars.touching = true;
-                                                                                        }
-                                                                                        if (me.width != me.vars.expandedSize) {
-                                                                                            step("expandAnimation");
-                                                                                        }
-                                                                                        if (game.input.mouse.down && (! me.vars.clicked)) {
-                                                                                            game.playSound(".Internal.unmuteButtonClick");
-                                                                                            if (vars.audio.autoPlay) {
-                                                                                                step("pause");
-                                                                                            }
-                                                                                            else {
-                                                                                                step("play");
-                                                                                            }
-                                                                                            me.vars.clicked = true;
-                                                                                        }
-                                                                                    }
-                                                                                    else {
-                                                                                        me.vars.touching = false;
-                                                                                        step("shrinkAnimation");
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    ]
-                                                                },
-                                                                vars: {
-                                                                    plugin: plugin,
-                                                                    size: size,
-                                                                    expandedSize: size * 1.1,
-                                                                    delay: 0,
-                                                                    clicked: false,
-                                                                    delete: false,
-                                                                    touching: false,
-                                                                    appearAnimation: true
-                                                                },
-                                                                x: size,
-                                                                y: game.height - size,
-                                                                width: 1,
-                                                                height: 1,
-                                                            }, "plugin Internal, function \"game.playSound\" (via Game.add.sprite)");
-                                                        }
+                                                        plugin.vars.audio.createUnmute(plugin, game);
                                                         plugin.vars.audio.queue.push(args.id);
                                                     }
                                                     Bagel.internal.loadCurrent();
@@ -1726,14 +1670,14 @@ Bagel = {
                                 },
                                 fn: (me, args, game) => {
                                     let cached = me.internal.cache;
-                                    if (args.angle) {
-                                        let rad = Bagel.maths.degToRad(args.angl + 90);
-                                        me.x += Math.cos(rad) * args.amount;
-                                        me.y += Math.sin(rad) * args.amount;
+                                    if (args.angle == null) {
+                                        me.x -= cached.cos * args.amount;
+                                        me.y -= cached.sin * args.amount;
                                     }
                                     else {
-                                        me.x += cached.cos * args.amount;
-                                        me.y += cached.sin * args.amount;
+                                        let rad = Bagel.maths.degToRad(args.angle + 90);
+                                        me.x -= Math.cos(rad) * args.amount;
+                                        me.y -= Math.sin(rad) * args.amount;
                                     }
                                 }
                             }
@@ -1927,10 +1871,10 @@ Bagel = {
                                             if (args.box == null) {
                                                 // Make a bounding box
                                                 args.box = {
-                                                    x: me.x - (me.width / 2),
-                                                    y: me.y - (me.height / 2),
-                                                    width: me.width,
-                                                    height: me.height
+                                                    x: me.x - Math.abs(me.width / 2),
+                                                    y: me.y - Math.abs(me.height / 2),
+                                                    width: Math.abs(me.width),
+                                                    height: Math.abs(me.height)
                                                 };
                                             }
                                             else {
@@ -2015,7 +1959,7 @@ Bagel = {
                                             };
                                             if (args.radius == null) {
                                                 // Make a bounding box
-                                                box.radius = Math.max(me.width, me.height) / 2;
+                                                box.radius = Math.max(Math.abs(me.width), Math.abs(me.height)) / 2;
                                             }
                                             else {
                                                 box.radius = args.radius;
@@ -2140,10 +2084,10 @@ Bagel = {
                                             if (args.options.box == null) {
                                                 // Make a bounding box
                                                 args.options.box = {
-                                                    x: me.x - (me.width / 2),
-                                                    y: me.y - (me.height / 2),
-                                                    width: me.width,
-                                                    height: me.height
+                                                    x: me.x - Math.abs(me.width / 2),
+                                                    y: me.y - Math.abs(me.height / 2),
+                                                    width: Math.abs(me.width),
+                                                    height: Math.abs(me.height)
                                                 };
                                             }
                                             else {
@@ -2170,10 +2114,12 @@ Bagel = {
                                                 if (! args.options.include.invisibles) {
                                                     if (! sprite.visible) continue;
                                                 }
-                                                if (box.x < sprite.x + sprite.width) {
-                                                    if (box.x + box.width > sprite.x) {
-                                                        if (box.y < sprite.y + sprite.height) {
-                                                            if (box.y + box.height > sprite.y) {
+                                                let leftX = me.x - Math.abs(me.width / 2);
+                                                let leftY = me.y - Math.abs(me.height / 2);
+                                                if (box.x < leftX + Math.abs(me.width)) {
+                                                    if (box.x + box.width > leftX) {
+                                                        if (box.y < leftY + Math.abs(me.height)) {
+                                                            if (box.y + box.height > leftY) {
                                                                 if (args.check) {
                                                                     passed = args.check(sprite, me, game);
                                                                 }
@@ -2208,19 +2154,21 @@ Bagel = {
                                     Bagel.get.asset.img(sprite.img, game, true); // Requesting it will trigger loading
                                 }
                             }
-                            if (sprite.request[state]) {
-                                for (let type in sprite.request[state]) {
-                                    let singular = game.internal.combinedPlugins.types.assets[type];
-                                    if (singular == null) {
-                                        console.error("Oops, the (plural) asset type " + JSON.stringify(type) + " doesn't exist in this game.");
-                                        console.log("These are the only types:");
-                                        console.log(Object.keys(game.internal.combinedPlugins.types.assets).join("\n"));
-                                        Bagel.internal.oops(game);
-                                    }
+                            if (sprite.request) {
+                                if (sprite.request[state]) {
+                                    for (let type in sprite.request[state]) {
+                                        let singular = game.internal.combinedPlugins.types.assets[type];
+                                        if (singular == null) {
+                                            console.error("Oops, the (plural) asset type " + JSON.stringify(type) + " doesn't exist in this game.");
+                                            console.log("These are the only types:");
+                                            console.log(Object.keys(game.internal.combinedPlugins.types.assets).join("\n"));
+                                            Bagel.internal.oops(game);
+                                        }
 
-                                    singular = singular.get;
-                                    for (let i in sprite.request[state][type]) {
-                                        Bagel.get.asset[singular](sprite.request[state][type][i], game, true); // Requesting it will trigger loading
+                                        singular = singular.get;
+                                        for (let i in sprite.request[state][type]) {
+                                            Bagel.get.asset[singular](sprite.request[state][type][i], game, true); // Requesting it will trigger loading
+                                        }
                                     }
                                 }
                             }
@@ -2239,23 +2187,193 @@ Bagel = {
             vars: {
                 audio: {
                     autoPlay: true, // We probably don't have it but assume we do for now
-                    queue: []
+                    queue: [],
+                    createUnmute: (plugin, game) => {
+                        if (! Bagel.get.sprite(".Internal.unmute", game, true)) { // Check if the button exists
+                            // Create one instead
+                            let where = "plugin Internal's function \"game.playSound\"";
+                            game.add.asset.img({
+                                id: ".Internal.unmuteButtonMuted",
+                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgYpH/xRLwAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAFGSURBVEhLpVbbtcMwCCs9d4brjbJzvVGmcD9clQBRIY4+mtgRWBZ+VB5LGCNjnEMkY1DMIdnA6PfPKtbjw4wg9HyusXeMMSrDiYhotI/gzpIPOugMPaauCcowBedCXUcM0NKPcfTVDiCyKjwT+vQBnqDCZqLzhDkQZ0uNimjPtm/7tof8cfHCEesM3q/wbTvje55zMD8GwKh66B1jmEKjk3/nRLY2FFaols4PdBdkDdaBXa7bpeZYFbcFAt7RX9wroAJtqXJPwPeO3oUTGNPaXZZD1zDa+vsLbM0/8dkSPe364l91dO5ebZMS83RrQvF2vJkmmHO99dabCD0Hs2PmqlAF4mx+7xyQXnU1oexrBPKxAx/OffmPEtjmyR1kE/SOvf57603P1W+8D2TA1TNnmLEjWAm9Y3rgf54xpAbyryOFF8SAzG9tVk73YdUDkgAAAABJRU5ErkJggg=="
+                            }, where); // Load its image
+                            game.add.asset.img({
+                                id: ".Internal.unmuteButton",
+                                src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgoeC/S7LAAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAElSURBVEhLrZbREYQgDETNFaEdac3akTaR+2D2lODOBs/3w4gbWEJAbXiEu1LcY6YUkWRAa2je533e9YTbtE3bxBak44XgHJgZWsd1XMfY27Icy7EczDA3Sl5wY1lDCjMzM230Uz/mjWGC0g7duLu7x8i2FILBvLEYp2ALikbL/M346HAvAgSebdTVLdffx2fHv2Qweyp7yZZAMdpmstlibGm9JXpLs7peGoP/ks1YltcNvg01WNeEzkmsobf4GWSfpPqUaXr1gNXwB6/RgU9SpDdDvXqAa45w3kPIBGtrPdfdx/H7L17UoQbPFatro0zQnyEYi+OzzKX/Zp4aiihj5SxcEjWkYIdHG2Y7oYwBOQFAbZSBlLqFbSEzBtIGI+SvQ6IMRb66bmr2BeoT1QAAAABJRU5ErkJggg=="
+                            }, where); // Load its image
+
+                            game.add.asset.snd({
+                                id: ".Internal.unmuteButtonClick",
+                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAAAwAABBIAYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBg0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ////////////////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQCzSEAAeAAAAQSSYAuqwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEnACyvdAAACoh3exu8jLeoIAgcKAgCAYLggCAIHCgIAhggGIPv5cEFg+D+sH/Lg4CHDHKHP/E4PghrBwMcEAQygY//BB3//+UBAEAx/KAhlAQcmYqIp0mTVUZDWGgyrJEUQYImG/BhWy0KoEQVVjZUyyAxi+zMxAcDuX+WiWnPTQwFZ4BkIgoSlO0HWRLRa6sZiyXtxgTnQ+IAlwFSpHstGDFzlpJ1J2pzS2mZiuluTRlbS2DUE23jTFgFMVrERfV4GUv7edHTZbTQ3CYA37KYccp4lAmlpzMpkEOspbRYs7LIi8j8MQbxBMzxd8NvvB7KbTgw4yl1W5P67sEQS7sYhl3Zx/ZbS7xUzi6X+TZJFYkkYszmT+NETCdJdz7uFIpTWyjsNSdyauojEpdBNNLm408Oz/87DE4loUgqsfmMAkgxuzs47j+VGWS1u8Uf913bjdZa8ehyAaaIu7EXJhhwZC4VK+0ifZr0F/j++Y/vHW6WVZwzAUWZ7FrTIbUonIxGL0OUt+9G5e5cXmm3gp+aBnEQfaROjKqF/Zl/ZQ+smaVSuk8zSmJNFZVG2Gv9BMO/dpccfkF6/er5y/LC67MYfWchq4/0fVrKAIu7lfHLva4zAQE2q//1VFBQEBKMzKuGAhVCgJqs+qAnVAVL/6vxmKMx///9VTqr/V9VXjMUZvgYCAQNP9YKrBX8S8ShsSgrEVZ0RBwRPg1Bp5U7rBUeGpUNiU78RBwRPUIoilTusFR4KqTEFNRTMuOTkuM6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqv/zYMTZGtmybx/DGACqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg=="
+                            }, where);
+                            game.add.asset.snd({
+                                id: ".Internal.unmuteButtonClickUp",
+                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABMkATk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDLCEAAeAAAATJpqKjmQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAFogGux9BAAC6qruoVWtAv0iG8oCDgQcUBA4Jz8pLg+D+IAQd5cHwfB/rP/BAEDkoGPxACYPg+D5+GPUCAIA+/8HwQBAEAQBMH/h/8EAQBB3UCAPg+H/wQDH8HwfD8uD4Pg+qushml2hmlAYBrCAMEjTYbZgXKSJMQKAAkRyGgr9CoNCahLjLRnVAAhorQiAL13knoq8qAdYdH1rCt6FqmTC2dsHT1HCMoc2jWLUjdBRNoyJv4RMO0+0ZrvFNRFbrNnkWi/kVZar+lnZySwWwG4+ixJ1YkCQ+8pbp5BEMtK0x06WUrt+hjNymv+3B3YjhSwzfl+pU8dytnvDLdWPVbMpuUdPNWprdLVi9irfi0sqU17Ofj8Oyrct1AT9y2td13+c+7WpqbfJqlpatarGeX5Xf7rD/86DE0Up0bqMfmsAAw5zWN6btVKDKzU7yzzKbyps6amyrU1/uWWOOP8paa13k1DVLjTV7tumz7llnhjZyws6t1pfMyHcons7H42c6avS27mprVaNVbUzS/vdL3u/5l3+5fv7N/qaMNZRoSaM02g0LO2aTFcDsQUEAsfvVoGoStQqLLLRgFURCVLcDdYiz5huShkdWIiu/qVSyzERIxDHQ0pUtZNFTUECvRA6UymyVysMPMABBJfQHFAUZwC8TIEEyk3udBhrpMhGCRxJYZOULpBco1Sk7HGyX0/l6VsgUOZnGH2U2MI0A8GLUeKwWfCoQ8E0F/6BprcYalVlOdmj4tNyf6VXuLTLIuC/LorRbMhlMYw1BN2yzJs8dd2zGcZmTN3lUWlUzOQ3H4CpuPEw6G8qsZxtNxgFx//OwxNNQVC56/5jICGCqtSrclTdpucj0tjkRoKGIwTcd2njO6CtVptyqNXJuK0t2kpst61lv+a139Y6nN092prC19Ncls5QzfIlc3CL8BS+tasZXvm3RityJRaIxGw+0pj0Na7jvWWst/v//////UpprXcqYjJN1BQCkqkxBTUUzLjk5LjOqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqr/8xDE8QAAA/wBwAAAqqqqqqqqqqqqqqqqqg=="
+                            }, where);
+                            game.add.asset.snd({
+                                id: ".Internal.unmuteButtonMouseTouch",
+                                src: "data:audio/mpeg;base64,//OAxAAAAAAAAAAAAFhpbmcAAAAPAAAABAAABP0ASkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn/////////////////////////////////AAAAUExBTUUzLjk5cgRuAAAAAAAAAAA1CCQDKiEAAeAAAAT9uAw0pwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zoMQAEjkqnedDMACyMBL0ufxEQvkRC3REREKgYACCEe7JpkEIy7Jp3Ed7Jp3vezyad7+9nkyd7BMmH8uf8Tg+8uD4f/l///Ln/5d//h///rB9//g+z7q7iFlKYTSjQDSknrKLQgSoGlObS2JMhgJeYvuY7AQqCdmwWOKDMmn7BoHzfVVVDBTsLMmppKqLp0vOKCTvSCZkpdHXbYjEnpVuWSqo6TdY6z5ur2PA3FrEqV1EYgu8tyumPPoyarCXtXFGr8QhiZqr8pX8uxX4koFKn9eB8HDaw7rWJFKXioqVfzRW6vxFrMeu5RKAaDjxU8JmvtRDCV2s7eEsvZyCV49gGxGsaOrQvzT1XFsZczpYai2PYeyq3GyRSXSh3n8sSyN237rWKSKdhqLdhtiVC9kzIIlEpq69DRb/86DE406karb/mMAFHbtWq4NWxKsdSq9Wpq3JuxT27ff5X7T3+U+X2/yntXm4vk5WpFjMzsGWX6qVJdG5dlTRyHoL7Wz/Gl7rKm3KvrV8cfpr8Zw5vm+/vt/G9V5re6lXCtV5KptKs5xLtdN7LRLNNperiCirq5ChNOZN0QkNyLgShrjSgaOXwEQpl1LzMZFtXeJAWG2ugwCMCNzUA833wAgJFXiAwSlUnkYugAJmMGF1gGAPCykUA0eGnu4YEOjRSYWOGAildqzYmsuUy5iUvmJQAQcyg7MCIzJAUw00r8huy/cNv9U28b9Oy0iBBCHGPhRiiWYIThCaZeuGOoyQ7WYu15yXHdWd9Z6msOrSf+Mpywm2TF6mlNJAaDCEAQJmBCbMc6sImYkzqn5TydmE5FtTFmXQHCpN//PAxNRcDG6O/5nYDVKDH5bfR9WU0pr5ggqBA8oDTAQqCi/xcpSpqVz8LlBLOfbs5VZXujdmZpdX5qLSKjpb0upn9qw66lmtflMqp05X1a6/rouqyKIwwBQqKvq+Evp6ksmbcY7m78VoYzhVr5T7cG3l0W5dptdpH/ll+zVtWfx5LUJyri9r6yHdWgjThQG12U2M5TSRrGgXNn3///3/P////99pfGdgs1VMQU1FVUxBTUUzLjk5LjNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//MQxPIAAAP8AcAAAFVVVVVVVVVVVVVVVVU="
+                            }, where);
+
+                            let size = Math.min(game.width, game.height) / 10;
+                            game.add.sprite({
+                                id: ".Internal.unmute", // We can use this as we're that plugin
+                                type: "sprite",
+                                img: ".Internal.unmuteButtonMuted", // It just won't show until the asset's loaded
+                                visible: false,
+                                scripts: {
+                                    steps: {
+                                        appearAnimation: me => {
+                                            if (me.vars.delay < 30) {
+                                                me.vars.delay++;
+                                            }
+                                            else {
+                                                me.visible = true;
+                                                if (me.width != me.vars.size) {
+                                                    me.width *= 1.4;
+
+                                                    if (me.width >= me.vars.size) {
+                                                        me.width = me.vars.size;
+                                                        me.vars.appearAnimation = false;
+                                                    }
+                                                    me.height = me.width;
+                                                }
+                                            }
+                                        },
+                                        deleteAnimation: me => {
+                                            me.width /= 1.4;
+                                            me.height = me.width;
+                                            if (me.width < 1) {
+                                                me.delete(); // Bye
+                                            }
+                                        },
+                                        expandAnimation: me => {
+                                            me.width *= 1.025;
+                                            if (me.width > me.vars.expandedSize) {
+                                                me.width = me.vars.expandedSize;
+                                            }
+                                            me.height = me.width;
+                                        },
+                                        shrinkAnimation: me => {
+                                            if (me.width != me.vars.size) {
+                                                me.width /= 1.025;
+                                                if (me.width < me.vars.size) {
+                                                    me.width = me.vars.size;
+                                                }
+                                                me.height = me.width;
+                                            }
+                                            if (me.vars.plugin.vars.audio.autoPlay) { // Unmuted
+                                                me.vars.delete = true;
+                                            }
+                                        },
+                                        play: me => {
+                                            let vars = me.vars.plugin.vars;
+                                            for (let i in vars.audio.queue) {
+                                                let snd = Bagel.get.asset.snd(vars.audio.queue[i], game);
+                                                snd.play().then().catch(); // Play it
+                                            }
+                                            vars.audio.autoPlay = true;
+                                            vars.audio.queue = []; // Clear the queue
+                                            me.img = ".Internal.unmuteButton"; // Change to the unmuted image
+                                        },
+                                        pause: me => {
+                                            let vars = me.vars.plugin.vars;
+                                            for (let id in game.internal.assets.assets.snds) {
+                                                let snd = game.internal.assets.assets.snds[id];
+                                                if (! snd.paused) {
+                                                    snd.pause();
+                                                    if (snd.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
+                                                        vars.audio.queue.push(id);
+                                                    }
+                                                    else {
+                                                        snd.currentTime = 0;
+                                                    }
+                                                }
+                                            }
+                                            vars.audio.autoPlay = false;
+                                            me.img = ".Internal.unmuteButtonMuted"; // Change to the unmuted image
+                                        }
+                                    },
+                                    all: [
+                                        (me, game, step) => {
+                                            me.layer.bringToFront();
+                                            if (me.vars.appearAnimation) {
+                                                step("appearAnimation");
+                                            }
+                                            else {
+                                                if (! game.input.mouse.down) {
+                                                    if (me.vars.clicked) {
+                                                        game.playSound(".Internal.unmuteButtonClickUp");
+                                                    }
+                                                    me.vars.clicked = false;
+                                                }
+
+                                                let vars = me.vars.plugin.vars;
+                                                if (me.vars.delete) {
+                                                    step("deleteAnimation");
+                                                }
+                                                else {
+                                                    if (me.touching.mouseCircles()) {
+                                                        if (! me.vars.touching) {
+                                                            game.playSound(".Internal.unmuteButtonMouseTouch");
+                                                            me.vars.touching = true;
+                                                        }
+                                                        if (me.width != me.vars.expandedSize) {
+                                                            step("expandAnimation");
+                                                        }
+                                                        if (game.input.mouse.down && (! me.vars.clicked)) {
+                                                            game.playSound(".Internal.unmuteButtonClick");
+                                                            if (vars.audio.autoPlay) {
+                                                                step("pause");
+                                                            }
+                                                            else {
+                                                                step("play");
+                                                            }
+                                                            me.vars.clicked = true;
+                                                        }
+                                                    }
+                                                    else {
+                                                        me.vars.touching = false;
+                                                        step("shrinkAnimation");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                },
+                                vars: {
+                                    plugin: plugin,
+                                    size: size,
+                                    expandedSize: size * 1.1,
+                                    delay: 0,
+                                    clicked: false,
+                                    delete: false,
+                                    touching: false,
+                                    appearAnimation: true
+                                },
+                                x: size,
+                                y: game.height - size,
+                                width: 1,
+                                height: 1,
+                            }, "plugin Internal, function \"game.playSound\" (via Game.add.sprite)");
+                        }
+                    }
                 }
             }
         },
-        loadPlugin: (plugin, game, args) => {
+        loadPlugin: (plugin, game, args, index) => {
             let subFunctions = Bagel.internal.subFunctions.loadPlugin;
             plugin = Bagel.internal.deepClone(plugin); // Create a copy of the plugin
             let current = Bagel.internal.current;
             Bagel.internal.saveCurrent();
             current.plugin = plugin;
 
+            plugin.args = args;
             if (plugin.plugin) {
                 if (plugin.plugin.scripts) {
                     if (plugin.plugin.scripts.preload) plugin.plugin.scripts.preload(plugin, game, Bagel.step.plugin.scripts);
                 }
             }
-            plugin = subFunctions.check(game, plugin);
+            plugin = subFunctions.check(game, plugin, index);
             plugin.args = Bagel.internal.deepClone(args);
 
             // Combine all the plugins into one plugin
@@ -2317,7 +2435,8 @@ Bagel = {
                 let combinedPlugins = game.internal.combinedPlugins;
                 let plural = combinedPlugins.types.internal.pluralAssetTypes[combinedPlugins.types.assets[type].get];
 
-                assets.assets[type][assetJSON.id] = asset;
+                assets.loadingIDs[plural][assetJSON.id] = false; // Not loading anymore
+                assets.assets[plural][assetJSON.id] = asset;
                 assets.loaded++;
                 assets.loading--;
                 if (assets.toLoad[plural]) {
@@ -2333,8 +2452,13 @@ Bagel = {
                 }
             })(asset, game); // This is called by the init function once the asset has loaded
             if (loadNow) {
+                let combinedPlugins = game.internal.combinedPlugins;
+                let plural = combinedPlugins.types.internal.pluralAssetTypes[combinedPlugins.types.assets[type].get];
+
                 assetLoader.init(asset, ready, game, assetLoader.internal.plugin, i);
-                game.internal.assets.loading++;
+                assets.loading++;
+                if (assets.loadingIDs[plural] == null) assets.loadingIDs[plural] = {};
+                assets.loadingIDs[plural][asset.id] = true; // It's currently loading
             }
             else {
                 let toLoad = game.internal.assets.toLoad;
@@ -2370,7 +2494,17 @@ Bagel = {
             if (handler == null) {
                 let spriteTypes = Object.keys(combined.types.sprites);
                 if (! spriteTypes.includes(sprite.type)) {
-                    console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + " for the sprite " + JSON.stringify(sprite.id) + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                    if (sprite.id) {
+                        console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + " for the sprite " + JSON.stringify(sprite.id) + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                    }
+                    else {
+                        if (idIndex) {
+                            console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + " for sprite " + idIndex + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                        }
+                        else {
+                            console.error("Oops, you used an invalid sprite type. You tried to use " + JSON.stringify(sprite.type) + ". It can only be one of these:\n" + spriteTypes.reduce((total, value) => total + "  • " + JSON.stringify(value) + " -> " + combined.types.sprites[value].description + "\n", ""));
+                        }
+                    }
                     Bagel.internal.oops(game);
                 }
             }
@@ -2400,6 +2534,7 @@ Bagel = {
             sprite.idIndex = idIndex;
             let register = subFunctions.register;
 
+            subFunctions.extraChecks(sprite, game, where, idIndex);
             register.scripts("init", sprite, game, parent);
             register.scripts("main", sprite, game, parent);
             register.scripts("all", sprite, game, parent);
@@ -2459,7 +2594,6 @@ Bagel = {
                 };
             })(sprite);
 
-            subFunctions.extraChecks(sprite, game, where, idIndex);
             subFunctions.init(sprite, game, subFunctions);
 
             Bagel.internal.loadCurrent();
@@ -2477,25 +2611,34 @@ Bagel = {
 
                     subFunctions.scaleCanvas(game);
 
-                    if (game.state != game.internal.lastPrepState) {
-                        Bagel.internal.triggerPluginListener("prepState", game, game.state);
-                        if (game.internal.assets.loading != 0) { // Something needs to load
-                            if (game.loaded) {
+                    if (game.internal.pluginsDone) {
+                        if (game.state != game.internal.lastPrepState) {
+                            Bagel.internal.triggerPluginListener("prepState", game, game.state);
+                            if (game.internal.assets.loading != 0) { // Something needs to load
                                 game.loaded = false;
+                                if (game.internal.loadingScreen == null) {
+                                    Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                                }
+                            }
+                            game.internal.lastPrepState = game.state;
+                        }
+
+
+                        if (game.loaded) {
+                            if (subFunctions.loaded(game)) { // Loading screen triggered
                                 Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                                subFunctions.loading(game);
                             }
                         }
-                        game.internal.lastPrepState = game.state;
-                    }
-
-                    if (game.loaded) {
-                        if (subFunctions.loaded(game)) { // Loading screen triggered
-                            Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                        else {
                             subFunctions.loading(game);
                         }
                     }
                     else {
-                        subFunctions.loading(game);
+                        if (game.internal.pluginsLoading == 0) {
+                            game.internal.pluginsDone = true;
+                            Bagel.internal.subFunctions.init.onPluginsReady(game);
+                        }
                     }
 
                     let now = new Date();
@@ -2559,7 +2702,10 @@ Bagel = {
                             loading: 0,
                             loaded: 0,
                             assets: {},
-                            toLoad: {}
+                            toLoad: {},
+                            loadingIDs: {},
+                            ranTasks: false,
+                            assetsLoading: 0
                         },
                         combinedPlugins: {
                             types: {
@@ -2581,7 +2727,9 @@ Bagel = {
                         }, // The plugins are combined as they're loaded
                         lastState: (! game.state),
                         lastPrepState: (! game.state),
-                        plugins: {}
+                        plugins: {},
+                        pluginsLoading: 0,
+                        pluginsDone: false
                     };
 
                     game = Bagel.check({
@@ -2597,20 +2745,11 @@ Bagel = {
                         touches: [],
                         mouse: {
                             down: false,
-                            x: 0,
-                            y: 0
+                            x: game.width / 2, // The centre of the game
+                            y: game.height / 2
                         },
                         keys: {
-                            isDown: function(keyCode) {
-                                if (this.internal.game.input.keys.keys[keyCode]) {
-                                    return true;
-                                }
-                                return false;
-                            },
-                            keys: {},
-                            internal: {
-                                game: game
-                            }
+                            keys: {}
                         },
                         lookup: {
                             left: 37,
@@ -2627,17 +2766,16 @@ Bagel = {
 
                     (game => {
                         addEventListener("mousemove", e => {
-                            let canvas = game.internal.renderer.canvas;
-                            let rect = canvas.getBoundingClientRect();
+                            let renderer = game.internal.renderer;
+                            let rect = renderer.canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
-                            mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                            mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                            mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
+                            mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
                         }, false);
                         addEventListener("mousedown", e => {
                             Bagel.device.is.touchscreen = false;
                             game.input.mouse.down = true;
-                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         addEventListener("mouseup", e => {
                             game.input.mouse.down = false;
@@ -2646,13 +2784,13 @@ Bagel = {
                         addEventListener("touchstart", e => {
                             Bagel.device.is.touchscreen = true;
 
-                            let canvas = game.internal.renderer.canvas;
-                            let rect = canvas.getBoundingClientRect();
+                            let renderer = game.internal.renderer;
+                            let rect = renderer.canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
                             if (e.touches == null) {
-                                mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
+                                mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
                                 game.input.touches = [
                                     {
                                         x: game.input.mouse.x,
@@ -2661,34 +2799,33 @@ Bagel = {
                                 ];
                             }
                             else {
-                                mouse.x = ((e.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((e.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.touches[0].clientX - rect.left) / renderer.styleWidth) * game.width;
+                                mouse.y = ((e.touches[0].clientY  - rect.top) / renderer.styleHeight) * game.height;
 
                                 game.input.touches = [];
                                 for (let i in e.touches) {
                                     game.input.touches.push({
-                                        x: ((e.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
-                                        y: ((e.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
+                                        x: ((e.touches[i].clientX - rect.left) / renderer.styleWidth) * game.width,
+                                        y: ((e.touches[i].clientY  - rect.top) / renderer.styleHeight) * game.height
                                     });
                                 }
                             }
 
                             mouse.down = true;
                             if (e.cancelable) {
-                                ctx.preventDefault();
+                                e.preventDefault();
                             }
-                            Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         addEventListener("touchmove", e => {
                             Bagel.device.is.touchscreen = true;
 
-                            let canvas = game.internal.renderer.canvas;
-                            let rect = canvas.getBoundingClientRect();
+                            let renderer = game.internal.renderer;
+                            let rect = renderer.canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
                             if (e.touches == null) {
-                                mouse.x = ((e.clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((e.clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
+                                mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
                                 game.input.touches = [
                                     {
                                         x: mouse.x,
@@ -2697,14 +2834,14 @@ Bagel = {
                                 ];
                             }
                             else {
-                                mouse.x = ((e.touches[0].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width;
-                                mouse.y = ((e.touches[0].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height;
+                                mouse.x = ((e.touches[0].clientX - rect.left) / renderer.styleWidth) * game.width;
+                                mouse.y = ((e.touches[0].clientY  - rect.top) / renderer.styleHeight) * game.height;
 
                                 game.input.touches = [];
                                 for (let i in e.touches) {
                                     game.input.touches.push({
-                                        x: ((e.touches[i].clientX - rect.left) / (canvas.width / window.devicePixelRatio)) * game.width,
-                                        y: ((e.touches[i].clientY  - rect.top) / (canvas.height / window.devicePixelRatio)) * game.height
+                                        x: ((e.touches[i].clientX - rect.left) / renderer.styleWidth) * game.width,
+                                        y: ((e.touches[i].clientY  - rect.top) / renderer.styleHeight) * game.height
                                     });
                                 }
                             }
@@ -2725,20 +2862,13 @@ Bagel = {
                             }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
-                        document.addEventListener("keydown", e => {
-                            for (let i in Bagel.internal.games) {
-                                let game = Bagel.internal.games[i];
-                                game.input.keys.keys[e.keyCode] = true;
+
+                        game.input.keys.isDown = keyCode => {
+                            if (game.input.keys.keys[keyCode]) {
+                                return true;
                             }
-                            Bagel.internal.inputAction.input(); // Run anything queued for an action
-                        }, false);
-                        document.addEventListener("keyup", e => {
-                            for (let i in Bagel.internal.games) {
-                                let game = Bagel.internal.games[i];
-                                game.input.keys.keys[e.keyCode] = false;
-                            }
-                            Bagel.internal.inputAction.input(); // Run anything queued for an action
-                        }, false);
+                            return false;
+                        };
 
                         if (document.readyState == "complete") {
                             Bagel.internal.subFunctions.init.documentReady(game);
@@ -2751,6 +2881,20 @@ Bagel = {
                             });
                         }
                     })(game);
+                    if (Object.keys(Bagel.internal.games).length == 0) { // Only need to do this once
+                        document.addEventListener("keydown", e => {
+                            for (let i in Bagel.internal.games) {
+                                let game = Bagel.internal.games[i];
+                                game.input.keys.keys[e.keyCode] = true;
+                            }
+                        }, false);
+                        document.addEventListener("keyup", e => {
+                            for (let i in Bagel.internal.games) {
+                                let game = Bagel.internal.games[i];
+                                game.input.keys.keys[e.keyCode] = false;
+                            }
+                        }, false);
+                    }
                 },
                 misc: game => {
                     game.loaded = false;
@@ -2779,7 +2923,7 @@ Bagel = {
                     }
                     renderer.canvas.id = "Bagel.js " + game.id;
 
-                    renderer.ctx.imageSmoothingEnabled = false;
+                    renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing;
                     renderer.canvas.width = game.width;
                     renderer.canvas.height = game.height;
                     if (game.config.display.mode == "fill") {
@@ -2819,6 +2963,13 @@ Bagel = {
                             },
                             asset: {}
                         };
+                        game.get = {
+                            asset: {},
+                            sprite: (id, check) => Bagel.get.sprite(id, game, check)
+                        };
+                        game.set = {
+                            asset: {}
+                        };
                         game.delete = () => {
                             if (game.config.display.dom) {
                                 game.internal.renderer.canvas.remove();
@@ -2856,19 +3007,18 @@ Bagel = {
                 plugins: game => {
                     for (let i in game.game.plugins) {
                         let plugin = game.game.plugins[i];
-                        game.internal.assets.loading++; // Not technically an asset but this stops the game loading until its done
-                        ((game, src, args) => {
+                        game.internal.pluginsLoading++;
+                        ((game, src, args, index) => {
                             fetch(src).then(res => res.text().then(plugin => {
-                                game.internal.assets.loading--;
-                                game.internal.assets.loaded++;
+                                game.internal.pluginsLoading--;
                                 plugin = (new Function("return " + plugin))(); // Not entirely sure if this is good practice or not but it allows the functions to be parsed unlike JSON.parse
                                 if (typeof plugin != "object") {
                                     console.error("Erm, the plugin with the src " + JSON.stringify(src) + " isn't an object, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(plugin))) + ". If you made the plugin, you should check you've written it correctly. If you didn't, make sure the src is for the right file.";
                                     Bagel.internal.oops(game);
                                 }
-                                Bagel.internal.loadPlugin(plugin, game, args);
+                                Bagel.internal.loadPlugin(plugin, game, args, index);
                             }));
-                        })(game, plugin.src);
+                        })(game, plugin.src, plugin.args? Bagel.internal.deepClone(plugin.args) : {}, i);
                     }
                 },
                 assets: (game, dontLoad) => {
@@ -2881,13 +3031,28 @@ Bagel = {
                             Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i, i, false, dontLoad);
                         }
                     }
-                    if (game.internal.assets.loading == 0 && Object.keys(game.internal.assets.toLoad).length == 0) {
+                    if (game.internal.assets.loading == 0) {
                         (game => {
                             game.loaded = true;
+                            if (game.internal.loadingScreen) {
+                                game.internal.loadingScreen.delete();
+                                delete game.internal.loadingScreen;
+                            }
                             setTimeout(() => {
-                                Bagel.internal.subFunctions.init.onload(game);
+                                if (game.loaded) {
+                                    Bagel.internal.subFunctions.init.onload(game);
+                                }
                             }, 0);
                         })(game);
+                    }
+                },
+                preloadTasks: game => {
+                    let assets = game.internal.assets;
+                    assets.assetsLoading = assets.loading; // Keep track of which are actually assets
+                    let tasks = game.game.scripts.preload;
+                    assets.loading += tasks.tasks.length; // They aren't assets but it makes it easier to group them
+                    if (tasks.misc) {
+                        assets.loading++;
                     }
                 },
                 methods: game => {
@@ -2993,11 +3158,6 @@ Bagel = {
                         let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "GameJSON.game.sprites item " + i, false, parseInt(i));
                     }
                 },
-                preload: game => {
-                    if (game.game.scripts.preload != null) {
-                        game.game.scripts.preload(game);
-                    }
-                },
                 loadingScreen: game => {
                     if (! game.config.loading.skip) {
                         Bagel.internal.saveCurrent();
@@ -3013,9 +3173,11 @@ Bagel = {
                                 mode: "preload"
                             },
                             display: {
+                                resolution: "fixed",
                                 dom: false,
                                 backgroundColour: "transparent"
-                            }
+                            },
+                            disableBagelJSMessage: true // Otherwise there would be 2 per game
                         };
                         if (loadingScreen.vars == null) {
                             loadingScreen.vars = {};
@@ -3047,19 +3209,25 @@ Bagel = {
                             }
                         }
                     }
-                    if (! game.config.loading.skip) {
-                        Bagel.internal.subFunctions.init.assets(game); // The page has to have loaded before loading the assets so as not to delay the page load
-                    }
+                    Bagel.internal.subFunctions.init.plugins(game);
                 },
                 onload: game => {
                     let sprites = game.game.sprites;
                     for (let i in sprites) {
                         Bagel.internal.subFunctions.createSprite.triggerListeners(sprites[i], game);
                     }
+                },
+                onPluginsReady: game => {
+                    let subFunctions = Bagel.internal.subFunctions.init;
+                    subFunctions.methods(game);
+                    subFunctions.assets(game);
+                    subFunctions.preloadTasks(game);
+                    subFunctions.initScripts(game);
+                    subFunctions.initSprites(game);
                 }
             },
             loadPlugin: {
-                check: (game, plugin) => {
+                check: (game, plugin, index) => {
                     let current = Bagel.internal.current;
                     Bagel.internal.saveCurrent();
                     current.plugin = plugin;
@@ -3068,7 +3236,7 @@ Bagel = {
                     plugin = Bagel.check({
                         ob: plugin,
                         syntax: Bagel.internal.checks.plugin,
-                        where: "plugin " + plugin.info.id
+                        where: (plugin.info && plugin.info.id)? ("plugin " + plugin.info.id) : "GameJSON.game.plugins item " + index
                     }, Bagel.internal.checks.disableArgCheck);
 
                     Bagel.internal.loadCurrent();
@@ -3142,13 +3310,32 @@ Bagel = {
                                             if (doesntExist) { // Invalid id
                                                 let exists = assets.toLoad[plural];
                                                 if (exists) exists = exists[id];
+                                                if (! exists) {
+                                                    if (assets.loadingIDs[plural]) {
+                                                        if (assets.loadingIDs[plural][id]) {
+                                                            Bagel.internal.loadCurrent();
+                                                            return true; // It's already loading
+                                                        }
+                                                    }
+                                                }
+
                                                 if (exists) {
                                                     let info = exists;
                                                     current.i = info.i;
                                                     current.where = info.where;
 
-                                                    info.assetLoader.init(info.asset, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
+                                                    info.assetLoader.init({...info.asset}, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
                                                     info.game.internal.assets.loading++;
+
+                                                    if (assets.loadingIDs[plural] == null) assets.loadingIDs[plural] = {};
+                                                    assets.loadingIDs[plural][info.asset.id] = true; // It's currently loading
+
+                                                    if (assets.toLoad[plural]) {
+                                                        if (assets.toLoad[plural][id]) {
+                                                            delete assets.toLoad[plural][id]; // It's loading so it should be removed from the list of assets to load
+                                                        }
+                                                    }
+
                                                     Bagel.internal.loadCurrent();
                                                     return true; // It's loading
                                                 }
@@ -3163,10 +3350,50 @@ Bagel = {
                                             Bagel.internal.loadCurrent();
                                             return asset;
                                         };
+                                        boundGame.get.asset[typeJSON.get] = (id, check) => Bagel.get.asset[typeJSON.get](id, boundGame, check); // An alias
                                         boundGame.add.asset[typeJSON.get] = (asset, where) => {
+                                            if (asset == null) {
+                                                console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the arguments for the asset as an object.");
+                                                Bagel.internal.oops(game);
+                                            }
+                                            if (typeof asset != "object") {
+                                                console.error("Huh, looks like you used the wrong type for the \"asset\" argument (the first argument). That's the arguments for the asset as an object. You tried to use " + JSON.stringify(asset) + ".");
+                                                Bagel.internal.oops(game);
+                                            }
                                             if (! where) where = "the function Game.add.asset." + typeJSON.get;
                                             let plural = game.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
                                             Bagel.internal.loadAsset(asset, boundGame, plural, where, true);
+                                        };
+                                        boundGame.set.asset[typeJSON.get] = (id, asset, overwrite, check, where) => {
+                                            if (asset == null) {
+                                                console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the value for this asset to be set to.");
+                                                Bagel.internal.oops(game);
+                                            }
+                                            if (id == null) {
+                                                console.error("Hmm, looks like you forgot the \"id\" argument (the second argument). It's the id of the asset to be changed.");
+                                                Bagel.internal.oops(game);
+                                            }
+                                            if (typeof id != "string") {
+                                                console.error("Oops, looks like you used the wrong type for the \"id\" argument (the second argument). It's the id of the asset to be changed. It's supposed to be a string but you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + ".");
+                                                Bagel.internal.oops(game);
+                                            }
+                                            if (! where) where = "the function Game.set.asset." + typeJSON.get;
+
+                                            let assets = boundGame.internal.assets.assets;
+                                            let plural = boundGame.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
+                                            if (assets[plural] == null) assets[plural] = {};
+                                            if (assets[plural][id]) {
+                                                if (! overwrite) {
+                                                    if (check) {
+                                                        return true;
+                                                    }
+                                                    else {
+                                                        console.error("Huh, looks like that id is already being used. You can try setting the \"overwrite\" argument (the 3rd one) to true if you're happy with overwriting. Otherwise check the id or use the \"check\" argument (the 4th) to return true instead of an error when the asset already exists.");
+                                                        Bagel.internal.oops(game);
+                                                    }
+                                                }
+                                            }
+                                            assets[plural][id] = asset;
                                         };
                                     })(newType, game, typeJSON, plugin);
                                 }
@@ -3197,16 +3424,18 @@ Bagel = {
                                 }
                                 if (merge) {
                                     let syntax = {...Bagel.internal.checks.sprite.clones.syntax}; // Add in the default checks
-                                    for (let i in typeJSON.cloneArgs) {
-                                        syntax[i] = typeJSON.cloneArgs[i].syntax;
+                                    if (typeJSON.cloneArgs) {
+                                        for (let i in typeJSON.cloneArgs) {
+                                            syntax[i] = typeJSON.cloneArgs[i].syntax;
+                                        }
+                                        typeJSON.cloneArgs = {
+                                            ...typeJSON.cloneArgs,
+                                            ...Bagel.internal.checks.sprite.clones.args
+                                        };
                                     }
                                     typeJSON.args = {
                                         ...typeJSON.args,
                                         ...Bagel.internal.checks.sprite.sprite
-                                    };
-                                    typeJSON.cloneArgs = {
-                                        ...typeJSON.cloneArgs,
-                                        ...Bagel.internal.checks.sprite.clones.args
                                     };
                                     typeJSON.internal = {
                                         plugin: plugin,
@@ -3217,7 +3446,7 @@ Bagel = {
                             }
                         }
                     },
-                    method: (game, plugin, type, spriteType, position, method, methodName, bagelPosition) => {
+                    method: (game, plugin, type, spriteType, position, method, methodName, bagelPosition, positionName) => {
                         let merge = false;
                         if (position[methodName] == null) {
                             merge = true;
@@ -3246,7 +3475,7 @@ Bagel = {
                                     bagelPosition[methodName] = method.fn.fn; // No bindings needed
                                 }
                                 else {
-                                    ((position, methodName, plugin, method) => {
+                                    ((position, methodName, plugin, method, positionName) => {
                                         if (method.fn.obArg) {
                                             bagelPosition[methodName] = args => {
                                                 if (args == null) args = {};
@@ -3258,7 +3487,7 @@ Bagel = {
                                                 args = Bagel.check({
                                                     ob: args,
                                                     syntax: method.fn.args,
-                                                    where: "Bagel.js method " + JSON.stringify(methodName)
+                                                    where: "the Bagel.js method " + JSON.stringify(positionName + "." + methodName)
                                                 }, Bagel.internal.checks.disableArgCheck);
                                                 // Passed the argument checks
 
@@ -3288,7 +3517,7 @@ Bagel = {
                                                 newArgs = Bagel.check({
                                                     ob: newArgs,
                                                     syntax: method.fn.args,
-                                                    where: "Bagel.js method " + JSON.stringify(methodName)
+                                                    where: "the Bagel.js method " + JSON.stringify(positionName + "." + methodName)
                                                 }, Bagel.internal.checks.disableArgCheck, false, "Btw, the arguments go in this order: " + keys.join(", ") + ".");
                                                 // Passed the argument checks
 
@@ -3301,7 +3530,7 @@ Bagel = {
                                                 return output;
                                             };
                                         }
-                                    })(position, methodName, plugin, method);
+                                    })(position, methodName, plugin, method, positionName);
                                 }
                             }
                             else {
@@ -3309,21 +3538,29 @@ Bagel = {
                             }
                         }
                     },
-                    subMethods: (game, plugin, type, method, methodName, position, oldPosition, combinedPosition, bagelPosition) => {
+                    subMethods: (game, plugin, type, method, methodName, position, oldPosition, combinedPosition, bagelPosition, positionName) => {
                         let subFunctions = Bagel.internal.subFunctions.loadPlugin.merge;
                         if (method.category) {
                             let oldPosition = position;
                             if (type == "bagel") {
                                 if (! bagelPosition[methodName]) bagelPosition[methodName] = {};
                                 bagelPosition = bagelPosition[methodName];
+                                if (positionName != "") {
+                                    positionName += ".";
+                                }
+                                positionName += methodName;
                             }
-                            if (type != "sprite") {
+                            else if (type != "sprite") {
                                 if (! position[methodName]) position[methodName] = {};
                                 position = position[methodName];
+                                if (positionName != "") {
+                                    positionName += ".";
+                                }
+                                positionName += methodName;
                             }
                             combinedPosition.push(methodName);
                             for (let i in method.category) {
-                                subFunctions.subMethods(game, plugin, type, method.category[i], i, position, oldPosition, combinedPosition, bagelPosition);
+                                subFunctions.subMethods(game, plugin, type, method.category[i], i, position, oldPosition, combinedPosition, bagelPosition, positionName);
                             }
                         }
                         else {
@@ -3365,7 +3602,7 @@ Bagel = {
                                 }
                             }
                             else {
-                                subFunctions.method(game, plugin, type, null, position, method, methodName, bagelPosition);
+                                subFunctions.method(game, plugin, type, null, position, method, methodName, bagelPosition, positionName);
                             }
                         }
                     },
@@ -3381,7 +3618,7 @@ Bagel = {
                                 let method = methods[methodName];
 
                                 let position = combined.methods[type];
-                                Bagel.internal.subFunctions.loadPlugin.merge.subMethods(game, plugin, type, method, methodName, position, position, [], Bagel);
+                                Bagel.internal.subFunctions.loadPlugin.merge.subMethods(game, plugin, type, method, methodName, position, position, [], Bagel, "");
                             }
                         }
                     },
@@ -3406,6 +3643,11 @@ Bagel = {
                     let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
 
                     if (parent) { // Clone
+                        if (handler.cloneArgs == null) {
+                            console.error("Oops, the sprite type " + JSON.stringify(parent.type) + " doesn't support clones.");
+                            Bagel.internal.oops(game);
+                        }
+
                         sprite = Bagel.check({
                             ob: sprite,
                             where: where,
@@ -3468,13 +3710,6 @@ Bagel = {
                         where: where,
                         syntax: parent? handler.internal.cloneSyntax : handler.args
                     }, Bagel.internal.checks.disableArgCheck);
-                    if (handler.check) {
-                        let error = handler.check(sprite, game, Bagel.check, where);
-                        if (error) {
-                            console.error(error);
-                            Bagel.internal.oops(game);
-                        }
-                    }
 
                     Bagel.internal.loadCurrent();
                     return sprite;
@@ -3502,8 +3737,9 @@ Bagel = {
                     let plugin = handler.internal.plugin;
                     current.plugin = plugin;
 
-
-                    handler.init(sprite, game, current.plugin);
+                    if (handler.init) {
+                        handler.init(sprite, game, current.plugin);
+                    }
                     if (game.loaded) subFunctions.triggerListeners(sprite, game);
                     Bagel.internal.loadCurrent();
                 },
@@ -3662,13 +3898,13 @@ Bagel = {
                             sprite.internal.properties[property] = sprite[property];
                             ((sprite, property, game, plugin, handlers) => {
                                 let get = () => {
-                                    Bagel.internal.triggerSpriteListener("get", property, sprite, game);
+                                    Bagel.internal.triggerSpriteListener("get", property, sprite, game, false);
                                     return sprite.internal.properties[property];
                                 };
                                 let set = value => {
                                     if (sprite.internal.properties[property] != value) { // Don't trigger it if it hasn't actually changed
                                         sprite.internal.properties[property] = value;
-                                        Bagel.internal.triggerSpriteListener("set", property, sprite, game);
+                                        Bagel.internal.triggerSpriteListener("set", property, sprite, game, false);
                                     }
                                 }
                                 if (handlers.get || handlers.set) {
@@ -3849,7 +4085,7 @@ Bagel = {
                         let rerun = [...sprite.internal.rerunListeners]; // Clone is so running the listeners doesn't affect which listeners are triggered
                         sprite.internal.rerunListeners = [];
                         for (let c in rerun) {
-                            Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game);
+                            Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game, false);
                         }
                     }
                 },
@@ -3874,7 +4110,7 @@ Bagel = {
                         }
 
                         subFunctions.pluginScripts(game);
-                        subFunctions.processSprites(game)
+                        subFunctions.processSprites(game);
                         subFunctions.scripts("main", true, game, state);
                         subFunctions.scripts("main", false, game, state);
                         subFunctions.scripts("all", true, game, state);
@@ -3892,14 +4128,36 @@ Bagel = {
                         let assets = game.internal.assets;
                         let loading = loadingScreen.vars.loading;
 
-                        if (assets.loaded == 0) {
-                            loading.progress = 0; // 0/0 == NaN
+                        if (assets.loading + assets.loaded == 0) {
+                            loading.progress = 100; // Avoid dividing by 0
                         }
                         else {
                             loading.progress = (assets.loaded / (assets.loading + assets.loaded)) * 100;
                         }
                         loading.loaded = assets.loaded;
                         loading.loading = assets.loading;
+                        if (assets.loading != 0) {
+                            let tasks = game.game.scripts.preload;
+                            if (assets.loading <= assets.assetsLoading) { // The assets are done loading but the tasks need running
+                                if (assets.ranTasks) {
+                                    if (tasks.misc && assets.loading == 1) { // Only the misc funciton left
+                                        tasks.misc(game);
+                                        assets.loaded++;
+                                        assets.loading--;
+                                    }
+                                }
+                                else {
+                                    let ready = (assets => () => {
+                                        assets.loaded++;
+                                        assets.loading--;
+                                    })(assets);
+                                    for (let i in tasks.tasks) {
+                                        tasks.tasks[i](game, ready);
+                                    }
+                                    assets.ranTasks = true;
+                                }
+                            }
+                        }
 
 
                         let clearStyle = game.config.display.backgroundColour;
@@ -3915,6 +4173,7 @@ Bagel = {
                             game.loaded = true;
                             Bagel.internal.subFunctions.init.onload(game);
                             loadingScreen.delete();
+                            delete game.internal.loadingScreen;
                         }
                     }
                 },
@@ -3934,23 +4193,40 @@ Bagel = {
                             width = height * ratio;
                         }
                     }
-                    width *= window.devicePixelRatio;
-                    height *= window.devicePixelRatio;
+                    let renderWidth, renderHeight;
+                    let res = game.config.display.resolution;
+                    if (res == "full") {
+                        renderWidth = width * window.devicePixelRatio;
+                        renderHeight = height * window.devicePixelRatio;
+                    }
+                    else {
+                        if (res == "fixed") {
+                            renderWidth = game.width;
+                            renderHeight = game.height;
+                        }
+                        else {
+                            renderWidth = res[0];
+                            renderHeight = res[1];
+                        }
+                    }
+
+                    renderWidth = Math.ceil(renderWidth); // The canvas width has to be a whole number
+                    renderHeight = Math.ceil(renderHeight);
 
                     let renderer = game.internal.renderer;
                     let canvas = renderer.canvas;
-                    if (canvas.width != width || canvas.height != height) {
-                        canvas.width = width;
-                        canvas.height = height;
-
-                        canvas.style.removeProperty("width");
-                        canvas.style.setProperty("width", (width / window.devicePixelRatio) + "px", "important");
-                        canvas.style.removeProperty("height");
-                        canvas.style.setProperty("height", (height / window.devicePixelRatio) + "px", "important");
-
-                        renderer.ctx.imageSmoothingEnabled = false; // It's reset when the canvas is resized
+                    if (canvas.width != renderWidth || canvas.height != renderHeight) {
+                        canvas.width = renderWidth;
+                        canvas.height = renderHeight;
                     }
-                },
+                    canvas.style.width = width + "px";
+                    canvas.style.height = height + "px";
+
+                    renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
+                    renderer.styleHeight = height;
+
+                    renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing; // It needs to be reset when the canvas is resized
+                }
             },
             delete: {
                 layers: (me, game) => {
@@ -4129,6 +4405,31 @@ Bagel = {
                                     checkEach: true,
                                     types: ["array"],
                                     description: "\"All\" scripts. They run every frame regardless of game state."
+                                },
+                                preload: {
+                                    required: false,
+                                    default: {},
+                                    subcheck: {
+                                        tasks: {
+                                            required: false,
+                                            default: [],
+                                            types: ["array"],
+                                            check: value => {
+                                                if (typeof value != "function") {
+                                                    return "Oops, this is supposed to be a function but you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
+                                                }
+                                            },
+                                            checkEach: true,
+                                            description: "Tasks that need to be completed before the game loads (but after the assets have loaded). The arguments provided are the game object followed by a ready function. This function must be called once the task is completed (otherwise the game won't load)."
+                                        },
+                                        misc: {
+                                            required: false,
+                                            types: ["function"],
+                                            description: "A function for performing miscellaneous preload tasks that can be completed asynchronously. The function is called with the game object as its first argument."
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "Code that needs to be run before the game can load. \"tasks\" and \"misc\"."
                                 }
                             },
                             types: ["object"],
@@ -4170,31 +4471,64 @@ Bagel = {
                             required: false,
                             default: {},
                             types: ["object"],
-                            check: ob => {
-                                if (! ["fill", "static"].includes(ob.mode)) {
-                                    return "Oops! You used an invalid option in GameJSON.config.display.mode. You used " + ob.mode + ", it can only be either \"fill\" or \"static\".";
-                                }
-                                if (! ["auto", "canvas", "webgl"].includes(ob.renderer)) {
-                                    return "Oops. You used an invalid option in GameJSON.config.display.renderer. You used " + ob.renderer + ", it can only be either \"auto\", \"canvas\" or \"webgl\".";
-                                }
-
-                                if (document.getElementById(ob.htmlElementID) == null && ob.htmlElementID != null) { // Make sure the element exists
-                                    return "Oops, you specified the element to add the game canvas to but it doesn't seem to exist.\nThis is specified in \"GameJSON.config.display.htmlElementID\" and is set to " + JSON.stringify(ob.htmlElementID) + ". You might want to check that the HTML that creates the element is before your JavaScript.";
-                                }
-                            },
-                            checkEach: false,
                             subcheck: {
                                 mode: {
                                     required: false,
                                     default: "fill",
+                                    check: value => {
+                                        if (! ["fill", "static"].includes(value)) {
+                                            return "Oops! You used an invalid option. You used " + JSON.stringify(value) + ", it can only be either \"fill\" or \"static\".";
+                                        }
+                                    },
                                     types: ["string"],
                                     description: "The display mode. e.g static (always the same size) or fill (fills the whole window)."
+                                },
+                                resolution: {
+                                    required: false,
+                                    default: "full",
+                                    types: [
+                                        "string",
+                                        "array"
+                                    ],
+                                    check: value => {
+                                        if (typeof value == "string") {
+                                            if (! ["full", "fixed"].includes(value)) {
+                                                return "Oops, this can only be \"full\", \"fixed\" or a custom resolution using an array.";
+                                            }
+                                        }
+                                        else if (Array.isArray(value)) {
+                                            if (value.length != 2) {
+                                                return "Huh, the array can only have two items: the width and height to render at.";
+                                            }
+                                            if (typeof value[0] != "number") {
+                                                return "Hmm, looks like the first item of the custom resolution isn't a number, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(value[0])) + ".";
+                                            }
+                                            if (typeof value[1] != "number") {
+                                                return "Oops, looks like the second item of the custom resolution isn't a number, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(value[1])) + ".";
+                                            }
+                                        }
+                                        else {
+                                            return "Erm, this can only be a number or an array.";
+                                        }
+                                    },
+                                    description: "The resolution for the game to be rendered at. Either \"full\", \"fixed\" or a custom resolution using an array containing the width and height (in that order). Full renders the game at the full resolution which makes it good for vector graphics. Fixed is good for pixel art because it means that resources aren't wasted rendering extra pixels as it renders at the game's width and height. And custom's good if you want to do something more advanced."
+                                },
+                                antialiasing: {
+                                    required: false,
+                                    default: false,
+                                    types: ["boolean"],
+                                    description: "If antialiasing is used or not. Antialiasing smooths out lower resolution stuff at the a slight cost to performance. However, it doesn't work well with pixel art so should be disabled for that. Disabling it also rounds coordinates during the rendering which removes fuzzy edges but can make motion less smooth."
                                 },
                                 renderer: {
                                     required: false,
                                     default: "auto",
+                                    check: value => {
+                                        if (! ["auto", "canvas", "webgl"].includes(value)) {
+                                            return "Oops. You used an invalid option. You used " + JSON.stringify(value) + ", it can only be either \"auto\", \"canvas\" or \"webgl\".";
+                                        }
+                                    },
                                     types: ["string"],
-                                    description: "The renderer for this game. Either \"auto\", \"canvas\" or \"webgl\". \"auto\" will use WebGL if it's supported by the browser, otherwise it'll use the basic 2d renderer (slower)."
+                                    description: "The renderer for this game. Either \"auto\", \"canvas\" or \"webgl\". \"auto\" will use WebGL if it's supported by the browser, otherwise it'll use the basic 2d renderer (slower). Currently, this input will be ignored as there's no WebGL renderer support yet."
                                 },
                                 dom: {
                                     required: false,
@@ -4204,6 +4538,11 @@ Bagel = {
                                 },
                                 htmlElementID: {
                                     required: false,
+                                    check: value => {
+                                        if (document.getElementById(value) == null && value != null) { // Make sure the element exists
+                                            return "Oops, you specified the element to add the game canvas to but it doesn't seem to exist.\nYou tried to use " + JSON.stringify(value) + ". You might want to check that the HTML that creates the element is before your JavaScript.";
+                                        }
+                                    },
                                     types: ["string"],
                                     description: "An element to append the canvas to. If unspecified, it will be added to the document or body."
                                 },
@@ -4246,6 +4585,14 @@ Bagel = {
                                                     {
                                                         id: "Bagel",
                                                         src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAxCAYAAABznEEcAAAHBklEQVRoQ8Wa+28UVRTHz126s2C3u1BA0wpUQBBa3NKWl/6qoj/6iNGoMRo1RsVo1D9B8YFvFDWoEKOJifEHf/cVH7yKvAQi0iIsNa3RUlNI27CzHXPue2bvzNyZ3Uh/abePmfnc8z3nfM/ZEmjwh/vVeo8QgAwBAPwCP+OH9prcslt8tyF3r/tiE1+ukw/NnpmwZ48BYVCMjmzcVddzpP7j81+s9eThEvbgePppQRCI3JQOJjHE2Odr6MkTQthDC9XYgLQvBxj+3SctPSLia3JjMhhriL8/6/PYSSu5JAJBgJmtABfHokFcF8BpoqDkBjsYK4i/Pu1jpw9CMslBZixerxKdg3iuC8TJ8sioHJHRsQSJhRj+pNdz3So4TpMsNmki0oQQlXMAubkAF88BjJysqVomadlEJBJiaGevv/IIKQUi4rouOE42NEec9mUAuVYWCQQZPhlaftOAhEKUd/RwCQUqTwhIVLLPbL+aRQDvVhmD6eGTvj4yXXEhQ/NAVAr8PcwNv9TCcsQI8cdHPTyJ/SVTltCEILOuWicB3OEB2UdEBE0NUUYkAGMCqYEY3L7aX0IDtR9BkuRIM42CklJlZCBVQ4xK9hqIAYTQan+V6l0kdXJp5TvW8lwYg6mRgbobIk30QB/xQZz4oNvLaFLx6dwQEfy5jEpI+S1QCHYqk+V+2dndCisGYRYlrvzqID6I397v5tWI9wEtIioflD+yyZFim5ATS+rJkcGGWxQJcXwbA1AnQ4AmXpZLSdiMkIjITg4AVbcqrzNRAZiTz0KhbSn8e/YEl6bZa+H9cnqV0t3vlcvZww2fYF1R81oS4ti2kqc7UGbokkUEpYV/N1lR0Vry8CFy+mNeLIBAS449i5BSrGkUfmvJdaxJaiDC/VKII++UVEnVrHQSECwAExUGfc2jh2P7D8JYgSzeoAwjhQDlvbiNpzc7vLUUOhPYgGAE8PQ7HzsSa2PEFHR2Z48XCyJMo2iCp/f4GyJKauNu/CnAobev9YSmTeFFjeveSa9aqOPJCoFVT9gDxIFkqU3hHR7NIvoscTyy/vPUuJlDHHwLIZTNNoGYIoJwky5AadOv1hEIzqPBiMzE7l4ZYw+dmwvTZ/bGjrpk/5urvAzPg2q1CllejWxA8PdRRt1PpodAj4aymt2xQnV2ftrumX00xyKrFh5+/xurWD74EpqAqVOL8itKKAL0PnU0dRREVBBk4bIV/PRbYarcn6izk32vMwgTSNjcjN+nUqoA9D1dP8SZHau9FofAnI4VMIHeymbU1XKE7H1NQSQBEfmwpgEQ2EfyOYAc2pCYmd0kLbLn1S5ZmUwREXmi50i1ihUJYN0zx+qWkpBUEhCRJ9hnaOfetaXLsACozZGgtBoJcupDFglWxtkWhRlE9jpM1mJBR37e0kWtd+3cHA2CDW6qArD+2fqjgTOMgki+DiI/vYJyYoUBpSMMH5PRjJqqJU6FQrgAGxoAMbC928s7RDVUy70WmwybgPz4cqfKiYQRaQQIzjA0CtkmqQb5cNqCToyyRmlhYiUFKV7eIbU7VD4F1z+XXlI4w0gppdhrObfuY97ph5cwGtp2LyQixfkdkHGKfFYgQNxx+npo8GAqkOPvlby8oxJayDrJXit3G4f4/sVObbuhZgj9YsX5i4BwADpnuOP8NYGx8gGYdEkikKPvlrxmn4ziR13T7nfW7Rziu80sEqZxkz18QS2QRclzx+H8P2VZAtGmIAheIyrZD29lZrNZRIDbHZtRF8ttVZZeppzL7uAQKCkTSGHeQshwAHHyGXz40bKxaiEIXhirlui82BDRZIrX+RzOj0JC9e218nf203SQHffbzSvleKqfSqGtS/UQlBAhcGEUI+DvI3pnF2MqXgc7e7OjFtDBmV1WIi0itnutliAEEgVBMBJSSu44XBg9G1jt23V2Ze+Tzez68iGY7LPv2i8D4PM+37yw0rd/LbZ1sodGgHNDIat9BWKaR+ipyo1J8uVDGMicu0MgMBoChEYhW4BMdRxItmgNkmZClG/WWKyDMCJz7/nFd/g1LvTr51k0CvMWUAh6gypKaYh+jRac2pGad43ipSVcsj7qqt0Wf/ssAKKGMyXF+ffGQGA0dJALo3/6XWTERpwuFDTphDlQdMCYJ0n3Wni9K+7zA/iqU3CAFyCsiyZZJKeLiDCgDE5tIvV7t91/wDi/RA41lwJE5FRwxl/wgBkgMhIiMpcSRERk0YMHIw/barwMA9FLathg5c8TJkt5yhYr08UPRQNYReL/iogp2Zc+csjqkK1+SU/6YEM0GTd9QhTrHZuqJUpw1ELa9B8tiSHERcK8VvhMEF+1Oh8P36ZH/TtOaghx0TAbz3JhBp3bhXcK22uVNiVfRutQdUMET8hm1G3Ewk2/73+GkYKJ4ZsYiQAAAABJRU5ErkJggg=="
+                                                    },
+                                                    {
+                                                        id: "Loading.Black",
+                                                        src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAGCAYAAABAU4emAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AYht+mSou0ONhBRCFDdbIgKuIoVSyChdJWaNXB5NI/aNKQpLg4Cq4FB38Wqw4uzro6uAqC4A+Ik6OToouU+F1SaBHjHcc9vPe9L3ffAUKzylSzZwJQNctIJ+JiLr8qBl4RwAjCNIMSM/VkZjELz/F1Dx/f72I8y7vuzxFWCiYDfCLxHNMNi3iDeGbT0jnvE0dYWVKIz4nHDbog8SPXZZffOJccFnhmxMim54kjxGKpi+UuZmVDJZ4mjiqqRvlCzmWF8xZntVpn7XvyF4YK2kqG67SGkcASkkhBhIw6KqjCQox2jRQTaTqPe/iHHH+KXDK5KmDkWEANKiTHD/4Hv3trFqcm3aRQHOh9se2PUSCwC7Qatv19bNutE8D/DFxpHX+tCcx+kt7oaNEjoH8buLjuaPIecLkDDD7pkiE5kp+WUCwC72f0TXlg4BboW3P71j7H6QOQpV4t3wAHh8BYibLXPd4d7O7bvzXt/v0AOZJykKeF/tkAAAAGYktHRAD/AOwAAJPfVTcAAAAJcEhZcwAALiMAAC4jAXilP3YAAAAHdElNRQfkBx0TEyFitOyDAAAAGXRFWHRDb21tZW50AENyZWF0ZWQgd2l0aCBHSU1QV4EOFwAAAIZJREFUKFPFkUEOQiEMRGeMN5D7n7D/DM8NaEEQXPkSAh0G2rSWBCEr4SJyTMg7jZD1QLbfGtg2+W7qG/JLkot0H8VGe/BRwEx7Jba7giouAmqci9xw2xn+ybJzM8bRntK62YlptKsu/tQ5Qj4ZxxGXBWz/Ii9irRFSPo8eoNdqnO+++ob9Cdg1gf0PGCdvAAAAAElFTkSuQmCC"
+                                                    },
+                                                    {
+                                                        id: "Loading.White",
+                                                        src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAGCAYAAABAU4emAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AYht+mSou0ONhBRCFDdbIgKuIoVSyChdJWaNXB5NI/aNKQpLg4Cq4FB38Wqw4uzro6uAqC4A+Ik6OToouU+F1SaBHjHcc9vPe9L3ffAUKzylSzZwJQNctIJ+JiLr8qBl4RwAjCNIMSM/VkZjELz/F1Dx/f72I8y7vuzxFWCiYDfCLxHNMNi3iDeGbT0jnvE0dYWVKIz4nHDbog8SPXZZffOJccFnhmxMim54kjxGKpi+UuZmVDJZ4mjiqqRvlCzmWF8xZntVpn7XvyF4YK2kqG67SGkcASkkhBhIw6KqjCQox2jRQTaTqPe/iHHH+KXDK5KmDkWEANKiTHD/4Hv3trFqcm3aRQHOh9se2PUSCwC7Qatv19bNutE8D/DFxpHX+tCcx+kt7oaNEjoH8buLjuaPIecLkDDD7pkiE5kp+WUCwC72f0TXlg4BboW3P71j7H6QOQpV4t3wAHh8BYibLXPd4d7O7bvzXt/v0AOZJykKeF/tkAAAAGYktHRAD/AOwAAJPfVTcAAAAJcEhZcwAALiMAAC4jAXilP3YAAAAHdElNRQfkBx0TEjVhdQm/AAAAGXRFWHRDb21tZW50AENyZWF0ZWQgd2l0aCBHSU1QV4EOFwAAAIlJREFUKFPNk8ERwyAMBPcy6cDpv0NquDw0OEKBYP+yLzgECOmQbdMkMoc9zJu01WIOkOMEeFibxdX7Ab3gUcWTJn1tWmkQiTZBJDRemB+Rk5ydl1gn9wc8dwEDtbXXifZmcmsX1btXuU0bbpEtsCAqV41dtV/0uGr00Lv/4HD/HDGe+fBTYdn4DcirSc3L3FGIAAAAAElFTkSuQmCC"
                                                     }
                                                 ]
                                             },
@@ -4334,15 +4681,21 @@ Bagel = {
                                                 },
                                                 {
                                                     id: "Text",
-                                                    type: "text",
-                                                    text: "Loading...",
+                                                    type: "sprite",
+                                                    img: "Loading.Black",
                                                     scripts: {
                                                         init: [
                                                             {
-                                                                code: (me, game) => {
-                                                                    me.y += Bagel.get.sprite("Bagel").height / 2;
-                                                                    me.font = (Math.min(game.width, game.height) / 20) + "px Helvetica";
-                                                                    me.y += me.height / 2;
+                                                                code: (me, game, step) => {
+                                                                    let canvas = document.createElement("canvas"); // This is used for converting colours
+                                                                    canvas.width = 1;
+                                                                    canvas.height = 1;
+                                                                    me.vars.ctx = canvas.getContext("2d");
+
+                                                                    me.vars.halfBagelHeight = Bagel.get.sprite("Bagel").height / 2;
+
+                                                                    step("calculateSize");
+                                                                    step("calculateColour");
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
@@ -4351,14 +4704,24 @@ Bagel = {
                                                             {
                                                                 code: (me, game, step) => {
                                                                     step("calculateColour");
+                                                                    step("calculateSize");
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
                                                         ],
                                                         steps: {
+                                                            calculateSize: (me, game) => {
+                                                                let ratio = me.height / me.width;
+                                                                me.width = Math.min(game.width, game.height) / 2;
+                                                                me.height = me.width * ratio;
+
+
+                                                                me.y = (game.height / 2) + me.vars.halfBagelHeight;
+                                                                me.y += me.height;
+                                                            },
                                                             calculateColour: (me, game) => {
                                                                 // A slightly hackish way of converting colours to hex
-                                                                let ctx = me.internal.ctx; // Don't tell the plugin but we're stealing its canvas for a minute
+                                                                let ctx = me.vars.ctx;
                                                                 let backgroundColour = game.vars.loading.game.config.display.backgroundColour;
                                                                 if (backgroundColour == "transparent") {
                                                                     backgroundColour = document.body.bgColor;
@@ -4368,11 +4731,8 @@ Bagel = {
 
                                                                 let rgb = backgroundColour;
                                                                 let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
-                                                                if (brightness > 127) {
-                                                                    me.colour = "black";
-                                                                }
-                                                                else {
-                                                                    me.colour = "white";
+                                                                if (brightness <= 127) {
+                                                                    me.img = "Loading.White";
                                                                 }
                                                             }
                                                         }
@@ -4389,11 +4749,17 @@ Bagel = {
                                         }
                                     },
                                     types: ["object"],
-                                    description: "The loading screen animation. Defaults to a Bagel themed one.\nIt's a game object and works exactly the same as a game except its loading screen is disabled, Game.vars.loading is automatically created and the id, width, height and config given for the game is ignored. Game.vars.loading contains the following:\n  progress -> The percentage of the assets loaded\n  loaded -> The number of assets loaded\n  loading -> The number currently loading\n  done -> Starts as false, set this to true when you're done (loaded should be 0 when you do this)"
+                                    description: "The loading screen animation. Defaults to a Bagel.js themed one.\nIt's a game object and works exactly the same as a game except its loading screen is disabled, Game.vars.loading is automatically created and the id, width, height and config given for the game is ignored. Game.vars.loading contains the following:\n  progress -> The percentage of the assets loaded\n  loaded -> The number of assets loaded\n  loading -> The number currently loading\n  done -> Starts as false, set this to true when you're done (loaded should be 0 when you do this)"
                                 }
                             },
                             types: ["object"],
                             description: "A few options for how Bagel.js should handle loading assets."
+                        },
+                        disableBagelJSMessage: {
+                            required: false,
+                            default: false,
+                            types: ["boolean"],
+                            description: "Disables the console message when the game is initialised. As crediting is required to use Bagel.js, please put a link to the GitHub page somewhere else in your program. e.g in the credits."
                         }
                     },
                     types: ["object"],
@@ -4695,6 +5061,7 @@ Bagel = {
                 },
                 plugin: {
                     required: false,
+                    default: {},
                     subcheck: {
                         types: {
                             required: false,
@@ -4709,16 +5076,14 @@ Bagel = {
                                             required: true,
                                             types: ["object"],
                                             description: [
-                                                "The required and optional arguments for the sprite. Is an object where the key is the argument name. e.g {",
-                                                "    x: {",
+                                                "The required and optional arguments for the asset type. Is an object where the key is the argument name. e.g {",
+                                                "    foo: {",
                                                 "        required: false,",
-                                                "        default: \"centred\",",
+                                                "        default: 1,",
                                                 "        types: [",
-                                                "            \"number\",",
-                                                "            \"string\",",
-                                                "            \"function\",",
+                                                "            \"number\"",
                                                 "        ],",
-                                                "        description: \"The X position for the sprite. Can also be set to \"centred\" to centre it along the X axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\"",
+                                                "        description: \"The first argument for this asset type.",
                                                 "    }",
                                                 "}"
                                             ].join("\n")
@@ -4822,6 +5187,12 @@ Bagel = {
                                                     types: ["object"],
                                                     description: "The subcheck. Same as a \"syntax\" argument but there's no checks on what you put in here."
                                                 },
+                                                arrayLike: {
+                                                    required: false,
+                                                    default: false,
+                                                    types: ["boolean"],
+                                                    description: "If each item should be checked or not. Works for both objects and arrays."
+                                                },
                                                 default: {
                                                     required: false,
                                                     types: "any",
@@ -4829,8 +5200,10 @@ Bagel = {
                                                 }
                                             },
                                             check: (value, ob, i, name, game, prev) => {
-                                                if (prev.ob.cloneArgs[i] == null) {
-                                                    return "Oops, there's no matching cloneArg variant for the " + JSON.stringify(i) + " argument. Make sure \"cloneArgs\" exists for this sprite type. Clone arguments are a variant of the arguments for clones, each argument is an object with two items: \"syntax\" and \"mode\". The syntax is in the same format as the syntax in the normal args but anything unspecified defaults to the normal variant and mode is how the value's calculated. Check the syntax for cloneArgs for more info.";
+                                                if (prev.ob.cloneArgs) {
+                                                    if (prev.ob.cloneArgs[i] == null) {
+                                                        return "Oops, there's no matching cloneArg variant for the " + JSON.stringify(i) + " argument. Make sure \"cloneArgs\" exists for this sprite type. Clone arguments are a variant of the arguments for clones, each argument is an object with two items: \"syntax\" and \"mode\". The syntax is in the same format as the syntax in the normal args but anything unspecified defaults to the normal variant and mode is how the value's calculated. Check the syntax for cloneArgs for more info.";
+                                                    }
                                                 }
                                             },
                                             checkEach: true,
@@ -4838,7 +5211,7 @@ Bagel = {
                                         },
                                         cloneArgs: {
                                             required: true,
-                                            types: ["object"],
+                                            types: ["object", "undefined"],
                                             arrayLike: true,
                                             subcheck: {
                                                 syntax: {
@@ -5039,7 +5412,7 @@ Bagel = {
                                                     required: false,
                                                     default: null,
                                                     types: ["function"],
-                                                    description: "The ctx render function. Runs every frame."
+                                                    description: "The ctx render function. Runs every frame. Called with these arguments: sprite, ctx, canvas, game, plugin, scaleX and scaleY."
                                                 },
                                                 webgl: {
                                                     required: false,
@@ -5369,6 +5742,11 @@ Bagel = {
                     default: {},
                     types: ["object"],
                     description: "An object you can use to store data for the sprite."
+                },
+                args: {
+                    required: false,
+                    types: ["object"],
+                    description: "The arguments provided when the plugin was loaded. You shouldn't change any of these values in the plugin, that's what the \"vars\" property is for."
                 }
             },
             assets: {
@@ -5455,7 +5833,7 @@ Bagel = {
             return game.game.sprites.length;
         },
 
-        oops: (game) => { // When something goes wrong
+        oops: game => { // When something goes wrong
             if (game == null) {
                 throw "Critical Bagel.js error, please look at the error above for more info. ^-^";
             }
@@ -5507,6 +5885,26 @@ Bagel = {
         },
         currentStack: [],
 
+        roundX: value => {
+            let game = Bagel.internal.current.game;
+            if (game.config.display.antialiasing) {
+                return value;
+            }
+            let scale = game.internal.renderer.ctx.getTransform().a;
+            value *= scale; // Scale it based on the canvas scale
+            // ^ produces the value that will be used on the canvas
+            return Math.round(value) / scale; // Needs to be scaled back down so it produces the right value when it's scaled later
+        },
+        roundY: value => { // Works the same as the above
+            let game = Bagel.internal.current.game;
+            if (game.config.display.antialiasing) {
+                return value;
+            }
+            let scale = game.internal.renderer.ctx.getTransform().d;
+            value *= scale;
+            return Math.round(value) / scale;
+        },
+
         inputAction: {
             queued: [],
             queue: (code, data) => {
@@ -5545,7 +5943,7 @@ Bagel = {
             current.game = game;
             current.plugin = plugin;
 
-            let error = handler.listeners.property[property][type](sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener, (!! initialTrigger));
+            let error = handler.listeners.property[property][type](sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener, initialTrigger);
 
             if (error) {
                 if (error = ".rerun") { // Not actually an error, just means it needs to be ran again the next frame
@@ -5604,7 +6002,7 @@ Bagel = {
         if (! (args.prev || disableChecks.args)) {
             args = Bagel.check({
                 ob: args,
-                where: where? where : "the check function. (Bagel.check)",
+                where: args.where? where : "the check function. (Bagel.check)",
                 syntax: {
                     ob: {
                         required: true,
@@ -5861,7 +6259,7 @@ Bagel = {
                     if (syntax.checkEach) {
                         let prev = args;
                         for (let c in args.ob[argID]) {
-                            let error = syntax.check(args.ob[argID][c], args.ob[argID], c, argID, args.game, prev);
+                            let error = syntax.check(args.ob[argID][c], args.ob[argID], c, argID, args.game, prev, args);
                             if (error) {
                                 console.error(error);
                                 if (isNaN(c)) {
@@ -5877,7 +6275,7 @@ Bagel = {
                         }
                     }
                     else {
-                        let error = syntax.check(args.ob[argID], args.ob, argID, args.game, args.prev);
+                        let error = syntax.check(args.ob[argID], args.ob, argID, args.game, args.prev, args);
                         if (error) {
                             console.error(error);
                             console.log("In " + args.where + "." + argID + ".");
@@ -5890,7 +6288,6 @@ Bagel = {
             }
         }
 
-        //delete args;
         return args.ob;
     },
 
@@ -5906,6 +6303,10 @@ Bagel = {
             }
             if (id == null) {
                 console.error("Oops, you forgot the first argument: the id. It's the id for the sprite you want to get").
+                Bagel.internal.oops(game);
+            }
+            if (typeof id != "string") {
+                console.error("Oops, the id for Bagel.get.sprite can only be a string but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + ".");
                 Bagel.internal.oops(game);
             }
             if (game.internal.idIndex[id] == null) {
@@ -5994,6 +6395,10 @@ Bagel = {
         is: {
             touchscreen: document.ontouchstart === null
         }
-    }
+    },
+    events: {
+        pwaUpdate: null
+    },
+    version: "1.5.1b"
 };
 Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
