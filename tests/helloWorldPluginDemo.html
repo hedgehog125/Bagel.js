@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        Plugin test
+    </title>
+</head>
+<script src="../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "Bagel",
+    state: "game",
+    game: {
+        assets: {
+            imgs: [],
+            snds: []
+        },
+        plugins: [
+            {
+                src: "../assets/plugins/helloWorld.js"
+            }
+        ],
+        sprites: [],
+        scripts: {
+            init: [
+                {
+                    code: _ => {
+                        Bagel.helloWorld();
+                    },
+                    stateToRun: "game"
+                }
+            ]
+        }
+    },
+    width: 800,
+    height: 450,
+    config: {
+        display: {
+            mode: "fill"
+        }
+    }
+});
+
+</script>

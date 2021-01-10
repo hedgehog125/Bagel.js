@@ -5,13 +5,12 @@
     },
     plugin: {
         types: {},
-        assets: {},
         methods: {
             bagel: {
                 helloWorld: {
                     fn: {
                         normal: true,
-                        fn: () => console.log("Hello world!")
+                        fn: () => alert("Hello world!")
                     }
                 }
             }

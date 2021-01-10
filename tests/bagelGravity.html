@@ -30,11 +30,12 @@ Bagels = Bagel.init({
                     delay: 0,
                     debugDisplay: document.getElementById("debug")
                 },
-                visible: false,
                 scripts: {
                     init: [
                         {
                             code: me => {
+                                me.visible = false;
+                                
                                 let i = 0;
                                 while (i < 100) {
                                     me.clone();
@@ -108,7 +109,7 @@ Bagels = Bagel.init({
                                     let distance = centreDistance - (me.vars.radius + clone.vars.radius);
 
                                     let force = clone.vars.mass / Math.pow(centreDistance, 2);
-                                    let degrees = Bagel.maths.getDirection(me.x, me.y, clone.x, clone.y);
+                                    let degrees = Bagel.maths.get.direction(me.x, me.y, clone.x, clone.y);
                                     let radians = Bagel.maths.degToRad(degrees + 90);
                                     vel.x += (Math.cos(radians) * force) * 10;
                                     vel.y += (Math.sin(radians) * force) * 10;

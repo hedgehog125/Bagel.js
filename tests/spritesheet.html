@@ -69,8 +69,7 @@ let game = Bagel.init({
                     frame: 0,
                     direction: 1
                 },
-                width: "5x",
-                height: "5x"
+                scale: 5
             }
         ]
     },
@@ -78,9 +77,6 @@ let game = Bagel.init({
     height: 450,
     state: "game",
     config: {
-        display: {
-            mode: "fill"
-        },
         loading: {
             skip: false,
             mode: "dynamic"

@@ -8,11 +8,12 @@
     <p id="debug"></p>
 </body>
 
-<script src="../beginningJS.js"></script>
+<script src="../bagel.js"></script>
 <script>
 
-Bagels = BeginningJS.init({
-    ID: "Bagel",
+Bagels = Bagel.init({
+    id: "Bagel",
+    state: "Hail the bagel overlords",
     game: {
         assets: {
             imgs: [
@@ -33,19 +34,19 @@ Bagels = BeginningJS.init({
                 scripts: {
                     init: [
                         {
-                            code: (gameRef, me) => {
+                            code: me => {
                                 me.x = Bagels.width / 2;
                                 me.y = Bagels.height / 2;
 
                                 me.angle = 0;
 
-                                var count = Math.round(Math.random() * 100);
+                                var count = Math.round(Math.random() * 10);
                                 var i = 0;
                                 while (i < count) {
                                     me.clone({
                                         vars: {
                                             generation: 1,
-                                            maxGenerations: 2
+                                            maxGenerations: 3
                                         }
                                     });
 
@@ -59,7 +60,7 @@ Bagels = BeginningJS.init({
                     ],
                     main: [
                         {
-                            code: (gameRef, me) => {
+                            code: me => {
                                 me.angle++;
                                 me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + (Bagels.game.sprites.length - 1);
                             },
@@ -68,7 +69,7 @@ Bagels = BeginningJS.init({
                     ]
                 },
                 img: "THE_Bagel",
-                scale: 0.1,
+                scale: 2,
                 x: 0,
                 y: 0,
                 clones: {
@@ -76,7 +77,7 @@ Bagels = BeginningJS.init({
                     visible: true,
                     scripts: {
                         init: [
-                            (gameRef, me) => {
+                            me => {
                                 me.width = me.parent.width / 2;
                                 me.height = me.parent.height / 2;
 
@@ -93,7 +94,7 @@ Bagels = BeginningJS.init({
                                     var angleWas = me.angle;
                                     me.angle = 0;
 
-                                    var count = Math.round(Math.random() * 100);
+                                    var count = Math.round(Math.random() * 5);
                                     var i = 0;
                                     while (i < count) {
                                         me.clone({
@@ -111,7 +112,7 @@ Bagels = BeginningJS.init({
                             }
                         ],
                         main: [
-                            (gameRef, me) => {
+                            me => {
                                 me.angle += ((me.vars.direction * ((me.angle + 90) / 10)) + me.vars.direction) / 10;
 
                                 me.x = me.parent.x;
@@ -125,13 +126,7 @@ Bagels = BeginningJS.init({
         ]
     },
     width: 800,
-    height: 450,
-    config: {
-        display: {
-            fillScreen: true
-        },
-        state: "Hail the bagel overlords"
-    }
+    height: 450
 });
 
 </script>

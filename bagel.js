@@ -3,6 +3,9 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 
 TODO:
+Give up Webgl context on deleting game
+Make other sprite types use the updated logic in their listeners
+Built in FPS counter
 Lag causes wrong/no frame to be extracted in rickroll PWA (e.g Firefox)
 Mask icon audit problem in lighthouse ???? One of the ways to improve in last section
 Safari audio doesn't work. Even after clicking unmute. Should also assume muted videos might not play. (make sure this is true with audio too). What about firefox? Is it the same as chrome's? Mobile PWAs (Chrome) are supposed to always allow auto play but this seems inconsistent
@@ -149,7 +152,7 @@ Bagel = {
                                                 let ctx = canvas.getContext("2d");
                                                 ctx.drawImage(img, -(x * width), -(y * height));
 
-                                                if (game.set.asset.img(canvas, id, false, true)) {
+                                                if (game.set.asset.img(id, canvas, false, true)) {
                                                     console.error("Hmm, Bagel.js ran into a problem with the spritesheet " + JSON.stringify(asset.id) + ". The image id " + JSON.stringify(id) + " has already been taken. Double check the ids of your assets.");
                                                     Bagel.internal.oops(game);
                                                 }
@@ -200,7 +203,6 @@ Bagel = {
                                 },
                                 width: {
                                     required: false,
-                                    default: "1x",
                                     types: [
                                         "number",
                                         "string"
@@ -209,7 +211,6 @@ Bagel = {
                                 },
                                 height: {
                                     required: false,
-                                    default: "1x",
                                     types: [
                                         "number",
                                         "string"
@@ -288,7 +289,15 @@ Bagel = {
                             },
                             listeners: {
                                 fns: {
-                                    xy: (sprite, value, property, game, plugin, triggerSprite, step) => {
+                                    xy: (sprite, value, property, game, plugin, triggerSprite) => {
+                                        if (typeof value == "number") {
+                                            if (isNaN(value)) {
+                                                return "Huh, looks like you've done something wrong in a calculation somewhere in your program. Sprite " + JSON.stringify(triggerSprite.id) + "'s " + property + " is NaN. This is usually caused by having a non number somewhere in a calcuation.";
+                                            }
+                                            else {
+                                                return;
+                                            }
+                                        };
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
@@ -299,13 +308,33 @@ Bagel = {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
                                             return;
                                         }
-                                        if (typeof value == "number") return;
 
                                         // It's invalid if it wasn't any of those valid values
-                                        console.error("Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
-                                        Bagel.internal.oops(game);
+                                        return "Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
                                     },
-                                    dimensions: (sprite, value, property, game, plugin, triggerSprite) => {
+                                    dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                        if (typeof value == "number") {
+                                            if (isNaN(value)) {
+                                                return "Huh, looks like you've done something wrong in a calculation somewhere in your program. Sprite " + JSON.stringify(triggerSprite.id) + "'s " + property + " is NaN. This is usually caused by having a non number somewhere in a calcuation.";
+                                            }
+                                            else {
+                                                if (sprite.scale == null) {
+                                                    if (sprite.img) {
+                                                        let img = Bagel.get.asset.img(sprite.img);
+                                                        if (typeof img == "boolean") return ".rerun";
+                                                        // Update the scale
+                                                        let scaleX = sprite.width / img.width;
+                                                        let scaleY = sprite.height / img.height;
+                                                        sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                                    }
+                                                }
+                                                return;
+                                            }
+                                        }
+
+                                        if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first before the next two types can be handled
+                                            return ".rerun";
+                                        }
                                         if (typeof value == "string") {
                                             if (value.includes("x")) {
                                                 let scale = parseFloat(value.split("x")[0]);
@@ -318,10 +347,12 @@ Bagel = {
                                                 if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * scale;
 
-                                                // Update the scale
-                                                let scaleX = sprite.width / img.width;
-                                                let scaleY = sprite.height / img.height;
-                                                sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                                if (sprite.width && sprite.height) { // Make sure there isn't a missing dimention otherwise can't update scale
+                                                    // Update the scale
+                                                    let scaleX = sprite.width / img.width;
+                                                    let scaleY = sprite.height / img.height;
+                                                    sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                                }
                                                 return;
                                             }
                                         }
@@ -338,34 +369,29 @@ Bagel = {
                                             }
                                             return;
                                         }
-                                        if (typeof value == "number") {
-                                            if (sprite.img) {
-                                                let img = Bagel.get.asset.img(sprite.img);
-                                                if (typeof img == "boolean") return ".rerun";
-                                                // Update the scale
-                                                let scaleX = sprite.width / img.width;
-                                                let scaleY = sprite.height / img.height;
-                                                sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
-                                            }
-                                            return;
-                                        };
                                         if (value == null) {
                                             if (sprite.scale) {
-                                                triggerSprite[property] = sprite.scale + "x"; // It's triggerSprite so it becomes a number
+                                                if (sprite.img == null) {
+                                                    sprite[property] = 1;
+                                                    return;
+                                                }
+                                                let img = Bagel.get.asset.img(sprite.img);
+                                                if (typeof img == "boolean") return ".rerun";
+                                                sprite[property] = img[property] * sprite.scale;
+
                                                 return;
                                             }
                                         }
 
-                                        console.error("Hmm. This can only be a function, a multiple of its image " + property + " (e.g 1x, 2x, 0.3x etc.) or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
-                                        Bagel.internal.oops(game);
+                                        return "Hmm. This can only be a function, a multiple of its image " + property + " (e.g 1x, 2x, 0.3x etc.) or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
                                     }
                                 },
                                 property: {
                                     x: {
-                                        set: "xy"
+                                        get: "xy"
                                     },
                                     y: {
-                                        set: "xy"
+                                        get: "xy"
                                     },
                                     img: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
@@ -373,8 +399,9 @@ Bagel = {
                                                 if (sprite.img) {
                                                     let img = Bagel.get.asset.img(sprite.img);
                                                     if (typeof img == "boolean") return ".rerun";
-                                                    triggerSprite.width = img.width;
-                                                    triggerSprite.height = img.height;
+
+                                                    triggerSprite.width = img.width * sprite.scale;
+                                                    triggerSprite.height = img.height * sprite.scale;
                                                 }
                                             }
                                         }
@@ -386,11 +413,29 @@ Bagel = {
                                         set: "dimensions"
                                     },
                                     scale: {
-                                        set: (sprite, value, property, game, plugin, triggerSprite) => {
-                                            if (value != null) {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (value == null) {
+                                                sprite.scale = 1;
+                                                return;
+                                            }
+                                            else {
+                                                if ((! game.loaded) || initialTrigger) {
+                                                    return ".rerun";
+                                                }
+
                                                 if (typeof value == "number") {
-                                                    triggerSprite.width = value + "x";
-                                                    triggerSprite.height = value + "x";
+                                                    if (sprite.img) {
+                                                        let img = Bagel.get.asset.img(sprite.img);
+                                                        if (typeof img == "boolean") return ".rerun";
+
+                                                        // Update the scale
+                                                        sprite.width = img.width * value;
+                                                        sprite.height = img.height * value;
+                                                    }
+                                                    else {
+                                                        sprite.width = 1;
+                                                        sprite.height = 1;
+                                                    }
                                                 }
                                                 else {
                                                     console.error("Erm, this can only be a number. In the sprite " + JSON.stringify(triggerSprite.id) + ".scale. You tried to set it to " + JSON.stringify(value) + ".");
@@ -3009,15 +3054,23 @@ Bagel = {
                         let plugin = game.game.plugins[i];
                         game.internal.pluginsLoading++;
                         ((game, src, args, index) => {
-                            fetch(src).then(res => res.text().then(plugin => {
-                                game.internal.pluginsLoading--;
-                                plugin = (new Function("return " + plugin))(); // Not entirely sure if this is good practice or not but it allows the functions to be parsed unlike JSON.parse
-                                if (typeof plugin != "object") {
-                                    console.error("Erm, the plugin with the src " + JSON.stringify(src) + " isn't an object, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(plugin))) + ". If you made the plugin, you should check you've written it correctly. If you didn't, make sure the src is for the right file.";
+                            fetch(src).then(res => {
+                                if (res.ok) {
+                                    res.text().then(plugin => {
+                                        game.internal.pluginsLoading--;
+                                        plugin = (new Function("return " + plugin))(); // Not entirely sure if this is good practice or not but it allows the functions to be parsed unlike JSON.parse
+                                        if (typeof plugin != "object") {
+                                            console.error("Erm, the plugin with the src " + JSON.stringify(src) + " isn't an object, it's " + Bagel.internal.an(Bagel.internal.getTypeOf(plugin))) + ". If you made the plugin, you should check you've written it correctly. If you didn't, make sure the src is for the right file.";
+                                            Bagel.internal.oops(game);
+                                        }
+                                        Bagel.internal.loadPlugin(plugin, game, args, index);
+                                    });
+                                }
+                                else {
+                                    console.error("Huh, the network request for a plugin failed. This could be because the server can't be accessed or the src is incorrect. Check out the HTTP error above for more info.");
                                     Bagel.internal.oops(game);
                                 }
-                                Bagel.internal.loadPlugin(plugin, game, args, index);
-                            }));
+                            });
                         })(game, plugin.src, plugin.args? Bagel.internal.deepClone(plugin.args) : {}, i);
                     }
                 },
@@ -3111,7 +3164,7 @@ Bagel = {
                                             args = Bagel.check({
                                                 ob: args,
                                                 syntax: method.fn.args,
-                                                where: "game " + game.id + "'s " + JSON.stringify(methodName) + " method"
+                                                where: "game " + JSON.stringify(game.id) + "'s " + JSON.stringify(methodName) + " method"
                                             }, Bagel.internal.checks.disableArgCheck);
                                             let output = method.fn.fn(game, args, current.plugin); // Passed the argument checks
 
@@ -3140,7 +3193,7 @@ Bagel = {
                                             newArgs = Bagel.check({
                                                 ob: newArgs,
                                                 syntax: method.fn.args,
-                                                where: "game " + game.id + "'s " + JSON.stringify(methodName) + " method"
+                                                where: "game " + JSON.stringify(game.id) + "'s " + JSON.stringify(methodName) + " method"
                                             }, Bagel.internal.checks.disableArgCheck, false, "Btw, the arguments go in this order: " + keys.join(", ") + ".");
                                             let output = method.fn.fn(game, newArgs, method.internal.plugin); // Passed the argument checks
 
@@ -3828,7 +3881,7 @@ Bagel = {
                                             args = Bagel.check({
                                                 ob: args,
                                                 syntax: fn.args,
-                                                where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
+                                                where: "the sprite " + JSON.stringify(sprite.id) + "'s " + JSON.stringify(methodName) + " method"
                                             }, Bagel.internal.checks.disableArgCheck);
                                             // Passed the argument checks
 
@@ -3860,7 +3913,7 @@ Bagel = {
                                             newArgs = Bagel.check({
                                                 ob: newArgs,
                                                 syntax: fn.args,
-                                                where: "the sprite " + sprite.id + "'s " + JSON.stringify(methodName) + " method"
+                                                where: "the sprite " + JSON.stringify(sprite.id) + "'s " + JSON.stringify(methodName) + " method"
                                             }, Bagel.internal.checks.disableArgCheck, false, "Btw, the arguments go in this order: " + keys.join(", ") + ".");
                                             // Passed the argument checks
 
@@ -4082,7 +4135,12 @@ Bagel = {
                     for (let i in game.game.sprites) {
                         let sprite = game.game.sprites[i];
                         if (sprite == null) continue;
-                        let rerun = [...sprite.internal.rerunListeners]; // Clone is so running the listeners doesn't affect which listeners are triggered
+                        if (Bagel.internal.games[sprite.game.id] == null) { // From a deleted game
+                            sprite.internal.rerunListeners = [];
+                            continue;
+                        }
+
+                        let rerun = [...sprite.internal.rerunListeners]; // The clone is so running the listeners doesn't affect which listeners are triggered
                         sprite.internal.rerunListeners = [];
                         for (let c in rerun) {
                             Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game, false);
@@ -4093,6 +4151,8 @@ Bagel = {
                     let subFunctions = Bagel.internal.subFunctions.tick;
 
                     if (! game.paused) {
+                        subFunctions.pluginScripts(game);
+                        subFunctions.processSprites(game);
                         let state = game.state;
                         if (state != game.internal.lastState) {
                             Bagel.internal.triggerPluginListener("state", game, state);
@@ -4109,8 +4169,6 @@ Bagel = {
                             }
                         }
 
-                        subFunctions.pluginScripts(game);
-                        subFunctions.processSprites(game);
                         subFunctions.scripts("main", true, game, state);
                         subFunctions.scripts("main", false, game, state);
                         subFunctions.scripts("all", true, game, state);
@@ -5358,7 +5416,7 @@ Bagel = {
                                                                 "function",
                                                                 "string"
                                                             ],
-                                                            description: "A function that's run after the property is changed. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin and triggerSprite."
+                                                            description: "A function that's run after the property is changed. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin, triggerSprite, step and initialTrigger."
                                                         },
                                                         get: {
                                                             required: false,
@@ -5375,7 +5433,7 @@ Bagel = {
                                                                 "function",
                                                                 "string"
                                                             ],
-                                                            description: "A function that's run before the value is sent back to the code that requested it. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin and triggerSprite."
+                                                            description: "A function that's run before the value is sent back to the code that requested it. Can also be the name of a function defined in SpriteJSON.listeners.fns. The arguments given are these: sprite, value, property, game, plugin, triggerSprite and step."
                                                         }
                                                     },
                                                     arrayLike: true,
@@ -5935,6 +5993,13 @@ Bagel = {
         },
         triggerSpriteListener: (type, property, sprite, game, initialTrigger) => {
             let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+            if (handler.listeners.property[property] == null) { // No listener
+                return;
+            }
+            if (handler.listeners.property[property][type] == null) { // No listener of that type
+                return;
+            }
+
             let plugin = handler.internal.plugin;
 
             let current = Bagel.internal.current;
@@ -5946,7 +6011,7 @@ Bagel = {
             let error = handler.listeners.property[property][type](sprite.internal.properties, sprite.internal.properties[property], property, game, plugin, sprite, Bagel.step.plugin.spriteListener, initialTrigger);
 
             if (error) {
-                if (error = ".rerun") { // Not actually an error, just means it needs to be ran again the next frame
+                if (error == ".rerun") { // Not actually an error, just means it needs to be run again the next frame
                     sprite.internal.rerunListeners.push([type, property]);
                 }
                 else {
@@ -6399,6 +6464,6 @@ Bagel = {
     events: {
         pwaUpdate: null
     },
-    version: "1.5.1b"
+    version: "1.6a"
 };
 Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);

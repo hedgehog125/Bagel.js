@@ -8,11 +8,11 @@
     <p id="debug"></p>
 </body>
 
-<script src="../beginningJS.js"></script>
+<script src="../bagel.js"></script>
 <script>
 
-Bagels = BeginningJS.init({
-    ID: "Bagel",
+Bagels = Bagel.init({
+    id: "Bagel",
     game: {
         assets: {
             imgs: [
@@ -32,7 +32,7 @@ Bagels = BeginningJS.init({
                 scripts: {
                     init: [
                         {
-                            code: (gameRef, me) => {
+                            code: me => {
                                 me.x = Bagels.width / 2;
                                 me.y = Bagels.height / 2;
                             },
@@ -41,7 +41,7 @@ Bagels = BeginningJS.init({
                     ],
                     main: [
                         {
-                            code: (gameRef, me) => {
+                            code: me => {
                                 me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS;
                                 me.angle++;
                             },
@@ -50,7 +50,7 @@ Bagels = BeginningJS.init({
                     ]
                 },
                 img: "THE_Bagel",
-                scale: 0.1,
+                scale: 5,
                 x: 0,
                 y: 0
             }
@@ -58,12 +58,7 @@ Bagels = BeginningJS.init({
     },
     width: 800,
     height: 450,
-    config: {
-        display: {
-            fillScreen: true
-        },
-        state: "Hail the bagel overlords"
-    }
+    state: "Hail the bagel overlords"
 });
 
 </script>
