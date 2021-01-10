@@ -313,6 +313,12 @@ Bagel = {
                                         return "Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                        if (sprite.img) {
+                                            if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first as the sprite has an image
+                                                return ".rerun";
+                                            }
+                                        }
+
                                         if (typeof value == "number") {
                                             if (isNaN(value)) {
                                                 return "Huh, looks like you've done something wrong in a calculation somewhere in your program. Sprite " + JSON.stringify(triggerSprite.id) + "'s " + property + " is NaN. This is usually caused by having a non number somewhere in a calcuation.";
@@ -332,9 +338,6 @@ Bagel = {
                                             }
                                         }
 
-                                        if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first before the next two types can be handled
-                                            return ".rerun";
-                                        }
                                         if (typeof value == "string") {
                                             if (value.includes("x")) {
                                                 let scale = parseFloat(value.split("x")[0]);
@@ -383,7 +386,7 @@ Bagel = {
                                             }
                                         }
 
-                                        return "Hmm. This can only be a function, a multiple of its image " + property + " (e.g 1x, 2x, 0.3x etc.) or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
+                                        return "Hmm. This can only be a function, a multiple of its image " + property + " (e.g 1x, 2x, 0.3x etc.) or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".\nIf you tried to set the other width/height attribute, you'll need to define this one as well.";
                                     }
                                 },
                                 property: {
@@ -415,8 +418,10 @@ Bagel = {
                                     scale: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                             if (value == null) {
-                                                sprite.scale = 1;
-                                                return;
+                                                if (! (sprite.width || sprite.height)) {
+                                                    sprite.scale = 1;
+                                                    return;
+                                                }
                                             }
                                             else {
                                                 if ((! game.loaded) || initialTrigger) {
