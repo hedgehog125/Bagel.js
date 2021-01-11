@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="A simple audio test in Bagel.js">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>
+            Audio demo
+        </title>
+    </head>
+    <body bgColor="white">
+        <p id="debug"></p>
+    </body>
+</html>
+<script src="../bagel.js"></script>
+<script>
+
+// Credit: Music is royalty free Kevin MacLeod
+
+game = Bagel.init({
+    id: "game",
+    game: {
+        assets: {
+            snds: [
+                {
+                    id: "Testing",
+                    src: "../assets/snds/music.mp3"
+                }
+            ]
+        },
+        scripts: {
+            init: [
+                {
+                    code: _ => {
+                        game.playSound("Testing");
+                    },
+                    stateToRun: "game"
+                }
+            ]
+        }
+    },
+    width: 800,
+    height: 450,
+    state: "game",
+    config: {
+        loading: {
+            skip: false
+        }
+    }
+});
+
+</script>
