@@ -7,10 +7,6 @@ TODO:
 Store updates to vertices due to layers in a separate array before updating it so it doesn't mess with creating and deleting vertices
 
 = Features =
-Alpha support for bitmap sprites
-
-How should sprite visibility be handled? Make sure to update the descriptions for init and tick render
-
 Render order
 
 Canvas rotation. Currently locked at 90 degrees when sent to renderer
@@ -527,73 +523,39 @@ Bagel = {
                                 sprite.internal.cache = {};
                             },
                             render: {
-                                init: (sprite, newBitmap) => {
-                                    sprite.internal.renderUpdate = false;
-                                    return newBitmap({
-                                        x: sprite.x,
-                                        y: sprite.y,
-                                        width: sprite.width,
-                                        height: sprite.height,
-                                        image: sprite.img,
-                                        rotation: sprite.angle,
-                                        alpha: sprite.alpha
-                                    }, sprite.game, false);
-                                },
-                                tick: (sprite, updateBitmap) => {
-                                    if (sprite.internal.renderUpdate) {
-                                        updateBitmap(sprite.internal.Bagel.renderID, {
-                                            x: sprite.x,
-                                            y: sprite.y,
-                                            width: sprite.width,
-                                            height: sprite.height,
-                                            image: sprite.img,
-                                            rotation: sprite.angle,
-                                            alpha: sprite.alpha
-                                        }, sprite.game, false);
-                                        sprite.internal.renderUpdate = false;
-                                    }
-                                }
-                                /*
-                                ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
-                                    if (sprite.img == null) return; // No image for this sprite
-                                    let img = Bagel.get.asset.img(sprite.img, game, true);
-                                    if (typeof img == "boolean") { // It's loading or it doesn't exist
-                                        if (img) { // Loading
-                                            return; // Don't render it this frame, wait until it's loaded
+                                tick: (sprite, updateBitmap, newBitmap, deleteBitmap, game) => {
+                                    if (sprite.visible) {
+                                        if (sprite.internal.Bagel.renderID == null) {
+                                            sprite.internal.Bagel.renderID = newBitmap({
+                                                x: sprite.x,
+                                                y: sprite.y,
+                                                width: sprite.width,
+                                                height: sprite.height,
+                                                image: sprite.img,
+                                                rotation: sprite.angle,
+                                                alpha: sprite.alpha
+                                            }, sprite.game, false);
                                         }
-                                        else { // Doesn't exist
-                                            console.error("Huh, the sprite " + JSON.stringify(sprite.id) + "'s image doesn't exist, it doesn't appear to be loading either. Check game.game.assets to make sure your asset is called " + JSON.stringify(sprite.img) + ", or change the sprite image to something else. (don't forget, it's case sensitive!)");
-                                            Bagel.internal.oops(game);
+                                        if (sprite.internal.renderUpdate) {
+                                            updateBitmap(sprite.internal.Bagel.renderID, {
+                                                x: sprite.x,
+                                                y: sprite.y,
+                                                width: sprite.width,
+                                                height: sprite.height,
+                                                image: sprite.img,
+                                                rotation: sprite.angle,
+                                                alpha: sprite.alpha
+                                            }, game, false);
+                                            sprite.internal.renderUpdate = false;
                                         }
-                                    }
-
-                                    ctx.globalAlpha = sprite.alpha;
-
-                                    let flipX = sprite.width >= 0? 1 : -1;
-                                    let flipY = sprite.height >= 0? 1 : -1;
-                                    scaleX = scaleX * flipX;
-                                    scaleY = scaleY * flipY;
-                                    ctx.scale(scaleX, scaleY);
-
-                                    let halfWidth = Math.abs(sprite.width) / 2;
-                                    let halfHeight = Math.abs(sprite.height) / 2;
-                                    let roundX = Bagel.internal.roundX;
-                                    let roundY = Bagel.internal.roundY;
-                                    if (sprite.angle == 90) { // Don't rotate if we don't need to
-                                        ctx.drawImage(img, (roundX(sprite.x) - roundX(halfWidth)) * flipX, (roundY(sprite.y) - roundY(halfHeight)) * flipY, roundX(sprite.width), roundY(sprite.height));
                                     }
                                     else {
-                                        let angle = Bagel.maths.degToRad(sprite.angle - 90);
-
-                                        ctx.translate(roundX(sprite.x * flipX), roundY(sprite.y * flipY));
-                                        ctx.rotate(angle);
-                                        ctx.drawImage(img, -halfWidth, -halfHeight, sprite.width, sprite.height);
+                                        if (sprite.internal.Bagel.renderID != null) {
+                                            deleteBitmap(sprite.internal.Bagel.renderID, game);
+                                            sprite.internal.Bagel.renderID = null;
+                                        }
                                     }
-                                    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
-                                    ctx.globalAlpha = 1;
-                                },
-                                clean: true
-                                */
+                                }
                             }
                         },
                         canvas: {
@@ -783,17 +745,8 @@ Bagel = {
 
                                     Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game);
                                     sprite.internal.renderUpdate = false;
-                                    return newBitmap({
-                                        x: sprite.x,
-                                        y: sprite.y,
-                                        width: sprite.width,
-                                        height: sprite.height,
-                                        image: sprite.internal.canvasID,
-                                        rotation: 90,
-                                        alpha: sprite.alpha
-                                    }, sprite.game, false);
                                 },
-                                tick: (sprite, updateBitmap, game) => {
+                                tick: (sprite, updateBitmap, newBitmap, deleteBitmap, game) => {
                                     let width;
                                     let height;
                                     if (sprite.fullRes) {
@@ -816,62 +769,45 @@ Bagel = {
                                     Bagel.internal.saveCurrent();
                                     current.plugin = null;
                                     current.sprite = sprite;
-                                    if (sprite.render) sprite.render(sprite, game, sprite.ctx, sprite.canvas);
+                                    if (sprite.render && sprite.visible) sprite.render(sprite, game, sprite.ctx, sprite.canvas);
                                     Bagel.internal.loadCurrent();
 
 
                                     Bagel.internal.render.texture.update(sprite.internal.canvasID, sprite.canvas, game);
-                                    if (sprite.internal.renderUpdate) {
-                                        updateBitmap(sprite.internal.Bagel.renderID, {
-                                            x: sprite.x,
-                                            y: sprite.y,
-                                            width: sprite.width,
-                                            height: sprite.height,
-                                            image: sprite.internal.canvasID,
-                                            rotation: 90,
-                                            alpha: sprite.alpha
-                                        }, sprite.game, false);
-                                        sprite.internal.renderUpdate = false;
-                                    }
-                                }
-                                /*
-                                ctx: (sprite, ctx, canvas, game, plugin, scaleX, scaleY) => {
-                                    let width;
-                                    let height;
-                                    if (sprite.fullRes) {
-                                        width = sprite.width * scaleX;
-                                        height = sprite.height * scaleY;
+
+                                    if (sprite.visible) {
+                                        if (sprite.internal.Bagel.renderID == null) {
+                                            sprite.internal.Bagel.renderID = newBitmap({
+                                                x: sprite.x,
+                                                y: sprite.y,
+                                                width: sprite.width,
+                                                height: sprite.height,
+                                                image: sprite.internal.canvasID,
+                                                rotation: 90,
+                                                alpha: sprite.alpha
+                                            }, game, false);
+                                            sprite.internal.renderUpdate = false;
+                                        }
+                                        if (sprite.internal.renderUpdate) {
+                                            updateBitmap(sprite.internal.Bagel.renderID, {
+                                                x: sprite.x,
+                                                y: sprite.y,
+                                                width: sprite.width,
+                                                height: sprite.height,
+                                                image: sprite.internal.canvasID,
+                                                rotation: 90,
+                                                alpha: sprite.alpha
+                                            }, game, false);
+                                            sprite.internal.renderUpdate = false;
+                                        }
                                     }
                                     else {
-                                        width = sprite.width * window.devicePixelRatio;
-                                        height = sprite.height * window.devicePixelRatio;
+                                        if (sprite.internal.Bagel.renderID != null) {
+                                            deleteBitmap(sprite.internal.Bagel.renderID, game);
+                                            sprite.internal.Bagel.renderID = null;
+                                        }
                                     }
-                                    let last = sprite.internal.last;
-                                    if (last.width != width || last.height != height) {
-                                        sprite.canvas.width = width;
-                                        sprite.canvas.height = height;
-                                        last.width = width;
-                                        last.height = height;
-                                    }
-                                    let current = Bagel.internal.current;
-                                    Bagel.internal.saveCurrent();
-                                    current.plugin = null;
-                                    current.sprite = sprite;
-                                    if (sprite.render) sprite.render(sprite, game, sprite.ctx, sprite.canvas);
-                                    Bagel.internal.loadCurrent();
-
-                                    let roundX = Bagel.internal.roundX;
-                                    let roundY = Bagel.internal.roundY;
-
-                                    ctx.globalAlpha = sprite.alpha;
-                                    ctx.scale(scaleX, scaleY);
-                                    ctx.drawImage(sprite.canvas, roundX(sprite.x) - roundX(sprite.width / 2), roundY(sprite.y) - roundY(sprite.height / 2), roundX(sprite.width), roundY(sprite.height));
-
-                                    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
-                                    ctx.globalAlpha = 1;
-                                },
-                                clean: true
-                                */
+                                }
                             }
                         },
                         text: {
@@ -955,10 +891,14 @@ Bagel = {
                             listeners: {
                                 fns: {
                                     xy: (sprite, value, property, game, plugin, triggerSprite, step) => {
-                                        if (typeof value == "number") return;
+                                        if (typeof value == "number") {
+                                            triggerSprite.internal.renderUpdate = true;
+                                            return;
+                                        }
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
+                                                triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
                                         }
@@ -969,6 +909,7 @@ Bagel = {
 
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
+                                            triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
 
@@ -989,6 +930,11 @@ Bagel = {
                                     y: {
                                         set: "xy"
                                     },
+                                    alpha: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step) => {
+                                            triggerSprite.internal.renderUpdate = true;
+                                        }
+                                    },
                                     text: {
                                         set: "rerender"
                                     },
@@ -1003,54 +949,85 @@ Bagel = {
                             },
                             description: "A text sprite. Allows you to easily display text onscreen.",
                             init: (sprite, game) => {
-                                let internal = sprite.internal;
-                                internal.last = {};
-                                internal.canvas = document.createElement("canvas");
-                                internal.ctx = internal.canvas.getContext("2d");
-                                internal.prerender = (sprite, mainCanvas) => {
-                                    let last = sprite.internal.last;
-                                    let canvas = sprite.internal.canvas;
-                                    let ctx = sprite.internal.ctx;
-                                    let scaleX = mainCanvas.width / sprite.game.width;
-                                    let scaleY = mainCanvas.height / sprite.game.height;
-
-                                    ctx.font = sprite.font;
-                                    let size = (ctx.measureText("M").width * 1.5) * scaleY;
-                                    canvas.width = ctx.measureText(sprite.text).width * scaleX; // It's not affected by scaling
-                                    //let size = parseInt(sprite.font.split(" ")[0].split("px")[0]);
-                                    canvas.height = Math.ceil(size);
-                                    ctx.font = sprite.font;
-                                    ctx.textBaseline = "middle";
-                                    ctx.fillStyle = sprite.colour;
-
-                                    ctx.scale(scaleX, scaleY);
-                                    ctx.fillText(sprite.text, 0, (canvas.height / 2) / scaleY);
-                                    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
-
-                                    last.scaleX = scaleX;
-                                    last.scaleY = scaleY;
-                                    sprite.width = Math.round(canvas.width / scaleX);
-                                    sprite.height = Math.round(canvas.height / scaleY);
-                                };
-                                internal.prerender(sprite, game.internal.renderer.canvas);
+                                sprite.internal.last = {};
+                                sprite.internal.canvasID = ".Internal.text." + sprite.id;
                             },
                             render: {
-                                ctx: (sprite, mainCtx, mainCanvas, game, plugin, scaleX, scaleY) => {
-                                    let last = sprite.internal.last;
-                                    let canvas = sprite.internal.canvas;
-                                    let ctx = sprite.internal.ctx;
+                                init: (sprite, newBitmap) => {
+                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, sprite.game);
 
-                                    let roundX = Bagel.internal.roundX;
-                                    let roundY = Bagel.internal.roundY;
+                                    let internal = sprite.internal;
+                                    internal.canvas = document.createElement("canvas");
+                                    internal.canvas.width = 1;
+                                    internal.canvas.height = 1;
 
-                                    if (last.scaleX != scaleX || last.scaleY != scaleY) { // Update the text
-                                        sprite.internal.prerender(sprite, mainCanvas);
-                                    }
-                                    mainCtx.globalAlpha = sprite.alpha;
-                                    mainCtx.drawImage(canvas, roundX(sprite.x * scaleX) - roundX(canvas.width / 2), roundY(sprite.y * scaleY) - roundX(canvas.height / 2), roundX(canvas.width), roundY(canvas.height));
-                                    ctx.globalAlpha = 1;
+                                    internal.ctx = internal.canvas.getContext("2d");
+                                    internal.prerender = (sprite, mainCanvas) => {
+                                        let last = sprite.internal.last;
+                                        let canvas = sprite.internal.canvas;
+                                        let ctx = sprite.internal.ctx;
+                                        let scaleX = mainCanvas.width / sprite.game.width;
+                                        let scaleY = mainCanvas.height / sprite.game.height;
+
+                                        ctx.font = sprite.font;
+                                        let size = (ctx.measureText("M").width * 1.5) * scaleY;
+                                        canvas.width = ctx.measureText(sprite.text).width * scaleX; // It's not affected by scaling
+                                        //let size = parseInt(sprite.font.split(" ")[0].split("px")[0]);
+                                        canvas.height = Math.ceil(size);
+                                        ctx.font = sprite.font;
+                                        ctx.textBaseline = "middle";
+                                        ctx.fillStyle = sprite.colour;
+
+                                        ctx.scale(scaleX, scaleY);
+                                        ctx.fillText(sprite.text, 0, (canvas.height / 2) / scaleY);
+                                        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
+
+                                        last.scaleX = scaleX;
+                                        last.scaleY = scaleY;
+                                        sprite.width = Math.round(canvas.width / scaleX);
+                                        sprite.height = Math.round(canvas.height / scaleY);
+
+                                        Bagel.internal.render.texture.update(sprite.internal.canvasID, canvas, sprite.game);
+                                        sprite.internal.renderUpdate = true;
+                                    };
+                                    internal.prerender(sprite, game.internal.renderer.canvas);
+
+                                    sprite.internal.renderUpdate = false;
                                 },
-                                clean: true
+                                tick: (sprite, updateBitmap, newBitmap, deleteBitmap, game) => {
+                                    if (sprite.visible) {
+                                        if (sprite.internal.Bagel.renderID == null) {
+                                            sprite.internal.Bagel.renderID = newBitmap({
+                                                x: sprite.x,
+                                                y: sprite.y,
+                                                width: sprite.width,
+                                                height: sprite.height,
+                                                image: sprite.internal.canvasID,
+                                                rotation: 90,
+                                                alpha: sprite.alpha
+                                            }, game, false);
+                                            sprite.internal.renderUpdate = false;
+                                        }
+                                        if (sprite.internal.renderUpdate) {
+                                            updateBitmap(sprite.internal.Bagel.renderID, {
+                                                x: sprite.x,
+                                                y: sprite.y,
+                                                width: sprite.width,
+                                                height: sprite.height,
+                                                image: sprite.internal.canvasID,
+                                                rotation: 90,
+                                                alpha: sprite.alpha
+                                            }, game, false);
+                                            sprite.internal.renderUpdate = false;
+                                        }
+                                    }
+                                    else {
+                                        if (sprite.internal.Bagel.renderID != null) {
+                                            deleteBitmap(sprite.internal.Bagel.renderID, game);
+                                            sprite.internal.Bagel.renderID = null;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -4080,8 +4057,11 @@ Bagel = {
                             }
                         }
                     }
-                    if (noReruns) { // Otherwise will be run after the rerun
-                        Bagel.internal.subFunctions.createSprite.initRender(sprite, game);
+                    if (sprite.internal.Bagel.rendererNotInitialised) {
+                        if (noReruns) { // Otherwise will be run after the rerun
+                            sprite.internal.Bagel.rendererNotInitialised = false;
+                            Bagel.internal.subFunctions.createSprite.initRender(sprite, game);
+                        }
                     }
                 },
                 register: {
@@ -4518,6 +4498,9 @@ Bagel = {
                                             newVertices[i + 10] = newVertices[i + 2];
                                             newVertices[i + 11] = newVertices[i + 5];
 
+                                            Bagel.internal.subFunctions.tick.render.webgl.rotateVertices(newVertices, i, box.rotation, box.x, box.y);
+
+
 
                                             let textureId = renderer.textures[box.image][1];
                                             let alpha = box.alpha;
@@ -4590,6 +4573,25 @@ Bagel = {
                                     renderer.queue.bitmap.delete = {};
                                 }
                             }
+                        },
+                        rotateVertices: (vertices, i, angle, cx, cy) => {
+                            let rad = Bagel.maths.degToRad(angle);
+                            let sin = Math.sin(rad);
+                            let cos = Math.cos(rad);
+
+                            let c = 0;
+                            while (c < 6) {
+                                let x = vertices[i];
+                                let y = vertices[i + 1];
+
+                                // Somewhat adapted from https://stackoverflow.com/questions/17410809/how-to-calculate-rotation-in-2d-in-javascript
+                                vertices[i] = -(sin * (x - cx)) + (cos * (y - cy)) + cx;
+                                vertices[i + 1] = -(sin * (cy - y)) + (cos * (x - cx)) + cy;
+
+                                c++;
+                                i += 2;
+                            }
+                            return vertices;
                         },
                         init: game => {
                             let renderer = game.internal.renderer;
@@ -4745,10 +4747,14 @@ Bagel = {
                         let sprite = game.game.sprites[i];
                         if (sprite == null) continue;
 
-                        if (sprite.visible && (! sprite.internal.Bagel.rendererNotInitialised)) {
+                        if (! sprite.internal.Bagel.rendererNotInitialised) {
                             let handler = Bagels.internal.combinedPlugins.types.sprites[sprite.type];
                             if (handler.render.tick) {
-                                handler.render.tick(sprite, Bagel.internal.render.bitmapSprite.update, game);
+                                let bitmapFunctions = Bagel.internal.render.bitmapSprite;
+                                let output = handler.render.tick(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game);
+                                if (output != null) {
+                                    sprite.internal.Bagel.renderID = output;
+                                }
                             }
                         }
                     }
@@ -5310,11 +5316,17 @@ Bagel = {
                                                     id: "Bagel",
                                                     type: "canvas",
                                                     fullRes: false,
+                                                    visible: false,
+                                                    width: 1,
+                                                    height: 1,
                                                     scripts: {
                                                         init: [
                                                             {
-                                                                code: me => {
+                                                                code: (me, game) => {
                                                                     me.vars.img = Bagel.get.asset.img("Bagel");
+
+                                                                    me.width = Math.max(game.width, game.height) / 5;
+                                                                    me.height = me.width;
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
@@ -5384,9 +5396,7 @@ Bagel = {
                                                                 }
                                                             }
                                                         }
-                                                    },
-                                                    width: (me, game) => Math.max(game.width, game.height) / 5,
-                                                    height: (me, game) => Math.max(game.width, game.height) / 5
+                                                    }
                                                 },
                                                 {
                                                     id: "Text",
@@ -6125,7 +6135,7 @@ Bagel = {
                                                 tick: {
                                                     required: false,
                                                     types: ["function"],
-                                                    description: "A function that runs every frame the sprite is visible. Use the update function provided to update a bitmap sprite.\nCalled with the sprite, the update function and the game object."
+                                                    description: "A function that runs every frame the sprite is visible. Use the update function provided to update a bitmap sprite.\nCalled with the sprite, the update function, the new bitmap function, the delete function and the game object."
                                                 }
                                             },
                                             types: ["object"],
@@ -6737,6 +6747,8 @@ Bagel = {
 
                         vertices[i + 10] = vertices[i + 2];
                         vertices[i + 11] = vertices[i + 5];
+
+                        Bagel.internal.subFunctions.tick.render.webgl.rotateVertices(vertices, i, box.rotation, box.x, box.y);
 
 
                         let textureId = renderer.textures[box.image][1];
