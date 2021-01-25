@@ -7,6 +7,8 @@ TODO:
 Store updates to vertices due to layers in a separate array before updating it so it doesn't mess with creating and deleting vertices
 
 = Features =
+Alpha support for bitmap sprites
+
 How should sprite visibility be handled? Make sure to update the descriptions for init and tick render
 
 Render order
@@ -15,11 +17,7 @@ Canvas rotation. Currently locked at 90 degrees when sent to renderer
 
 Check texture exists when bitmap sprite is created but before the queue stuff
 
-Return sprite render id to save it?
-
 Update bitmap sprites when their texture is updated
-
-Alpha support for bitmap sprites
 
 Make sprite x/y properties use a setter rather than a getter
 
@@ -537,7 +535,8 @@ Bagel = {
                                         width: sprite.width,
                                         height: sprite.height,
                                         image: sprite.img,
-                                        rotation: sprite.angle
+                                        rotation: sprite.angle,
+                                        alpha: sprite.alpha
                                     }, sprite.game, false);
                                 },
                                 tick: (sprite, updateBitmap) => {
@@ -548,7 +547,8 @@ Bagel = {
                                             width: sprite.width,
                                             height: sprite.height,
                                             image: sprite.img,
-                                            rotation: sprite.angle
+                                            rotation: sprite.angle,
+                                            alpha: sprite.alpha
                                         }, sprite.game, false);
                                         sprite.internal.renderUpdate = false;
                                     }
@@ -789,7 +789,8 @@ Bagel = {
                                         width: sprite.width,
                                         height: sprite.height,
                                         image: sprite.internal.canvasID,
-                                        rotation: 90
+                                        rotation: 90,
+                                        alpha: sprite.alpha
                                     }, sprite.game, false);
                                 },
                                 tick: (sprite, updateBitmap, game) => {
@@ -827,7 +828,8 @@ Bagel = {
                                             width: sprite.width,
                                             height: sprite.height,
                                             image: sprite.internal.canvasID,
-                                            rotation: 90
+                                            rotation: 90,
+                                            alpha: sprite.alpha
                                         }, sprite.game, false);
                                         sprite.internal.renderUpdate = false;
                                     }
@@ -3187,9 +3189,11 @@ Bagel = {
                             gl.getExtension("WEBGL_lose_context").loseContext();
                         }
                     }
+
                     renderer.type = game.config.display.renderer;
+                    let antialiasing = game.config.display.antialiasing;
                     if (renderer.type == "webgl") {
-                        renderer.gl = renderer.canvas.getContext("webgl") || renderer.canvas.getContext("experimental-webgl");
+                        renderer.gl = renderer.canvas.getContext("webgl", {antialiasing: antialiasing}) || renderer.canvas.getContext("experimental-webgl", {antialiasing: antialiasing});
                         renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
 
                         renderer.colourCanvas = document.createElement("canvas");
@@ -3199,7 +3203,7 @@ Bagel = {
                     }
                     else {
                         renderer.ctx = renderer.canvas.getContext("2d");
-                        renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing;
+                        renderer.ctx.imageSmoothingEnabled = antialiasing;
                     }
 
                     if (game.config.display.mode == "fill") {
@@ -3486,8 +3490,10 @@ Bagel = {
                                 y: game.height / 2,
                                 width: game.width,
                                 height: game.height,
-                                image: ".Internal.loadingScreen"
-                            }, game);
+                                image: ".Internal.loadingScreen",
+                                rotation: 90,
+                                alpha: 1
+                            }, game, false);
                         }
 
                         Bagel.internal.loadCurrent();
@@ -4444,7 +4450,7 @@ Bagel = {
                                 if (bitmapQueue.new.length != 0 || Object.keys(bitmapQueue.delete).length != 0) {
                                     let toAdd = bitmapQueue.new.length - Object.keys(bitmapQueue.delete).length;
                                     let newVertices = new Float32Array(renderer.vertices.length + (toAdd * 12));
-                                    let newTextureCoords = new Float32Array(renderer.textureCoordinates.length + (toAdd * 18));
+                                    let newTextureCoords = new Float32Array(renderer.textureCoordinates.length + (toAdd * 24));
 
                                     let i = 0;
                                     let c = 0;
@@ -4471,8 +4477,8 @@ Bagel = {
                                     i = 0;
                                     c = 0;
                                     while (i < renderer.textureCoordinates.length) {
-                                        if (i % 18 == 0 && bitmapQueue.delete[i / 18]) {
-                                            i += 18;
+                                        if (i % 24 == 0 && bitmapQueue.delete[i / 24]) {
+                                            i += 24;
                                             continue;
                                         }
                                         else {
@@ -4482,7 +4488,7 @@ Bagel = {
                                         i++;
                                     }
 
-                                    previousCount = c / 18;
+                                    previousCount = c / 24;
                                     let a = c;
                                     i = oldVerticesEnd;
                                     c = 0;
@@ -4514,6 +4520,7 @@ Bagel = {
 
 
                                             let textureId = renderer.textures[box.image][1];
+                                            let alpha = box.alpha;
                                             let xZero = 0;
                                             if (box.width < 0) {
                                                 xZero = 1;
@@ -4533,30 +4540,37 @@ Bagel = {
                                             newTextureCoords[a] = xZero;
                                             newTextureCoords[a + 1] = yZero;
                                             newTextureCoords[a + 2] = textureId;
+                                            newTextureCoords[a + 3] = alpha;
 
-                                            newTextureCoords[a + 3] = xOne;
-                                            newTextureCoords[a + 4] = yZero;
-                                            newTextureCoords[a + 5] = textureId;
+                                            newTextureCoords[a + 4] = xOne;
+                                            newTextureCoords[a + 5] = yZero;
+                                            newTextureCoords[a + 6] = textureId;
+                                            newTextureCoords[a + 7] = alpha;
 
-                                            newTextureCoords[a + 6] = xZero;
-                                            newTextureCoords[a + 7] = yOne;
-                                            newTextureCoords[a + 8] = textureId;
-
-
-                                            newTextureCoords[a + 9] = xZero;
-                                            newTextureCoords[a + 10] = yOne;
-                                            newTextureCoords[a + 11] = textureId;
+                                            newTextureCoords[a + 8] = xZero;
+                                            newTextureCoords[a + 9] = yOne;
+                                            newTextureCoords[a + 10] = textureId;
+                                            newTextureCoords[a + 11] = alpha;
 
 
-                                            newTextureCoords[a + 12] = xOne;
-                                            newTextureCoords[a + 13] = yZero;
+                                            newTextureCoords[a + 12] = xZero;
+                                            newTextureCoords[a + 13] = yOne;
                                             newTextureCoords[a + 14] = textureId;
+                                            newTextureCoords[a + 15] = alpha;
 
-                                            newTextureCoords[a + 15] = xOne;
-                                            newTextureCoords[a + 16] = yOne;
-                                            newTextureCoords[a + 17] = textureId;
+
+                                            newTextureCoords[a + 16] = xOne;
+                                            newTextureCoords[a + 17] = yZero;
+                                            newTextureCoords[a + 18] = textureId;
+                                            newTextureCoords[a + 19] = alpha;
+
+                                            newTextureCoords[a + 20] = xOne;
+                                            newTextureCoords[a + 21] = yOne;
+                                            newTextureCoords[a + 22] = textureId;
+                                            newTextureCoords[a + 23] = alpha;
+
                                             i += 12;
-                                            a += 18;
+                                            a += 24;
                                             b++;
                                         }
                                         c++;
@@ -4584,12 +4598,12 @@ Bagel = {
                             let compileShader = Bagel.internal.subFunctions.tick.render.webgl.compileShader;
                             let vertex = compileShader(gl.VERTEX_SHADER, `
                                 attribute vec2 a_vertices;
-                                attribute vec3 a_textcoord;
+                                attribute vec4 a_textcoord;
 
                                 uniform float u_time;
                                 uniform vec2 u_resolution;
 
-                                varying vec3 v_texcoord;
+                                varying vec4 v_texcoord;
 
                                 void main () {
                                     v_texcoord = a_textcoord;
@@ -4603,7 +4617,7 @@ Bagel = {
                             let fragment = compileShader(gl.FRAGMENT_SHADER, `
                                 precision mediump float;
                                 uniform sampler2D u_images[5];
-                                varying vec3 v_texcoord;
+                                varying vec4 v_texcoord;
 
                                 // From https://gamedev.stackexchange.com/questions/34278/can-you-dynamically-set-which-texture-to-use-in-shader
 
@@ -4629,7 +4643,9 @@ Bagel = {
                                 }
 
                                 void main () {
-                                    gl_FragColor = getPixel();
+                                    pixel = getPixel();
+                                    pixel *= v_texcoord.w;
+                                    gl_FragColor = pixel;
                                 }
                             `, gl, game);
 
@@ -4664,7 +4680,7 @@ Bagel = {
                             gl.enableVertexAttribArray(textureLocation); // Enable it
                             renderer.buffers.images = gl.createBuffer();
                             gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.images);
-                            gl.vertexAttribPointer(textureLocation, 3, gl.FLOAT, false, 0, 0);
+                            gl.vertexAttribPointer(textureLocation, 4, gl.FLOAT, false, 0, 0);
                             gl.bufferData(gl.ARRAY_BUFFER, renderer.textureCoordinates, gl.STATIC_DRAW);
 
                             let blankTexture = document.createElement("canvas");
@@ -6448,6 +6464,12 @@ Bagel = {
                     default: 90,
                     types: ["number"],
                     description: "The rotation of the bitmap in degrees."
+                },
+                alpha: {
+                    required: false,
+                    default: 1,
+                    types: ["number"],
+                    description: "The alpha for the bitmap sprite. 1 is fully visible, 0 is completely transparent."
                 }
             }
         },
@@ -6694,7 +6716,7 @@ Bagel = {
                         let textureCoords = renderer.textureCoordinates;
 
                         let i = renderer.bitmapIndexes[id] * 12;
-                        let a = renderer.bitmapIndexes[id] * 18;
+                        let a = renderer.bitmapIndexes[id] * 24;
 
 
                         vertices[i] = box.x - (box.width / 2);
@@ -6718,6 +6740,7 @@ Bagel = {
 
 
                         let textureId = renderer.textures[box.image][1];
+                        let alpha = box.alpha;
                         let xZero = 0;
                         if (box.width < 0) {
                             xZero = 1;
@@ -6737,28 +6760,34 @@ Bagel = {
                         textureCoords[a] = xZero;
                         textureCoords[a + 1] = yZero;
                         textureCoords[a + 2] = textureId;
+                        textureCoords[a + 3] = alpha;
 
-                        textureCoords[a + 3] = xOne;
-                        textureCoords[a + 4] = yZero;
-                        textureCoords[a + 5] = textureId;
+                        textureCoords[a + 4] = xOne;
+                        textureCoords[a + 5] = yZero;
+                        textureCoords[a + 6] = textureId;
+                        textureCoords[a + 7] = alpha;
 
-                        textureCoords[a + 6] = xZero;
-                        textureCoords[a + 7] = yOne;
-                        textureCoords[a + 8] = textureId;
-
-
-                        textureCoords[a + 9] = xZero;
-                        textureCoords[a + 10] = yOne;
-                        textureCoords[a + 11] = textureId;
+                        textureCoords[a + 8] = xZero;
+                        textureCoords[a + 9] = yOne;
+                        textureCoords[a + 10] = textureId;
+                        textureCoords[a + 11] = alpha;
 
 
-                        textureCoords[a + 12] = xOne;
-                        textureCoords[a + 13] = yZero;
+                        textureCoords[a + 12] = xZero;
+                        textureCoords[a + 13] = yOne;
                         textureCoords[a + 14] = textureId;
+                        textureCoords[a + 15] = alpha;
 
-                        textureCoords[a + 15] = xOne;
-                        textureCoords[a + 16] = yOne;
-                        textureCoords[a + 17] = textureId;
+
+                        textureCoords[a + 16] = xOne;
+                        textureCoords[a + 17] = yZero;
+                        textureCoords[a + 18] = textureId;
+                        textureCoords[a + 19] = alpha;
+
+                        textureCoords[a + 20] = xOne;
+                        textureCoords[a + 21] = yOne;
+                        textureCoords[a + 22] = textureId;
+                        textureCoords[a + 23] = alpha;
 
                         renderer.verticesUpdated = true;
                     }
