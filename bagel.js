@@ -5352,7 +5352,7 @@ Bagel = {
                                     subcheck: {
                                         initialDelay: {
                                             required: false,
-                                            default: 15,
+                                            default: 0,
                                             types: ["number"],
                                             description: "The number of frames to delay rendering and scripts by when the game is initialised in order to allow WebGL to initialise first."
                                         }
