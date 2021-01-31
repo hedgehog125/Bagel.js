@@ -38,6 +38,7 @@ Bagels = Bagel.init({
                     init: [
                         { // This just makes sure the bagel loads
                             code: me => {
+                                me.x = 0;
                                 me.visible = false;
                             },
                             stateToRun: "Hail the bagel overlords"
@@ -47,7 +48,7 @@ Bagels = Bagel.init({
                         {
                             code: me => {
                                 let i = 0;
-                                while (i < 3) {
+                                while (i < 2) {
                                     me.clone();
                                     i++;
                                 }
@@ -65,7 +66,6 @@ Bagels = Bagel.init({
                         init: [
                             me => {
                                 me.visible = true;
-                                me.scale = 0.75;
 
                                 me.x = Bagels.width / 2;
                                 me.y = Bagels.height / 2;
