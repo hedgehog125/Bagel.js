@@ -9,7 +9,9 @@ Store updates to vertices due to layers in a separate array before updating it s
 
 = Features =
 Render order
+
 Multiple texture map support. Add them as they're needed
+Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
 
 Canvas rotation. Currently locked at 90 degrees when sent to renderer
 
@@ -19,11 +21,11 @@ Update bitmap sprites when their texture is updated
 Asset preload, runs before init. Runs even when assets aren't being initialised
 
 
-Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
-
 Reserve dot prefix for textures
 
 WebGL renderer. The firefox performance is 392x the canvas performance! Don't forget context lost handling and giving up context on game deltetion
+
+The ability to remove or replace a default argument for a sprite type. Maybe only for some?
 
 enableSet option for assets
 
@@ -32,8 +34,6 @@ Built in FPS counter
 FPS stabilisation. Use the time elapsed to calcuate how many times to run the main code before rendering. 30hz displays would run the main code twice and then render and 120hz would run the code once then render but only on every other frame. Should Bagel.js attempt to catch up if it lags? Should frames be able to be dropped?
 
 Display render options in Bagel.js console message. Dynamic resolution and antialiasing. Warn when game is downscaled?
-
-Wait until innerWidth and height stop changing before updating resolution? Should help performance
 
 Gamepad support
 
@@ -1862,30 +1862,8 @@ Bagel = {
                                         obArg: false,
                                         args: {},
                                         fn: (sprite, args, game) => {
-                                            if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
-                                                return;
-                                            }
-                                            let layers = game.internal.renderer.layers;
-                                            let originalIndex = layers.indexOf(sprite.idIndex);
-
-                                            if (layers[layers.length - 1] == sprite.idIndex) {
-                                                return;
-                                            }
-
-                                            let oldSprite = layers[layers.length - 1];
-                                            layers[layers.length - 1] = sprite.idIndex;
-                                            layers[originalIndex] = null; // This can now be used by another sprite
-
-                                            let i = layers.length - 2;
-                                            while (i >= 0) {
-                                                if (layers[i] == null) {
-                                                    layers[i] = oldSprite;
-                                                    return;
-                                                }
-                                                let oldSprite2 = layers[i];
-                                                layers[i] = oldSprite;
-                                                oldSprite = oldSprite2;
-                                                i--;
+                                            if (sprite.internal.Bagel.renderID != null) {
+                                                Bagel.internal.render.bitmapSprite.bringToFront(sprite.internal.Bagel.renderID, game);
                                             }
                                         }
                                     }
@@ -1900,6 +1878,11 @@ Bagel = {
                                         obArg: false,
                                         args: {},
                                         fn: (sprite, args, game) => {
+                                            if (sprite.internal.Bagel.renderID != null) {
+                                                Bagel.internal.render.bitmapSprite.bringForwards(sprite.internal.Bagel.renderID, game);
+                                            }
+
+                                            /*
                                             if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
                                                 return;
                                             }
@@ -1913,6 +1896,7 @@ Bagel = {
                                             let oldSprite = layers[originalIndex + 1];
                                             layers[originalIndex + 1] = sprite.idIndex;
                                             layers[originalIndex] = oldSprite; // Swap them
+                                            */
                                         }
                                     }
                                 },
@@ -1926,6 +1910,11 @@ Bagel = {
                                         obArg: false,
                                         args: {},
                                         fn: (sprite, args, game) => {
+                                            if (sprite.internal.Bagel.renderID != null) {
+                                                Bagel.internal.render.bitmapSprite.sendToBack(sprite.internal.Bagel.renderID, game);
+                                            }
+
+                                            /*
                                             if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
                                                 return;
                                             }
@@ -1951,6 +1940,7 @@ Bagel = {
                                                 oldSprite = oldSprite2;
                                                 i++;
                                             }
+                                            */
                                         }
                                     }
                                 },
@@ -1964,6 +1954,11 @@ Bagel = {
                                         obArg: false,
                                         args: {},
                                         fn: (sprite, args, game) => {
+                                            if (sprite.internal.Bagel.renderID != null) {
+                                                Bagel.internal.render.bitmapSprite.sendBackwards(sprite.internal.Bagel.renderID, game);
+                                            }
+
+                                            /*
                                             if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
                                                 return;
                                             }
@@ -1977,6 +1972,7 @@ Bagel = {
                                             let oldSprite = layers[originalIndex - 1];
                                             layers[originalIndex - 1] = sprite.idIndex;
                                             layers[originalIndex] = oldSprite; // Swap them
+                                            */
                                         }
                                     }
                                 }
@@ -2898,6 +2894,7 @@ Bagel = {
                             lastBackgroundColour: null,
                             verticesUpdated: false,
 
+                            bitmapLayerQueue: [],
                             textures: {},
                             textureSlots: [true, true, true, true, true],
                             textureSlotsUsed: 0,
@@ -3738,10 +3735,10 @@ Bagel = {
                                                                     return ".rerun";
                                                                 }
                                                                 else {
-                                                                    let output = typeJSON.render.onVisible(triggerSprite, bitmapFunctions.new, game);
-                                                                    if (output != null) {
-                                                                        triggerSprite.internal.Bagel.renderID = output;
-                                                                    }
+                                                                    Bagel.internal.processSpriteRenderOutput(
+                                                                        triggerSprite
+                                                                        typeJSON.render.onVisible(triggerSprite, bitmapFunctions.new, game)
+                                                                    );
 
                                                                     triggerSprite.internal.Bagel.onVisibleTriggered = true;
                                                                 }
@@ -3750,12 +3747,10 @@ Bagel = {
                                                         else if (! initialTrigger) {
                                                             if (typeJSON.render.onInvisible) {
                                                                 if (triggerSprite.internal.Bagel.onVisibleTriggered) {
-                                                                    let output = typeJSON.render.onInvisible(triggerSprite, bitmapFunctions.delete, game);
-
-                                                                    if (output != null) {
-                                                                        if (output === true) output = null;
-                                                                        triggerSprite.internal.Bagel.renderID = output;
-                                                                    }
+                                                                    Bagel.internal.processSpriteRenderOutput(
+                                                                        triggerSprite,
+                                                                        typeJSON.render.onInvisible(triggerSprite, bitmapFunctions.delete, game)
+                                                                    );
                                                                 }
                                                                 else {
                                                                     return ".rerun";
@@ -4292,10 +4287,10 @@ Bagel = {
 
 
                     if (handler.render.init) {
-                        let output = handler.render.init(sprite, Bagel.internal.render.bitmapSprite.new, game);
-                        if (output != null) {
-                            sprite.internal.Bagel.renderID = output;
-                        }
+                        Bagel.internal.processSpriteRenderOutput(
+                            sprite,
+                            handler.render.init(sprite, Bagel.internal.render.bitmapSprite.new, game)
+                        );
                     }
                     Bagel.internal.loadCurrent();
                 }
@@ -4613,6 +4608,7 @@ Bagel = {
 
                                     gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.vertices);
                                     gl.bufferData(gl.ARRAY_BUFFER, newVertices, gl.DYNAMIC_DRAW);
+                                    renderer.verticesUpdated = false; // If anything was waiting to be sent to the GPU then it will have been sent by this request
 
                                     renderer.vertices = newVertices;
                                     renderer.textureCoordinates = newTextureCoords;
@@ -4621,6 +4617,81 @@ Bagel = {
                                     bitmapQueue.delete = {};
                                     renderer.queueLengths.add = 0;
                                     renderer.queueLengths.delete = 0;
+                                }
+                            },
+                            bitmapLayers: game => {
+                                let renderer = game.internal.renderer;
+                                let gl = renderer.gl;
+                                let queue = renderer.bitmapLayerQueue;
+
+
+                                let vertices = Array.from(game.internal.renderer.vertices);
+                                let textCoords = Array.from(game.internal.renderer.textureCoordinates);
+                                let bitmapIndexes = game.internal.renderer.bitmapIndexes;
+
+                                if (vertices.length == 0 || vertices.length == 12) { // Nothing to change
+                                    renderer.bitmapLayerQueue = [];
+                                    return;
+                                }
+
+
+                                if (queue.length != 0) {
+                                    for (let i in queue) {
+                                        let data = queue[i];
+                                        switch (data[0]) { // The type of layer operation
+                                            case 0: // Bring to front
+                                                let originalIndex = bitmapIndexes[data[1]];
+                                                if (originalIndex * 12 == vertices.length - 12) { // Already at the front
+                                                    break;
+                                                }
+
+                                                let thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
+                                                let thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+
+
+                                                vertices.splice(originalIndex * 12, 12); // Remove the bitmap
+                                                textCoords.splice(originalIndex * 24, 24);
+
+
+                                                vertices.push(...thisBitmapVertices); // Add the bitmap back
+                                                textCoords.push(...thisBitmapTextureCoords);
+
+
+
+                                                let i = 0;
+                                                while (i < bitmapIndexes.length) {
+                                                    if (bitmapIndexes[i] > originalIndex) {
+                                                        bitmapIndexes[i]--;
+                                                    }
+                                                    i++;
+                                                }
+                                                bitmapIndexes[data[1]] = (vertices.length / 12) - 1; // The bitmap that was sent to the front
+
+                                                break;
+                                            case 1: // Bring forwards
+
+                                                break;
+                                            case 2: // Send to back
+
+                                                break;
+                                            case 3: // Send backwards
+
+                                        }
+                                    }
+
+                                    vertices = new Float32Array(vertices);
+                                    textCoords = new Float32Array(textCoords);
+                                    renderer.vertices = vertices;
+                                    renderer.textureCoords = textCoords;
+
+
+                                    renderer.bitmapLayerQueue = [];
+
+                                    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.images);
+                                    gl.bufferData(gl.ARRAY_BUFFER, textCoords, gl.STATIC_DRAW);
+                                    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.vertices);
+                                    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
+                                    renderer.verticesUpdated = false;
                                 }
                             }
                         },
@@ -4762,6 +4833,8 @@ Bagel = {
                             let renderer = game.internal.renderer;
                             let gl = renderer.gl;
                             Bagel.internal.subFunctions.tick.render.webgl.queues.bitmap(game);
+                            Bagel.internal.subFunctions.tick.render.webgl.queues.bitmapLayers(game);
+
 
                             renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
                             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -4798,22 +4871,22 @@ Bagel = {
                         if (sprite == null) continue;
 
                         if (! sprite.internal.Bagel.rendererNotInitialised) {
-                            let handler = Bagels.internal.combinedPlugins.types.sprites[sprite.type];
+                            let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
 
                             let bitmapFunctions = Bagel.internal.render.bitmapSprite;
                             if (handler.render.tick) {
-                                let output = handler.render.tick(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game);
-                                if (output != null) {
-                                    sprite.internal.Bagel.renderID = output;
-                                }
+                                Bagel.internal.processSpriteRenderOutput(
+                                    sprite,
+                                    handler.render.tick(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game)
+                                );
                             }
 
                             if (sprite.internal.Bagel.properties.visible && sprite.internal.Bagel.onVisibleTriggered) { // Saves some resources by avoiding the getter
                                 if (handler.render.whileVisible) {
-                                    let output = handler.render.whileVisible(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game);
-                                    if (output != null) {
-                                        sprite.internal.Bagel.renderID = output;
-                                    }
+                                    Bagel.internal.processSpriteRenderOutput(
+                                        sprite,
+                                        handler.render.whileVisible(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game)
+                                    );
                                 }
                             }
                         }
@@ -5352,7 +5425,7 @@ Bagel = {
                                     subcheck: {
                                         initialDelay: {
                                             required: false,
-                                            default: 0,
+                                            default: 15,
                                             types: ["number"],
                                             description: "The number of frames to delay rendering and scripts by when the game is initialised in order to allow WebGL to initialise first."
                                         }
@@ -6221,7 +6294,7 @@ Bagel = {
                                                 init: {
                                                     required: false,
                                                     types: ["function"],
-                                                    description: "(Most of the time you'll want to use \"onVisible\" instead) A function that runs when the sprite is made visible. The function is called with the sprite, the new bitmapSprite function and the game object."
+                                                    description: "(Most of the time you'll want to use \"onVisible\" instead) A function that runs when the sprite is first created. The function is called with the sprite, the new bitmapSprite function and the game object."
                                                 },
                                                 tick: {
                                                     required: false,
@@ -6232,12 +6305,12 @@ Bagel = {
                                                 onVisible: {
                                                     required: false,
                                                     types: ["function"],
-                                                    description: "A function that runs every time the sprite is made visible. Most of the time you'll want to use this to set up the rendering for the sprite. You can do this by calling \"Bagel.internal.render.bitmapSprite.new\" (also provided as the second argument). You should then store the value returned by returning it. This will store it in \"sprite.internal.Bagel.renderID\". You also need to update the values using listeners on sprite properties. You can do this using \"Bagel.internal.render.bitmapSprite.update\".\nThe on visible function is called with the sprite, the new bitmapSprite function and the game object."
+                                                    description: "A function that runs every time the sprite is made visible. Most of the time you'll want to use this to set up the rendering for the sprite. You can do this by calling \"Bagel.internal.render.bitmapSprite.new\" (also provided as the second argument). You should then store the value returned by returning it. This will store it in sprite.internal.Bagel.renderID. You also need to update the values using listeners on sprite properties. You can do this using \"Bagel.internal.render.bitmapSprite.update\".\nThe on visible function is called with the sprite, the new bitmapSprite function and the game object."
                                                 },
                                                 onInvisible: {
                                                     required: false,
                                                     types: ["function"],
-                                                    description: "A function that runs every time the sprite is made visible. Most of the time you'll want to use this to delete the rendering for the sprite (make sure you return true to tell Bagel.js you've deleted it if you have).\nThe on invisible function is called with the sprite, the delete bitmapSprite function and the game object."
+                                                    description: "A function that runs every time the sprite is made visible. Most of the time you'll want to use this to delete the rendering for the sprite (you can return true to set sprite.internal.Bagel.renderID to null).\nThe on invisible function is called with the sprite, the delete bitmapSprite function and the game object."
                                                 },
                                                 whileVisible: {
                                                     required: false,
@@ -6246,7 +6319,7 @@ Bagel = {
                                                 }
                                             },
                                             types: ["object"],
-                                            description: "Contains some render related events. Most of the time you'll want to use \"init\" as described in its description."
+                                            description: "Contains some render related events. Most of the time you'll want to use \"onVisible\", \"onInvisible\" and \"whileVisible\" as described in their descriptions."
                                         }
                                     },
                                     types: ["object"],
@@ -6928,6 +7001,40 @@ Bagel = {
                             renderer.verticesUpdated = true;
                         }
                     }
+                },
+                bringToFront: (id, game) => {
+                    Bagel.internal.render.bitmapSprite.internal.queueRenderOrder(0, id, game);
+                },
+                bringForwards: (id, game) => {
+                    Bagel.internal.render.bitmapSprite.internal.queueRenderOrder(1, id, game);
+                },
+                sendToBack: (id, game) => {
+                    Bagel.internal.render.bitmapSprite.internal.queueRenderOrder(2, id, game);
+                },
+                sendBackwards: (id, game) => {
+                    Bagel.internal.render.bitmapSprite.internal.queueRenderOrder(3, id, game);
+                },
+                internal: {
+                    queueRenderOrder: (type, id, game) => {
+                        if (Bagel.internal.getTypeOf(game) != "object") {
+                            if (game) {
+                                console.error("Huh, looks like you didn't specify the game properly (it's the 2nd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
+                            }
+                            else {
+                                console.error("Hmm, looks like you forgot to specify the game object. (2nd argument)");
+                            }
+                            Bagel.internal.oops(Bagel.internal.current.game);
+                        }
+
+                        let renderer = game.internal.renderer;
+                        if (renderer.bitmapIndexes[id] == null) {
+                            console.error("Err, Bagel.js couldn't find the bitmap sprite with the id " + JSON.stringify(id) + ". You might have deleted it.");
+                            Bagel.internal.oops(game);
+                        }
+                        else {
+                            renderer.bitmapLayerQueue.push([type, id]);
+                        }
+                    }
                 }
             },
             texture: {
@@ -7085,6 +7192,13 @@ Bagel = {
                 return true;
             }
             return false;
+        },
+
+        processSpriteRenderOutput: (sprite, output) => {
+            if (output != null) {
+                if (output === true) output = null;
+                triggerSprite.internal.Bagel.renderID = output;
+            }
         },
 
         requestAnimationFrame: window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,

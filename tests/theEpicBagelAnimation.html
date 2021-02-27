@@ -40,6 +40,7 @@ Bagels = Bagel.init({
                             code: me => {
                                 me.x = 0;
                                 me.visible = false;
+                                me.scale = 0.75;
                             },
                             stateToRun: "Hail the bagel overlords"
                         }
@@ -71,6 +72,7 @@ Bagels = Bagel.init({
                                 me.y = Bagels.height / 2;
 
                                 me.angle = (Math.random() * 360) - 180;
+                                me.move(-1); // The main code gets run on the first frame so this will cancel it out
                             }
                         ],
                         main: [

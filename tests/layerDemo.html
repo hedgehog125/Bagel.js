@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="A simple animation in Bagel.js">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>
+            A simple Bagel.js demo of the draw order
+        </title>
+    </head>
+    <body bgColor="white">
+        <p id="debug"></p>
+    </body>
+</html>
+<script src="../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "Bagel",
+    game: {
+        assets: {
+            imgs: [
+                {
+                    id: "Bagel",
+                    src: "../assets/imgs/bagel.png"
+                }
+            ],
+            snds: []
+        },
+        scripts: {
+            main: [
+                {
+                    code: game => {
+                        if (game.vars.layerTick > 180) {
+                            game.vars.layerTick = 1;
+                        }
+                        game.vars.layerTick++;
+                    },
+                    stateToRun: "game"
+                }
+            ]
+        },
+        sprites: [
+            {
+                id: "Bagels",
+                clones: {
+                    visible: true,
+                    scripts: {
+                        main: [
+                            (me, game) => {
+                                if (game.vars.layerTick == 60 * (me.cloneID + 1)) {
+                                    me.layer.bringToFront();
+                                }
+                            }
+                        ]
+                    }
+                },
+                scripts: {
+                    init: [
+                        {
+                            code: me => {
+                                me.visible = false;
+
+                                me.clone({
+                                    x: me.x - 20,
+                                    y: me.y - 20
+                                });
+                                me.clone();
+                                me.clone({
+                                    x: me.x + 20,
+                                    y: me.y + 20
+                                });
+                            },
+                            stateToRun: "game"
+                        }
+                    ]
+                },
+                x: (me, game) => game.width / 2,
+                y: (me, game) => game.height / 2,
+                img: "Bagel"
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    state: "game",
+
+    vars: {
+        layerTick: 0
+    },
+    config: {
+        display: {
+            mode: "fill"
+        },
+        loading: {
+            skip: false,
+            mode: "dynamic"
+        }
+    }
+});
+
+</script>
