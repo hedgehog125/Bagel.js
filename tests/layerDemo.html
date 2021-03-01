@@ -48,8 +48,12 @@ game = Bagel.init({
                     scripts: {
                         main: [
                             (me, game) => {
+                                if (game.vars.layerTick % 60 == 0) {
+                                    me.scale = 1;
+                                }
                                 if (game.vars.layerTick == 60 * (me.cloneID + 1)) {
                                     me.layer.bringToFront();
+                                    me.scale = 0.5;
                                 }
                             }
                         ]
