@@ -4,9 +4,14 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_test
 
 TODO:
-= Features =
-Render order
+== Bugs ==
+Negative widths and heights don't work
 
+Are textures deleted when canvases are deleted?
+
+(When clearRect is used instead of fillRect in the loading screens in non-chromium browsers, a line appears at the boarder of the arc when rendered onto the main canvas)
+
+= Features =
 Multiple texture map support. Add them as they're needed
 Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
 
@@ -15,12 +20,16 @@ Canvas rotation. Currently locked at 90 degrees when sent to renderer
 
 Update bitmap sprites when their texture is updated
 
+Should assets be able to be set? The video plugin could create a texture? Image sprites should look for textures instead of images?
+
 Asset preload, runs before init. Runs even when assets aren't being initialised
 
 
 Reserve dot prefix for textures
 
-WebGL renderer. The firefox performance is 392x the canvas performance! Don't forget context lost handling and giving up context on game deltetion
+Canvas renderer
+
+Context lost handling
 
 The ability to remove or replace a default argument for a sprite type. Maybe only for some?
 
@@ -4519,14 +4528,14 @@ Bagel = {
                                             renderer.bitmapIndexes[box[1]] = previousCount + b;
                                             box = box[0];
 
-                                            newVertices[i] = box.x - (box.width / 2);
-                                            newVertices[i + 1] = box.y - (box.height / 2);
+                                            newVertices[i] = box.x - Math.abs(box.width / 2);
+                                            newVertices[i + 1] = box.y - Math.abs(box.height / 2);
 
-                                            newVertices[i + 2] = box.x + (box.width / 2);
+                                            newVertices[i + 2] = box.x + Math.abs(box.width / 2);
                                             newVertices[i + 3] = newVertices[i + 1];
 
                                             newVertices[i + 4] = newVertices[i];
-                                            newVertices[i + 5] = box.y + (box.height / 2);
+                                            newVertices[i + 5] = box.y + Math.abs(box.height / 2);
 
 
                                             newVertices[i + 6] = newVertices[i];
@@ -4545,20 +4554,16 @@ Bagel = {
                                             let textureId = renderer.textures[box.image][1];
                                             let alpha = box.alpha;
                                             let xZero = 0;
-                                            if (box.width < 0) {
-                                                xZero = 1;
-                                            }
                                             let xOne = 1;
                                             if (box.width < 0) {
-                                                xZero = 0;
+                                                xZero = 1;
+                                                xOne = 0;
                                             }
                                             let yZero = 0;
-                                            if (box.height < 0) {
-                                                yZero = 1;
-                                            }
                                             let yOne = 1;
                                             if (box.height < 0) {
-                                                yZero = 0;
+                                                yZero = 1;
+                                                yOne = 0;
                                             }
                                             newTextureCoords[a] = xZero;
                                             newTextureCoords[a + 1] = yZero;
@@ -4759,7 +4764,7 @@ Bagel = {
                             }
                         },
                         rotateVertices: (vertices, i, angle, cx, cy) => {
-                            let rad = Bagel.maths.degToRad(angle);
+                            let rad = Bagel.maths.degToRad(angle - 90);
                             let sin = Math.sin(rad);
                             let cos = Math.cos(rad);
 
@@ -4769,8 +4774,8 @@ Bagel = {
                                 let y = vertices[i + 1];
 
                                 // Somewhat adapted from https://stackoverflow.com/questions/17410809/how-to-calculate-rotation-in-2d-in-javascript
-                                vertices[i] = -(sin * (x - cx)) + (cos * (y - cy)) + cx;
-                                vertices[i + 1] = -(sin * (cy - y)) + (cos * (x - cx)) + cy;
+                                vertices[i] = (cos * (x - cx)) + (sin * (y - cy)) + cx;
+                                vertices[i + 1] = (cos * (y - cy)) - (sin * (x - cx)) + cy;
 
                                 c++;
                                 i += 2;
@@ -5016,6 +5021,8 @@ Bagel = {
                         subFunctions.scripts("main", false, game, state);
                         subFunctions.scripts("all", true, game, state);
                         subFunctions.scripts("all", false, game, state);
+
+
                         if (Bagel.internal.games[game.id] == null) return;
 
                         subFunctions.spriteRenderTick(game);
@@ -5488,7 +5495,7 @@ Bagel = {
                                     subcheck: {
                                         initialDelay: {
                                             required: false,
-                                            default: 15,
+                                            default: 0,
                                             types: ["number"],
                                             description: "The number of frames to delay rendering and scripts by when the game is initialised in order to allow WebGL to initialise first."
                                         }
@@ -5573,7 +5580,7 @@ Bagel = {
                                                         else {
                                                             ctx.fillStyle = gameConfig.display.backgroundColour;
                                                         }
-                                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                                        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                                                         if (game.vars.stage == 0) {
                                                             if (game.vars.angle != -90) {
@@ -5593,6 +5600,7 @@ Bagel = {
                                                                 game.vars.stage++;
                                                                 return;
                                                             }
+
                                                             ctx.beginPath();
                                                             ctx.moveTo(midPoint, midPoint);
                                                             ctx.arc(midPoint, midPoint, midPoint * 2, Bagel.maths.degToRad(-90), Bagel.maths.degToRad(game.vars.angle), true);
