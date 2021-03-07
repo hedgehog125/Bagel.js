@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        Lots of textures
+    </title>
+</head>
+<body bgColor="#202020"></body>
+
+<script src="../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "Bagel",
+    game: {
+        assets: {
+            imgs: [
+                {
+                    id: "Bagel",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel2",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel3",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel4",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel5",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel6",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel7",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel8",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel9",
+                    src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "Bagel10",
+                    src: "../assets/imgs/bagel.png"
+                }
+            ],
+            snds: []
+        },
+        sprites: [
+            {
+                id: "Bagel",
+                scripts: {
+                    init: [
+                        {
+                            code: me => {
+                                me.x = game.width / 2;
+                                me.y = game.height / 2;
+                            },
+                            stateToRun: "game"
+                        }
+                    ],
+                    main: [
+                        {
+                            code: me => {
+                                me.angle++;
+                            },
+                            stateToRun: "game"
+                        }
+                    ]
+                },
+                img: "Bagel",
+                scale: 5,
+                x: 0,
+                y: 0
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    state: "game",
+    config: {
+        loading: {
+            skip: false,
+            mode: "preload"
+        }
+    }
+});
+
+/*
+setInterval(_ => {
+    game.internal.renderer.canvas.toBlob(blob => {
+        let img = new Image();
+        img.src = URL.createObjectURL(blob);
+        img.style.width = "25x";
+        img.style.height = "25px";
+        img.style.border = "1px solid black";
+        document.body.appendChild(img);
+    });
+}, 15);
+*/
+
+</script>

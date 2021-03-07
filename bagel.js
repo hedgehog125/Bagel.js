@@ -5,11 +5,13 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
-Negative widths and heights don't work
-
 Are textures deleted when canvases are deleted?
 
 (When clearRect is used instead of fillRect in the loading screens in non-chromium browsers, a line appears at the boarder of the arc when rendered onto the main canvas)
+
+Spritemaps don't work
+
+First 15 or so frames are rendered but not displayed to the user sometimes. Seems to be outside of Bagel.js's control as it seems to be somewhat random. Maybe can detect page render?
 
 = Features =
 Multiple texture map support. Add them as they're needed
@@ -3135,6 +3137,7 @@ Bagel = {
                 misc: game => {
                     game.loaded = false;
                     game.paused = false;
+                    game.error = false;
                     game.currentFPS = 60;
                     game.maxPossibleFPS = 60;
 
@@ -3159,7 +3162,11 @@ Bagel = {
                     renderer.type = game.config.display.renderer;
                     let antialiasing = game.config.display.antialiasing;
                     if (renderer.type == "webgl") {
-                        renderer.gl = renderer.canvas.getContext("webgl", {antialiasing: antialiasing}) || renderer.canvas.getContext("experimental-webgl", {antialiasing: antialiasing});
+                        renderer.gl = renderer.canvas.getContext("webgl", {
+                            antialiasing: antialiasing
+                        }) || renderer.canvas.getContext("experimental-webgl", {
+                            antialiasing: antialiasing
+                        });
                         renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
 
                         renderer.colourCanvas = document.createElement("canvas");
@@ -3447,6 +3454,7 @@ Bagel = {
 
                         loadingScreen = Bagel.init(loadingScreen);
                         game.internal.loadingScreen = loadingScreen;
+
 
                         if (game.internal.renderer.type == "webgl") {
                             Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game);
@@ -4835,7 +4843,9 @@ Bagel = {
 
                                 void main () {
                                     pixel = getPixel();
-                                    pixel *= v_texcoord.w;
+                                    pixel.rgb *= pixel.a * v_texcoord.a;
+                                    pixel.a *= v_texcoord.a;
+
                                     gl_FragColor = pixel;
                                 }
                             `, gl, game);
@@ -4930,6 +4940,7 @@ Bagel = {
 
                                 gl.drawArrays(gl.TRIANGLES, 0, renderer.vertices.length / 2);
                             }
+
                         }
                     }
                 },
@@ -5580,7 +5591,7 @@ Bagel = {
                                                         else {
                                                             ctx.fillStyle = gameConfig.display.backgroundColour;
                                                         }
-                                                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                                                         if (game.vars.stage == 0) {
                                                             if (game.vars.angle != -90) {
@@ -6809,6 +6820,7 @@ Bagel = {
                 throw "Critical Bagel.js error, please look at the error above for more info. ^-^";
             }
             game.paused = true;
+            game.error = true;
             throw "Critical Bagel.js error in the game " + JSON.stringify(game.id) + ", look at the error for some help. ^-^";
         },
 
@@ -7154,8 +7166,10 @@ Bagel = {
                             }
 
                             if (index == renderer.maxTextureSlots) {
-                                console.error("Huh, that wasn't supposed to happen. Bagel.js ran out of textures.");
-                                Bagel.internal.oops(game);
+                                if (! game.error) {
+                                    console.error("Huh, that wasn't supposed to happen. Bagel.js ran out of textures. Try and reduce the number your'e using (tip: canvas sprites have a separate texture for every clone by default) or use lower resolution textures. If you can't do either, you can try using the \"canvas\" renderer instead.\nYou can see the texture utilisation using game.debug.textures.displayCombined().");
+                                    Bagel.internal.oops(game);
+                                }
                             }
 
 
