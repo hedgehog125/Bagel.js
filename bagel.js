@@ -2729,6 +2729,8 @@ Bagel = {
                     rerunIndex: {},
                     rendererNotInitialised: true,
                     onVisibleTriggered: false,
+                    onVisibleTriggeredBefore: false,
+                    onInvisibleTriggered: false,
                     renderID: null
                 }
             };
@@ -3749,22 +3751,30 @@ Bagel = {
                                                                     return ".rerun";
                                                                 }
                                                                 else {
-                                                                    Bagel.internal.processSpriteRenderOutput(
-                                                                        triggerSprite,
-                                                                        typeJSON.render.onVisible(triggerSprite, bitmapFunctions.new, game)
-                                                                    );
+                                                                    if (! triggerSprite.internal.Bagel.onVisibleTriggered) {
+                                                                        Bagel.internal.processSpriteRenderOutput(
+                                                                            triggerSprite,
+                                                                            typeJSON.render.onVisible(triggerSprite, bitmapFunctions.new, game)
+                                                                        );
 
-                                                                    triggerSprite.internal.Bagel.onVisibleTriggered = true;
+                                                                        triggerSprite.internal.Bagel.onVisibleTriggered = true;
+                                                                        triggerSprite.internal.Bagel.onVisibleTriggeredBefore = true;
+                                                                        triggerSprite.internal.Bagel.onInvisibleTriggered = false;
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                         else if (! initialTrigger) {
                                                             if (typeJSON.render.onInvisible) {
-                                                                if (triggerSprite.internal.Bagel.onVisibleTriggered) {
-                                                                    Bagel.internal.processSpriteRenderOutput(
-                                                                        triggerSprite,
-                                                                        typeJSON.render.onInvisible(triggerSprite, bitmapFunctions.delete, game)
-                                                                    );
+                                                                if (triggerSprite.internal.Bagel.onVisibleTriggeredBefore) {
+                                                                    if (! triggerSprite.internal.Bagel.onInvisibleTriggered) {
+                                                                        Bagel.internal.processSpriteRenderOutput(
+                                                                            triggerSprite,
+                                                                            typeJSON.render.onInvisible(triggerSprite, bitmapFunctions.delete, game)
+                                                                        );
+                                                                        triggerSprite.internal.Bagel.onVisibleTriggered = false; // Can be triggered again
+                                                                        triggerSprite.internal.Bagel.onInvisibleTriggered = true;
+                                                                    }
                                                                 }
                                                                 else {
                                                                     return ".rerun";
