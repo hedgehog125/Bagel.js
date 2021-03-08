@@ -5,17 +5,21 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
-Are textures deleted when canvases are deleted?
+Textures sometimes have a few pixels from other textures. Maybe related to antialiasing?
 
-(When clearRect is used instead of fillRect in the loading screens in non-chromium browsers, a line appears at the boarder of the arc when rendered onto the main canvas)
+Are textures deleted when canvases are deleted?
 
 Spritemaps don't work
 
 First 15 or so frames are rendered but not displayed to the user sometimes. Seems to be outside of Bagel.js's control as it seems to be somewhat random. Maybe can detect page render?
 
 = Features =
-Multiple texture map support. Add them as they're needed
+Reverse changes to lines when removing textures
+
 Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
+
+game.debug.textures.displayCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
+Game.config.display.minimumLimits
 
 Canvas rotation. Currently locked at 90 degrees when sent to renderer
 
@@ -62,6 +66,7 @@ Bagel = {
         Bagel.internal.saveCurrent();
         current.game = game;
         game = subFunctions.check(game);
+        Bagel.internal.games[game.id] = game;
 
         subFunctions.misc(game);
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
@@ -72,7 +77,6 @@ Bagel = {
         if (! game.config.disableBagelJSMessage) {
             console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
         }
-        Bagel.internal.games[game.id] = game;
         Bagel.internal.loadCurrent();
         return game;
     },
@@ -2903,12 +2907,14 @@ Bagel = {
                             colourCtx: null,
                             lastBackgroundColour: null,
                             verticesUpdated: false,
+                            displayedDownscaleWarning: false,
 
                             bitmapLayerQueue: [],
                             textures: {},
-                            textureSlots: [true, true, true, true, true],
-                            textureSlotsUsed: 0,
-                            maxTextureSlots: 5,
+                            textureSlots: [],
+                            combinedTextures: [],
+                            bitmapsUsingTextures: {},
+                            maxTextureSlots: null,
 
                             width: game.width,
                             height: game.height,
@@ -3151,7 +3157,11 @@ Bagel = {
                     if (game.config.display.renderer == "auto") {
                         // This is just to test
                         let canvas = document.createElement("canvas");
-                        let gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+                        let gl = canvas.getContext("webgl", {
+                            failIfMajorPerformanceCaveat: true // It's not worth using if it's going to be slow
+                        }) || canvas.getContext("experimental-webgl", {
+                            failIfMajorPerformanceCaveat: true
+                        });
                         if (gl == null) { // No webgl
                             game.config.display.renderer = "canvas";
                         }
@@ -3161,14 +3171,17 @@ Bagel = {
                         }
                     }
 
-                    renderer.type = game.config.display.renderer;
-                    let antialiasing = game.config.display.antialiasing;
+                    let config = game.config;
+                    renderer.type = config.display.renderer;
+                    let antialiasing = config.display.antialiasing;
                     if (renderer.type == "webgl") {
-                        renderer.gl = renderer.canvas.getContext("webgl", {
-                            antialiasing: antialiasing
-                        }) || renderer.canvas.getContext("experimental-webgl", {
-                            antialiasing: antialiasing
-                        });
+                        let settings = {
+                            antialiasing: antialiasing,
+                            //alpha: config.display.backgroundColour == "transparent", //Disabling alpha seems to hurt performance sometimes so it's left off for now
+                            powerPreference: "high-performance",
+                            depth: false
+                        };
+                        renderer.gl = renderer.canvas.getContext("webgl", settings) || renderer.canvas.getContext("experimental-webgl", settings);
                         renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
 
                         renderer.colourCanvas = document.createElement("canvas");
@@ -3177,11 +3190,13 @@ Bagel = {
                         renderer.colourCtx = renderer.colourCanvas.getContext("2d");
                     }
                     else {
-                        renderer.ctx = renderer.canvas.getContext("2d");
+                        renderer.ctx = renderer.canvas.getContext("2d", {
+                            alpha: game.config.display.backgroundColour == "transparent"
+                        });
                         renderer.ctx.imageSmoothingEnabled = antialiasing;
                     }
 
-                    if (game.config.display.mode == "fill") {
+                    if (config.display.mode == "fill") {
                         renderer.canvas.style = "margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp
                     }
                     else {
@@ -3457,21 +3472,6 @@ Bagel = {
                         loadingScreen = Bagel.init(loadingScreen);
                         game.internal.loadingScreen = loadingScreen;
 
-
-                        if (game.internal.renderer.type == "webgl") {
-                            Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game);
-
-                            game.internal.loadingScreenRenderID = Bagel.internal.render.bitmapSprite.new({
-                                x: game.width / 2,
-                                y: game.height / 2,
-                                width: game.width,
-                                height: game.height,
-                                image: ".Internal.loadingScreen",
-                                rotation: 90,
-                                alpha: 1
-                            }, game, false);
-                        }
-
                         Bagel.internal.loadCurrent();
                     }
                 },
@@ -3514,6 +3514,29 @@ Bagel = {
                     let renderers = Bagel.internal.subFunctions.tick.render;
                     if (renderers[rendererType].init) {
                         renderers[rendererType].init(game);
+                    }
+
+                    let missingImage = new Image();
+                    missingImage.onload = _ => {
+                        Bagel.internal.render.texture.new(".Internal.missing", missingImage, game);
+                    };
+                    missingImage.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAF0lEQVQYVwXBAQEAAACCIPo/2mAoWWrmOPoF/8JfnIkAAAAASUVORK5CYII=";
+
+                    let loadingScreen = game.internal.loadingScreen;
+                    if (loadingScreen) {
+                        if (game.internal.renderer.type == "webgl") {
+                            Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game);
+
+                            game.internal.loadingScreenRenderID = Bagel.internal.render.bitmapSprite.new({
+                                x: game.width / 2,
+                                y: game.height / 2,
+                                width: game.width,
+                                height: game.height,
+                                image: ".Internal.loadingScreen",
+                                rotation: 90,
+                                alpha: 1
+                            }, game, false);
+                        }
                     }
                 },
                 onPluginsReady: game => {
@@ -4568,20 +4591,21 @@ Bagel = {
                                             Bagel.internal.subFunctions.tick.render.webgl.rotateVertices(newVertices, i, box.rotation, box.x, box.y);
 
 
-
-                                            let textureId = renderer.textures[box.image][1];
+                                            // [webgltexture, index, x, y, x + width, y + height, width, height]
+                                            let texture = renderer.textures[box.image];
+                                            let textureId = texture[1];
                                             let alpha = box.alpha;
-                                            let xZero = 0;
-                                            let xOne = 1;
+                                            let xZero = texture[2];
+                                            let xOne = texture[4];
                                             if (box.width < 0) {
-                                                xZero = 1;
-                                                xOne = 0;
+                                                xZero = texture[4];
+                                                xOne = texture[2];
                                             }
-                                            let yZero = 0;
-                                            let yOne = 1;
+                                            let yZero = texture[3];
+                                            let yOne = texture[5];
                                             if (box.height < 0) {
-                                                yZero = 1;
-                                                yOne = 0;
+                                                yZero = texture[5];
+                                                yOne = texture[3];
                                             }
                                             newTextureCoords[a] = xZero;
                                             newTextureCoords[a + 1] = yZero;
@@ -4804,6 +4828,7 @@ Bagel = {
                             let renderer = game.internal.renderer;
                             let gl = renderer.gl;
 
+
                             let compileShader = Bagel.internal.subFunctions.tick.render.webgl.compileShader;
                             let vertex = compileShader(gl.VERTEX_SHADER, `
                                 attribute vec2 a_vertices;
@@ -4823,9 +4848,23 @@ Bagel = {
                                     );
                                 }
                             `, gl, game);
+
+                            let textureCount = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+                            renderer.maxTextureSlots = textureCount;
+
+                            let textureCode = "";
+                            let c = 1;
+                            while (c < textureCount) { // WebGL texture accessing has to be determined at compilation so the code for all the uses has to be preprogrammed in
+                                textureCode += `
+                                else if (textureID == <c>) {
+                                    pixel = texture2D(u_images[<c>], v_texcoord.xy);
+                                }`.replaceAll("<c>", c);
+                                c++;
+                            }
+
                             let fragment = compileShader(gl.FRAGMENT_SHADER, `
                                 precision mediump float;
-                                uniform sampler2D u_images[5];
+                                uniform sampler2D u_images[<textureCount>];
                                 varying vec4 v_texcoord;
 
                                 // From https://gamedev.stackexchange.com/questions/34278/can-you-dynamically-set-which-texture-to-use-in-shader
@@ -4835,19 +4874,7 @@ Bagel = {
                                     int textureID = int(v_texcoord.z);
                                     if (textureID == 0) {
                                         pixel = texture2D(u_images[0], v_texcoord.xy);
-                                    }
-                                    else if (textureID == 1) {
-                                        pixel = texture2D(u_images[1], v_texcoord.xy);
-                                    }
-                                    else if (textureID == 2) {
-                                        pixel = texture2D(u_images[2], v_texcoord.xy);
-                                    }
-                                    else if (textureID == 3) {
-                                        pixel = texture2D(u_images[3], v_texcoord.xy);
-                                    }
-                                    else if (textureID == 4) {
-                                        pixel = texture2D(u_images[4], v_texcoord.xy);
-                                    }
+                                    }[...]
                                     return pixel;
                                 }
 
@@ -4858,7 +4885,7 @@ Bagel = {
 
                                     gl_FragColor = pixel;
                                 }
-                            `, gl, game);
+                            `.replace("[...]", textureCode).replace("<textureCount>", textureCount), gl, game);
 
                             let program = gl.createProgram();
                             gl.attachShader(program, vertex);
@@ -4878,7 +4905,7 @@ Bagel = {
 
                             // https://stackoverflow.com/questions/19592850/how-to-bind-an-array-of-textures-to-a-webgl-shader-uniform
                             renderer.locations.images = gl.getUniformLocation(program, "u_images");
-                            gl.uniform1iv(renderer.locations.images, [0, 1, 2, 3, 4]);
+                            gl.uniform1iv(renderer.locations.images, [...Array(textureCount).keys()]);
 
                             let verticesLocation = gl.getAttribLocation(program, "a_vertices");
                             gl.enableVertexAttribArray(verticesLocation); // Enable it
@@ -4899,7 +4926,7 @@ Bagel = {
                             blankTexture.height = 1;
 
                             let i = 0;
-                            while (i < 5) { // Fill the webgl textures with blank textures
+                            while (i < textureCount) { // Fill the webgl textures with blank textures
                                 let webgltexture = gl.createTexture();
                                 gl.activeTexture(gl.TEXTURE0 + i);
                                 gl.bindTexture(gl.TEXTURE_2D, webgltexture);
@@ -4909,6 +4936,7 @@ Bagel = {
                                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
                                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, blankTexture);
 
+                                renderer.textureSlots.push([true, webgltexture]);
                                 i++;
                             }
 
@@ -4925,7 +4953,6 @@ Bagel = {
 
 
                             renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
-                            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                             let backgroundColour = game.config.display.backgroundColour;
                             if (backgroundColour != renderer.lastBackgroundColour) {
                                 renderer.colourCtx.fillStyle = backgroundColour;
@@ -4937,6 +4964,7 @@ Bagel = {
                             }
                             backgroundColour = renderer.backgroundColour;
                             gl.clearColor(backgroundColour[0], backgroundColour[1], backgroundColour[2], backgroundColour[3]);
+                            gl.clear(gl.COLOR_BUFFER_BIT);
 
                             if (renderer.vertices.length != 0) {
                                 if (renderer.verticesUpdated) {
@@ -4950,7 +4978,6 @@ Bagel = {
 
                                 gl.drawArrays(gl.TRIANGLES, 0, renderer.vertices.length / 2);
                             }
-
                         }
                     }
                 },
@@ -6921,7 +6948,7 @@ Bagel = {
                     }
 
                     if (game.internal.renderer.textures[data.image] == null) {
-                        console.error("Oh no! Bagel.js couldn't find the texture " + JSON.stringify(data.image) + " for your bitmap sprite. Make sure your \"texture\" argument is correct.");
+                        console.error("Oh no! Bagel.js couldn't find the texture " + JSON.stringify(data.image) + " for your bitmap sprite. Make sure your \"image\" argument (part of the data argument) is correct.");
                         Bagel.internal.oops(game);
                     }
 
@@ -6935,6 +6962,8 @@ Bagel = {
                             id++;
                         }
                         renderer.bitmapIndexes[id] = true;
+                        renderer.bitmapSpriteData[id] = data;
+                        renderer.bitmapsUsingTextures[data.image].push(id);
 
                         renderer.queue.bitmap.new.push([data, id]); // Queue it to be added rather than just adding it as adding multiple at a time is more efficient
                         renderer.queueLengths.add++;
@@ -6978,7 +7007,11 @@ Bagel = {
                             renderer.queue.bitmap.delete[renderer.bitmapIndexes[id]] = true;
                             renderer.queueLengths.delete++;
                         }
+                        let usingTextures = renderer.bitmapsUsingTextures[renderer.bitmapSpriteData[id].image];
+                        usingTextures[usingTextures.indexOf(id)] = null;
+
                         renderer.bitmapIndexes[id] = null;
+                        renderer.bitmapSpriteData[id] = null;
                     }
                     return true;
                 },
@@ -7001,12 +7034,25 @@ Bagel = {
                         });
                     }
 
+                    if (game.internal.renderer.textures[box.image] == null) {
+                        console.error("Oh no! Bagel.js couldn't find the texture " + JSON.stringify(data.image) + " for your bitmap sprite. Make sure your \"image\" argument (part of the data argument) is correct.");
+                        Bagel.internal.oops(game);
+                    }
+
                     let renderer = game.internal.renderer;
                     if (renderer.bitmapIndexes[id] == null) {
                         console.error("Hmm, Bagel.js couldn't find the bitmap sprite with the id " + JSON.stringify(id) + ".");
                         Bagel.internal.oops(game);
                     }
                     else {
+                        if (renderer.bitmapSpriteData[id].image != box.image) { // The image has changed
+                            let usingTextures = renderer.bitmapsUsingTextures[renderer.bitmapSpriteData[id].image];
+                            usingTextures[usingTextures.indexOf(id)] = null; // Remove the old
+                            renderer.bitmapsUsingTextures[box.image].push(id); // Add the new
+                        }
+                        renderer.bitmapSpriteData[id] = box;
+
+
                         if (renderer.bitmapIndexes[id] === true) { // Still pending to be added
                             let oldBox = renderer.queue.bitmap.new.find(item => item[1] == id);
                             oldBox[0] = box;
@@ -7041,23 +7087,20 @@ Bagel = {
                             Bagel.internal.subFunctions.tick.render.webgl.rotateVertices(vertices, i, box.rotation, box.x, box.y);
 
 
-                            let textureId = renderer.textures[box.image][1];
+                            let texture = renderer.textures[box.image];
+                            let textureId = texture[1];
                             let alpha = box.alpha;
-                            let xZero = 0;
+                            let xZero = texture[2];
+                            let xOne = texture[4];
                             if (box.width < 0) {
-                                xZero = 1;
+                                xZero = texture[4];
+                                xOne = texture[2];
                             }
-                            let xOne = 1;
-                            if (box.width < 0) {
-                                xZero = 0;
-                            }
-                            let yZero = 0;
+                            let yZero = texture[3];
+                            let yOne = texture[5];
                             if (box.height < 0) {
-                                yZero = 1;
-                            }
-                            let yOne = 1;
-                            if (box.height < 0) {
-                                yZero = 0;
+                                yZero = texture[5];
+                                yOne = texture[3];
                             }
                             textureCoords[a] = xZero;
                             textureCoords[a + 1] = yZero;
@@ -7150,28 +7193,215 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
 
+                    if (! Bagel.internal.games[game.id]) { // Game deleted
+                        return;
+                    }
+
                     let renderer = game.internal.renderer;
                     let textures = renderer.textures;
                     if ((! overwrite) && textures[id]) {
-                        console.error("Hmm, you tried to overwrite a texture without setting the \"overwrite\" argument (the 4th) to true. If this was delibrate, try setting it to true. Otherwise you can use the \"check\" function which returns true if a texture with that id already exists.");
+                        console.error("Hmm, you tried to overwrite a texture without setting the \"overwrite\" argument (the 4th) to true. If this was deliberate, try setting it to true. Otherwise you can use the \"check\" function which returns true if a texture with that id already exists.");
                         Bagel.internal.oops(game);
                     }
+                    let combinedTexture = renderer.combinedTextures[texture[1]];
+
                     if (renderer.type == "webgl") {
                         let gl = renderer.gl;
 
-                        if (textures[id]) { // Replace the current texture
-                            let index = textures[id][1];
-                            gl.activeTexture(gl.TEXTURE0 + index);
-                            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture);
+                        let width = texture.width;
+                        let height = texture.height;
+                        let maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                        let downscaled = false;
+                        if (width > maxSize || height > maxSize) {
+                            downscaled = true;
+                            if (width > maxSize) {
+                                width = maxSize;
+                            }
+                            if (height > maxSize) {
+                                height = maxSize;
+                            }
 
-                            return index;
+                            if (! renderer.displayedDownscaleWarning) {
+                                console.warn(
+                                    "FYI, the texture "
+                                    + JSON.stringify(id)
+                                    + " just got downscaled to "
+                                    + maxSize + "x" + maxSize
+                                    + " to keep it within the WebGL dimension limit for this computer."
+                                    + "\nIf you want this behaviour without the warning, cap the texture width and height before running this method using \"Bagel.device.webgl.textureSizeLimit\" to find the maximum width/height."
+                                    + "\nIf it has to be the full resolution, you can either set a minimum WebGL resolution limit in \"Game.config.display.minimumLimits.textureSize\" (keep in mind that almost no machines support textures more than 16384 pixels wide due to a texture that size taking up around 4GB of VRAM. However, most desktops and laptops do support 16K textures so this can be your minimum if you're willing to exclude mostly phones and tablets.). Or you can set \"Game.config.display.renderer\" to \"canvas\" to get lower performance but have no texture limits (besides RAM and VRAM like WebGL)."
+                                    + "\n\nFuture downscales won't be reported for this game. But you can view the list using \"Game.debug.textures.listDownscaled\"."
+                                );
+                                renderer.displayedDownscaleWarning = true;
+                            }
+                        }
+
+                        if (textures[id]) { // Replace the current texture
+                            let slot = renderer.textureSlots[textures[id][1]]
+                            let canvas = slot.canvas;
+                            let ctx = slot.ctx;
+
+                            if (textures[id][10] != width || textures[id][11] != height) { // Resolution's changed, so the texture needs to be reallocated
+                                let render = Bagel.internal.render.texture;
+                                render.delete(id, game, false);
+                                render.new(id, texture, game);
+
+                                let newUsingTextures = [];
+
+                                for (let i in renderer.bitmapsUsingTextures[id]) { // Regenerate the texture coordinates
+                                    let bitmapID = renderer.bitmapsUsingTextures[id][i];
+                                    if (bitmapID != null) {
+                                        Bagel.internal.render.bitmapSprite.update(bitmapID, renderer.bitmapSpriteData[bitmapID], game, false);
+                                        newUsingTextures.push(bitmapID)
+                                    }
+                                }
+                                renderer.bitmapsUsingTextures[id] = newUsingTextures;
+                            }
+                            else {
+                                if (downscaled) {
+                                    ctx.imageSmoothingEnabled = true;
+                                }
+
+                                ctx.clearRect(textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
+                                ctx.drawImage(texture, textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
+                                ctx.imageSmoothingEnabled = false;
+
+                                gl.activeTexture(gl.TEXTURE0 + textures[id][1]);
+                                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                            }
                         }
                         else {
+                            renderer.bitmapsUsingTextures[id] = [];
+
                             let index = 0;
                             while (index < renderer.maxTextureSlots) {
-                                if (renderer.textureSlots[index]) { // Available
-                                    break;
+                                if (renderer.textureSlots[index][0]) { // Not initialised
+                                    let canvas = document.createElement("canvas");
+                                    if (width > 4096 || height > 4096) { // The texture is too big for a normal sized combined texture
+                                        canvas.width = width;
+                                        canvas.height = height;
+                                    }
+                                    else {
+                                        canvas.width = 4096;
+                                        canvas.height = 4096;
+                                    }
+                                    let ctx = canvas.getContext("2d");
+                                    ctx.imageSmoothingEnabled = false;
+
+                                    let lines = [];
+                                    let i = 0;
+                                    while (i < canvas.height) {
+                                        let line = [0, i, canvas.width]; // x positon, y position, x pixels available
+
+                                        lines.push([line]);
+                                        i++;
+                                    }
+
+                                    renderer.textureSlots[index] = {
+                                        canvas: canvas,
+                                        ctx: ctx,
+                                        lines: lines,
+                                        webgltexture: renderer.textureSlots[index][1]
+                                    };
                                 }
+
+                                let combinedTexture = renderer.textureSlots[index];
+                                let canvas = combinedTexture.canvas;
+                                let ctx = combinedTexture.ctx;
+
+                                let foundPosition = false;
+                                let i = 0;
+                                let a = 0;
+                                let drawX = 0;
+                                let drawY = 0;
+                                for (i in combinedTexture.lines) {
+                                    for (a in combinedTexture.lines[i]) {
+                                        let line = combinedTexture.lines[i][a];
+
+                                        if (width <= line[2]) {
+                                            let c = 0;
+                                            let d = i;
+                                            let y = line[1];
+
+                                            drawX = line[0];
+                                            drawY = line[1];
+
+                                            let valid = false;
+                                            while (c < height) { // Check the rows to see if there's space
+                                                y++;
+                                                d++;
+                                                valid = false;
+                                                for (let b in combinedTexture.lines[d]) {
+                                                    let newLine = combinedTexture.lines[d][b];
+                                                    if (newLine[1] == y) { // Make sure a row hasn't been skipped
+                                                        if (newLine[0] <= line[0]) { // Make sure the line starts at the same x position or before
+                                                            valid = true;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                if (! valid) {
+                                                    break;
+                                                }
+                                                c++;
+                                            }
+                                            if (valid) {
+                                                foundPosition = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (foundPosition) {
+                                        break;
+                                    }
+                                }
+
+                                if (foundPosition) {
+                                    if (downscaled) {
+                                        ctx.imageSmoothingEnabled = true;
+                                    }
+                                    let line = combinedTexture.lines[i][a];
+                                    ctx.drawImage(texture, drawX, drawY, width, height);
+                                    ctx.imageSmoothingEnabled = false;
+
+                                    gl.activeTexture(gl.TEXTURE0 + index);
+                                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+
+                                    textures[id] = [combinedTexture.webgltexture, index, drawX / canvas.width, drawY / canvas.height, (drawX + width) / canvas.width, (drawY + height) / canvas.height, width / canvas.width, height / canvas.height, drawX, drawY, width, height];
+
+                                    // Update the lines
+                                    let newLines = [];
+                                    while (i < combinedTexture.lines.length) { // i is deliberately not reset
+                                        newLines.push([]);
+                                        for (a in combinedTexture.lines[i]) { // a is reset
+                                            let line = combinedTexture.lines[i][a];
+                                            if (drawX > line[0] + line[2] || drawX + width < line[0]) { // Ignore lines where it doesn't overlap with the image bounding box
+                                                newLines[newLines.length - 1].push(line);
+                                                continue;
+                                            }
+
+                                            if (line[0] < drawX) { // There's a part of the line to the left of the image
+                                                let lineWidth = drawX - line[0];
+                                                if (lineWidth != 0) {
+                                                    newLines[newLines.length - 1].push([line[0], line[1], lineWidth]);
+                                                }
+                                            }
+                                            if (line[0] + line[2] > drawX + width) { // Part to the right
+                                                let lineWidth = line[2] - ((drawX + width) - line[0]);
+                                                if (lineWidth != 0) {
+                                                    newLines[newLines.length - 1].push([drawX + width, line[1], lineWidth]);
+                                                }
+                                            }
+                                        }
+                                        if (newLines[newLines.length - 1].length == 0) {
+                                            newLines.pop();
+                                        }
+                                        i++;
+                                    }
+                                    combinedTexture.lines = newLines;
+                                    return;
+                                }
+
                                 index++;
                             }
 
@@ -7180,24 +7410,8 @@ Bagel = {
                                     console.error("Huh, that wasn't supposed to happen. Bagel.js ran out of textures. Try and reduce the number your'e using (tip: canvas sprites have a separate texture for every clone by default) or use lower resolution textures. If you can't do either, you can try using the \"canvas\" renderer instead.\nYou can see the texture utilisation using game.debug.textures.displayCombined().");
                                     Bagel.internal.oops(game);
                                 }
+                                return;
                             }
-
-
-                            let webgltexture = gl.createTexture();
-                            gl.activeTexture(gl.TEXTURE0 + index);
-                            gl.bindTexture(gl.TEXTURE_2D, webgltexture);
-                            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-                            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-                            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture);
-
-
-                            textures[id] = [webgltexture, index];
-                            renderer.textureSlots[index] = false;
-                            renderer.textureSlotsUsed++;
-
-                            return index;
                         }
                     }
                     else {
@@ -7205,21 +7419,58 @@ Bagel = {
                     }
                 },
                 update: (id, texture, game) => Bagel.internal.render.texture.new(id, texture, game, true),
-                delete: (id, game) => {
+                delete: (id, game, replaceSpriteTextures=true) => {
+                    if (Bagel.internal.getTypeOf(game) != "object") {
+                        if (game) {
+                            console.error("Oops, looks like you didn't specify the game properly (it's the 2nd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
+                        }
+                        else {
+                            console.error("Hmm, looks like you forgot to specify the game object. (2nd argument)");
+                        }
+                        Bagel.internal.oops(Bagel.internal.current.game);
+                    }
+                    if (typeof id != "string") {
+                        console.error("Oops, looks like you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + " for the id argument (the first). It should be a string.");
+                        Bagel.internal.oops(game);
+                    }
+                    if (! Bagel.internal.games[game.id]) { // Game deleted
+                        return;
+                    }
+
+
                     let renderer = game.internal.renderer;
-                    if (renderer.textures[id]) {
-                        let canvas = document.createElement("canvas");
-                        canvas.width = 1;
-                        canvas.height = 1;
-                        let index = Bagel.internal.render.texture.update(id, canvas, game);
-                        renderer.textureSlots[index] = true;
-                        renderer.textureSlotsUsed--;
+                    let texture = renderer.textures[id];
+                    if (texture) {
+                        let slot = renderer.textureSlots[texture[1]]
+                        let canvas = slot.canvas;
+                        let ctx = slot.ctx;
+                        let gl = renderer.gl;
+
+                        ctx.clearRect(texture[8], texture[9], texture[10], texture[11]);
+
+                        gl.activeTexture(gl.TEXTURE0 + texture[1]);
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+
+                        // TODO: update lines
+
+                        if (replaceSpriteTextures) {
+                            for (let i in renderer.bitmapsUsingTextures[id]) { // Update the texture of sprites using this texture to a missing texture
+                                let bitmapID = renderer.bitmapsUsingTextures[id][i];
+                                if (bitmapID != null) {
+                                    Bagel.internal.render.bitmapSprite.update(bitmapID, {
+                                        ...renderer.bitmapSpriteData[bitmapID],
+                                        image: ".Internal.missing"
+                                    }, game, false);
+                                }
+                            }
+                        }
 
                         delete renderer.textures[id];
+                        delete renderer.bitmapsUsingTextures[id];
                     }
                     else {
-                        console.error("Huh, looks like that texture doesn't exist.");
-                        Bagel.internal.init(game? game : Bagel.internal.current.game);
+                        console.error("Huh, looks like that texture doesn't exist. You tried to delete a texture with the id " + JSON.stringify(id) + ".");
+                        Bagel.internal.oops(game);
                     }
                 }
             }
