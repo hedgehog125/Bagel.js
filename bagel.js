@@ -5,8 +5,6 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
-Textures sometimes have a few pixels from other textures. Maybe related to antialiasing?
-
 Are textures deleted when canvases are deleted?
 
 Spritemaps don't work
@@ -21,10 +19,7 @@ Render textures into texture map using a webgl renderer. Webgl is still about 10
 game.debug.textures.displayCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
 
-Canvas rotation. Currently locked at 90 degrees when sent to renderer
-
-
-Update bitmap sprites when their texture is updated
+Canvas rotation. Currently locked at 90 degrees when sent to renderer. Manual texture updates
 
 Should assets be able to be set? The video plugin could create a texture? Image sprites should look for textures instead of images?
 
@@ -7210,7 +7205,7 @@ Bagel = {
 
                         let width = texture.width;
                         let height = texture.height;
-                        let maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                        let maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) - 1;
                         let downscaled = false;
                         if (width > maxSize || height > maxSize) {
                             downscaled = true;
@@ -7277,9 +7272,9 @@ Bagel = {
                             while (index < renderer.maxTextureSlots) {
                                 if (renderer.textureSlots[index][0]) { // Not initialised
                                     let canvas = document.createElement("canvas");
-                                    if (width > 4096 || height > 4096) { // The texture is too big for a normal sized combined texture
-                                        canvas.width = width;
-                                        canvas.height = height;
+                                    if (width >= 4096 || height >= 4096) { // The texture is too big for a normal sized combined texture
+                                        canvas.width = width + 1;
+                                        canvas.height = height + 1;
                                     }
                                     else {
                                         canvas.width = 4096;
@@ -7318,7 +7313,7 @@ Bagel = {
                                     for (a in combinedTexture.lines[i]) {
                                         let line = combinedTexture.lines[i][a];
 
-                                        if (width <= line[2]) {
+                                        if (width + 1 <= line[2]) {
                                             let c = 0;
                                             let d = i;
                                             let y = line[1];
@@ -7327,7 +7322,7 @@ Bagel = {
                                             drawY = line[1];
 
                                             let valid = false;
-                                            while (c < height) { // Check the rows to see if there's space
+                                            while (c < height + 1) { // Check the rows to see if there's space
                                                 y++;
                                                 d++;
                                                 valid = false;
@@ -7375,22 +7370,33 @@ Bagel = {
                                         newLines.push([]);
                                         for (a in combinedTexture.lines[i]) { // a is reset
                                             let line = combinedTexture.lines[i][a];
-                                            if (drawX > line[0] + line[2] || drawX + width < line[0]) { // Ignore lines where it doesn't overlap with the image bounding box
+                                            let needsSorting = false;
+                                            if (drawX > line[0] + line[2]
+                                                || drawX + width < line[0]
+                                                || drawY > line[1] + 1
+                                                || drawY + height < line[1] - 1
+                                            ) { // Ignore lines where it doesn't overlap with the image bounding box
                                                 newLines[newLines.length - 1].push(line);
                                                 continue;
                                             }
 
                                             if (line[0] < drawX) { // There's a part of the line to the left of the image
-                                                let lineWidth = drawX - line[0];
+                                                let lineWidth = (drawX - line[0]) - 1;
                                                 if (lineWidth != 0) {
-                                                    newLines[newLines.length - 1].push([line[0], line[1], lineWidth]);
+                                                    newLines[newLines.length - 1].push([line[0] + 1, line[1], lineWidth - 1]);
+                                                    needsSorting = true;
                                                 }
                                             }
                                             if (line[0] + line[2] > drawX + width) { // Part to the right
-                                                let lineWidth = line[2] - ((drawX + width) - line[0]);
+                                                let lineWidth = (line[2] - ((drawX + width) - line[0])) - 1;
                                                 if (lineWidth != 0) {
-                                                    newLines[newLines.length - 1].push([drawX + width, line[1], lineWidth]);
+                                                    newLines[newLines.length - 1].push([drawX + width + 1, line[1], lineWidth]);
+                                                    needsSorting = true;
                                                 }
+                                            }
+
+                                            if (needsSorting) {
+                                                newLines[newLines.length - 1].sort((first, second) => first[0] - second[0]);
                                             }
                                         }
                                         if (newLines[newLines.length - 1].length == 0) {
@@ -7451,7 +7457,76 @@ Bagel = {
                         gl.activeTexture(gl.TEXTURE0 + texture[1]);
                         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
 
-                        // TODO: update lines
+                        // Update the lines to make the space available
+                        let newLines = [];
+                        let b = 0;
+                        let keys = Object.keys(slot.lines);
+                        while (b < keys.length) {
+                            let line = slot.lines[keys[b]];
+
+                            let y = line[0][1];
+                            if (y == texture[9]) { // First row affected by the texture
+                                break;
+                            }
+                            if (y > texture[9]) { // Gone past it
+                                break;
+                            }
+                            newLines.push(line);
+                            b++;
+                        }
+
+                        let c = 0;
+                        while (b < keys.length) {
+                            let i = keys[b];
+                            if (c > texture[11]) { // Processed all the rows affected by the image
+                                break;
+                            }
+                            newLines.push([]);
+                            if (slot.lines[i][0][1] != texture[9] + c) {
+                                newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // Just add the line from the texture if there's no other lines to combine it with
+                                c++;
+                                continue;
+                            }
+                            let addedLine = false;
+                            for (let a in slot.lines[i]) {
+                                let line = slot.lines[i][a];
+
+                                let justAddedLine = false;
+                                if (! addedLine) {
+                                    if (texture[9] > line[1] + 1
+                                        || texture[9] + texture[11] < line[1] - 1
+                                    ) { // The texure is within the y requirements
+                                        if (line[0] > texture[8] + texture[10]) { // Past where the line would've been
+                                            newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // insert the line that would be there if the texture wasn't there
+                                            newLines[newLines.length - 1].push(line);
+                                            addedLine = true;
+                                            justAddedLine = true;
+                                        }
+                                    }
+                                }
+
+
+                                if (addedLine) {
+                                    let prevLine = newLines[newLines.length - 1][newLines[newLines.length - 1].length - 2];
+                                    if (prevLine[0] + prevLine[2] + 1 == line[0]) { // Directly next to each other so join the two lines
+                                        prevLine[2] += line[0] + 1;
+                                        newLines[newLines.length - 1].pop();
+                                    }
+                                }
+                                else {
+                                    if (! justAddedLine) {
+                                        newLines[newLines.length - 1].push(line);
+                                    }
+                                }
+                            }
+                            c++;
+                            b++;
+                        }
+                        while (b < keys.length) { // Add any lines back in that were skipped
+                            newLines.push(slot.lines[keys[b]]);
+                            b++;
+                        }
+                        slot.lines = newLines;
 
                         if (replaceSpriteTextures) {
                             for (let i in renderer.bitmapsUsingTextures[id]) { // Update the texture of sprites using this texture to a missing texture

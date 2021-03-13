@@ -9,6 +9,16 @@
 <script src="../bagel.js"></script>
 <script>
 
+otherImages = [];
+i = 0;
+while (i < 100) {
+    otherImages.push({
+        id: "Bagel" + (i + 2),
+        src: "../assets/imgs/bagel.png"
+    });
+    i++;
+}
+
 game = Bagel.init({
     id: "Bagel",
     game: {
@@ -18,42 +28,7 @@ game = Bagel.init({
                     id: "Bagel",
                     src: "../assets/imgs/bagel.png"
                 },
-                {
-                    id: "Bagel2",
-                    src: "../assets/imgs/bagel.png"
-                },
-                {
-                    id: "Bagel3",
-                    src: "../assets/imgs/bagel.png"
-                },
-                {
-                    id: "Bagel4",
-                    src: "../assets/imgs/bagel.png"
-                },
-                {
-                    id: "Bagel5",
-                    src: "../assets/imgs/bagel.png"
-                },
-                {
-                    id: "Bagel6",
-                    src: "../assets/imgs/bagel.png"
-                },
-                {
-                    id: "Bagel7",
-                    src: "../assets/imgs/bagel.png"
-                },
-                {
-                    id: "Bagel8",
-                    src: "../assets/imgs/bagel.png"
-                },
-                {
-                    id: "Bagel9",
-                    src: "../assets/imgs/bagel.png"
-                },
-                {
-                    id: "Bagel10",
-                    src: "../assets/imgs/bagel.png"
-                }
+                ...otherImages
             ],
             snds: []
         },
