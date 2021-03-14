@@ -28,7 +28,7 @@ Canvas renderer
 
 Context lost handling
 
-The ability to remove or replace a default argument for a sprite type. Maybe only for some?
+The ability to remove or replace a default argument for a sprite type. Maybe only for some? Prevent setting some attributes like "type"
 
 Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
 
@@ -44,7 +44,6 @@ Gamepad support
 
 
 = Tweaks =
-Tidy up files included
 Fix spelling errors
 
 = Testing =
@@ -740,6 +739,15 @@ Bagel = {
                                 sprite.ctx = ctx;
                                 sprite.internal.canvasID = ".Internal.canvas." + sprite.id;
                                 sprite.internal.last = {};
+                            },
+                            listeners: {
+                                events: {
+                                    delete: sprite => {
+                                        if (sprite.internal.canvasID) {
+                                            Bagel.internal.render.texture.delete(sprite.internal.canvasID, sprite.game);
+                                        }
+                                    }
+                                }
                             },
                             render: {
                                 init: (sprite, newBitmap) => {
@@ -2798,12 +2806,21 @@ Bagel = {
                     let game = me.game;
                     let remove = Bagel.internal.subFunctions.delete;
 
+                    let current = Bagel.internal.current;
+                    Bagel.internal.saveCurrent();
+                    current.game = game;
+                    current.sprite = sprite;
+
+                    remove.event(me, game, current); // Calls the delete event
+                    current.plugin = null;
                     remove.bitmapSprite(me, game);
                     remove.layers(me, game);
                     remove.scripts("init", me, game);
                     remove.scripts("main", me, game);
                     remove.scripts("all", me, game);
                     remove.misc(me, game);
+
+                    Bagel.internal.loadCurrent();
                 };
             })(sprite);
 
@@ -5210,6 +5227,14 @@ Bagel = {
                 }
             },
             delete: {
+                event: (sprite, game, current) => {
+                    let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+                    current.plugin = handler.internal.plugin;
+                    handler = handler.listeners.events.delete;
+                    if (handler) {
+                        handler(sprite, game);
+                    }
+                },
                 bitmapSprite: (me, game) => {
                     if (me.internal.Bagel.renderID != null) {
                         Bagel.internal.render.bitmapSprite.delete(me.internal.Bagel.renderID, game);
@@ -6386,6 +6411,30 @@ Bagel = {
                                                     types: ["object"],
                                                     description: "Contains the \"set\" and \"get\" listener functions."
                                                 },
+                                                events: {
+                                                    required: false,
+                                                    default: {},
+                                                    subcheck: {
+                                                        delete: {
+                                                            required: false,
+                                                            types: [
+                                                                "function",
+                                                                "string"
+                                                            ],
+                                                            check: (fn, listeners, property, game, prev) => {
+                                                                if (typeof fn == "string") {
+                                                                    if (! prev.ob.fns.hasOwnProperty(fn)) {
+                                                                        return "Hmm, looks like you used an invalid id for a function. You used " + JSON.stringify(fn) + ".";
+                                                                    }
+                                                                    listeners[property] = prev.ob.fns[fn];
+                                                                }
+                                                            },
+                                                            description: "Runs just before the sprite is deleted (so the sprite methods all still work)."
+                                                        }
+                                                    },
+                                                    types: ["object"],
+                                                    description: "Lets you set a few functions to run on certain events for this type of sprite. Can also be the id of a function in \"fns\". The functions are called with the sprite object followed by the game object."
+                                                },
                                                 trigger: {
                                                     required: false,
                                                     default: false,
@@ -6444,7 +6493,7 @@ Bagel = {
                                         }
                                     },
                                     types: ["object"],
-                                    description: "Contains the new sprite types, the key is the name of type. (should be singular)"
+                                    description: "Contains the new sprite types, the key is the name of type (should be singular)."
                                 }
                             },
                             types: ["object"],
