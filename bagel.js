@@ -49,6 +49,7 @@ Fix spelling errors
 = Testing =
 */
 
+
 Bagel = {
     init: game => {
         let internal = Bagel.internal; // A shortcut
@@ -437,7 +438,7 @@ Bagel = {
                                                 let img = Bagel.get.asset.img(sprite.img, game, true);
                                                 if (typeof img == "boolean") {
                                                     if (img) { // Loading
-                                                        return ".rerun"
+                                                        return ".rerun";
                                                     }
                                                     else { // No asset
                                                         img = Bagel.internal.render.texture.get(sprite.img, game);
@@ -720,6 +721,13 @@ Bagel = {
                                         set: "dimensions"
                                     }
                                 },
+                                events: {
+                                    delete: sprite => {
+                                        if (sprite.internal.canvasID) {
+                                            Bagel.internal.render.texture.delete(sprite.internal.canvasID, sprite.game);
+                                        }
+                                    }
+                                },
                                 trigger: true
                             },
                             description: "A \"2d\" canvas sprite. Anything rendered onto the canvas gets rendered onto the main canvas. (but will usually be scaled down depending on the width and height of the canvas)",
@@ -739,15 +747,6 @@ Bagel = {
                                 sprite.ctx = ctx;
                                 sprite.internal.canvasID = ".Internal.canvas." + sprite.id;
                                 sprite.internal.last = {};
-                            },
-                            listeners: {
-                                events: {
-                                    delete: sprite => {
-                                        if (sprite.internal.canvasID) {
-                                            Bagel.internal.render.texture.delete(sprite.internal.canvasID, sprite.game);
-                                        }
-                                    }
-                                }
                             },
                             render: {
                                 init: (sprite, newBitmap) => {
@@ -796,7 +795,6 @@ Bagel = {
                                     current.sprite = sprite;
                                     if (sprite.render) sprite.render(sprite, sprite.game, sprite.ctx, sprite.canvas);
                                     Bagel.internal.loadCurrent();
-
 
 
                                     Bagel.internal.render.texture.update(sprite.internal.canvasID, sprite.canvas, sprite.game);
