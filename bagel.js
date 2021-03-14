@@ -53,6 +53,7 @@ Bagel = {
         Bagel.internal.saveCurrent();
         current.game = game;
         game = subFunctions.check(game);
+        let originalRenderer = game.config.display.renderer; // If it's auto, it will get changed in a bit to either webgl or canvas
         Bagel.internal.games[game.id] = game;
 
         subFunctions.misc(game);
@@ -61,8 +62,22 @@ Bagel = {
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
         subFunctions.loadingScreen(game);
 
-        if (! game.config.disableBagelJSMessage) {
-            console.log("Bagel.js | 🥯🥯🥯 | 2d Canvas\nhttps://github.com/hedgehog125/Bagel.js");
+        if (! game.config.disableBagelJSMessage) { // Display a message that provides an overview of the how the game is running
+            let hpText = "🥯🥯";
+            let rendererText = "";
+            if (game.config.display.renderer == "webgl") {
+                hpText += "🥯";
+                rendererText += "WebGL";
+            }
+            else {
+                hpText += "🍞";
+                rendererText += "Canvas";
+            }
+            if (originalRenderer == "auto") {
+                rendererText += " (via auto mode)";
+            }
+
+            console.log("| Bagel.js | <hp> | <renderer> |\nhttps://github.com/hedgehog125/Bagel.js".replace("<hp>", hpText).replace("<renderer>", rendererText));
         }
         Bagel.internal.loadCurrent();
         return game;
