@@ -449,8 +449,9 @@ Bagel = {
                                                 }
 
                                                 if (! initialTrigger) {
-                                                    triggerSprite.width = img.width * sprite.scale;
-                                                    triggerSprite.height = img.height * sprite.scale;
+                                                    let scale = sprite.scale;
+                                                    triggerSprite.width = img.width * scale;
+                                                    triggerSprite.height = img.height * scale;
 
                                                     triggerSprite.internal.renderUpdate = true;
                                                 }
@@ -3499,8 +3500,10 @@ Bagel = {
 
                         let renderer = game.internal.renderer;
                         if (renderer.type == "webgl") {
-                            Bagel.internal.render.bitmapSprite.delete(game.internal.loadingScreenRenderID, game);
-                            Bagel.internal.render.texture.delete(".Internal.loadingScreen", game);
+                            if (game.internal.loadingScreenRenderID != null) { // Make sure the texture and bitmap sprite had actually been made, otherwise they don't need removing
+                                Bagel.internal.render.bitmapSprite.delete(game.internal.loadingScreenRenderID, game);
+                                Bagel.internal.render.texture.delete(".Internal.loadingScreen", game);
+                            }
                         }
                     }
                 },
@@ -3553,6 +3556,7 @@ Bagel = {
                                 rotation: 90,
                                 alpha: 1
                             }, game, false);
+                            console.log(game.internal.loadingScreenRenderID)
                         }
                     }
                 },
@@ -7103,7 +7107,7 @@ Bagel = {
 
 
                         if (renderer.bitmapIndexes[id] === true) { // Still pending to be added
-                            let oldBox = renderer.queue.bitmap.new.find(item => item[1] == id);
+                            let oldBox = renderer.queue.bitmap.new.find(item => item != null && item[1] == id);
                             oldBox[0] = box;
                         }
                         else {
