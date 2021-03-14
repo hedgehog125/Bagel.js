@@ -5,10 +5,14 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
+Poor performance on loading screen in non chromium browsers
+
 Pause videos on state change
 
+Don't use lines and the 1px gap between textures for textures larger or equal to 4096x4096, otherwise low end devices effectively only support 4095x4095 textures. Also unnecessary extra processing. Make sure to modify remove logic
+
 = Features =
-game.debug.textures.displayCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
+game.debug.textures.hideCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
 
 Should assets be able to be set? The video plugin could create a texture? Image sprites should look for textures instead of images?
@@ -1924,6 +1928,51 @@ Bagel = {
                                     Bagel.get.asset.snd(args.id, game).stop();
                                 }
                             }
+                        },
+                        debug: {
+                            category: {
+                                textures: {
+                                    category: {
+                                        displayCombined: {
+                                            fn: {
+                                                obArg: false,
+                                                args: {
+                                                    index: {
+                                                        required: true,
+                                                        types: ["number"],
+                                                        check: (value, ob, argID, game, prev, args) => {
+                                                            let textureSlots = game.internal.renderer.textureSlots;
+                                                            let combinedTexture = textureSlots[value];
+                                                            if (combinedTexture == null || combinedTexture.canvas == null) {
+                                                                return "Huh, that combined texture doesn't seem to exist. Make sure the index is between 0 and " + (textureSlots.length - 1) + ". Also make sure that that combined texture has been activated.";
+                                                            }
+                                                        },
+                                                        description: "The index number of the combined texture to display."
+                                                    }
+                                                },
+                                                fn: (game, args, plugin) => {
+                                                    let combinedTexture = game.internal.renderer.textureSlots[args.index];
+                                                    combinedTexture.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);border:1px solid black;";
+                                                    let width = window.innerWidth;
+                                                    let height = window.innerHeight;
+                                                    if (width > height) {
+                                                        width = height;
+                                                    }
+                                                    else {
+                                                        height = width;
+                                                    }
+                                                    // Subtract 2 because of the 1 pixel border
+                                                    combinedTexture.canvas.style.width = (width - 2) + "px";
+                                                    combinedTexture.canvas.style.height = (height - 2) + "px";
+
+                                                    document.body.appendChild(combinedTexture.canvas);
+                                                    game.internal.renderer.canvas.hidden = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     },
                     sprite: {
@@ -3303,11 +3352,9 @@ Bagel = {
                         renderer.ctx.imageSmoothingEnabled = antialiasing;
                     }
 
+                    renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // CSS from Phaser (https://phaser.io)
                     if (config.display.mode == "fill") {
-                        renderer.canvas.style = "margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp
-                    }
-                    else {
-                        renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);" ; // CSS from Phaser (https://phaser.io)
+                        renderer.canvas.style += "margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp
                     }
                     Bagel.internal.subFunctions.tick.scaleCanvas(game);
 
@@ -7584,7 +7631,7 @@ Bagel = {
 
                             if (index == renderer.maxTextureSlots) {
                                 if (! game.error) {
-                                    console.error("Huh, that wasn't supposed to happen. Bagel.js ran out of textures. Try and reduce the number your'e using (tip: canvas sprites have a separate texture for every clone by default) or use lower resolution textures. If you can't do either, you can try using the \"canvas\" renderer instead.\nYou can see the texture utilisation using game.debug.textures.displayCombined().");
+                                    console.error("Huh, that wasn't supposed to happen. Bagel.js ran out of textures. Try and reduce the number your'e using (tip: canvas sprites have a separate texture for every clone by default) or use lower resolution textures. If you can't do either, you can try using the \"canvas\" renderer instead.\nYou can see the texture utilisation using \"Game.debug.textures.displayCombined(<combined texture index>)\".");
                                     Bagel.internal.oops(game);
                                 }
                                 return;
