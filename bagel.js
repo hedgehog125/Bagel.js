@@ -5,17 +5,13 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
-Are textures deleted when canvases are deleted?
+Pause videos on state change
 
-Spritemaps don't work
-
-First 15 or so frames are rendered but not displayed to the user sometimes. Seems to be outside of Bagel.js's control as it seems to be somewhat random. Maybe can detect page render?
+Queue texturemap changes before uploading to GPU
 
 = Features =
 game.debug.textures.displayCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
-
-Canvas rotation. Currently locked at 90 degrees when sent to renderer. Manual texture updates
 
 Should assets be able to be set? The video plugin could create a texture? Image sprites should look for textures instead of images?
 
@@ -178,9 +174,13 @@ Bagel = {
                                                 let ctx = canvas.getContext("2d");
                                                 ctx.drawImage(img, -(x * width), -(y * height));
 
-                                                if (game.set.asset.img(id, canvas, false, true)) {
+                                                let textureFns = Bagel.internal.render.texture;
+                                                if (textureFns.get(id, game)) {
                                                     console.error("Hmm, Bagel.js ran into a problem with the spritesheet " + JSON.stringify(asset.id) + ". The image id " + JSON.stringify(id) + " has already been taken. Double check the ids of your assets.");
                                                     Bagel.internal.oops(game);
+                                                }
+                                                else {
+                                                    textureFns.new(id, canvas, game);
                                                 }
                                                 x++;
                                             }
@@ -260,7 +260,7 @@ Bagel = {
                                     types: [
                                         "number"
                                     ],
-                                    description: "The angle of the sprite. In degrees. 0º = up. 180º = down. -90º = left. 90º = right."
+                                    description: "The angle of the sprite. In degrees. 0º = up. 180º = down. -90º = left. 90º = right (not rotated)."
                                 }
                             },
                             cloneArgs: {
@@ -356,7 +356,10 @@ Bagel = {
                                             }
                                             else {
                                                 if (sprite.img) {
-                                                    let img = Bagel.get.asset.img(sprite.img);
+                                                    let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
+                                                    if (! img) {
+                                                        img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
+                                                    }
                                                     if (img) {
                                                         if (typeof img == "boolean") return ".rerun";
 
@@ -364,6 +367,9 @@ Bagel = {
                                                         let scaleX = sprite.width / img.width;
                                                         let scaleY = sprite.height / img.height;
                                                         sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                                    }
+                                                    else {
+                                                        return "Huh, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
                                                     }
                                                 }
                                                 triggerSprite.internal.renderUpdate = true;
@@ -379,7 +385,14 @@ Bagel = {
                                                     sprite[property] = 1;
                                                     return;
                                                 }
-                                                let img = Bagel.get.asset.img(sprite.img);
+                                                let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
+                                                if (! img) {
+                                                    img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
+                                                }
+                                                if (! img) {
+                                                    return ":/ Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                                }
+
                                                 if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * scale;
 
@@ -397,7 +410,14 @@ Bagel = {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
 
                                             if (sprite.img) {
-                                                let img = Bagel.get.asset.img(sprite.img);
+                                                let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
+                                                if (! img) {
+                                                    img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
+                                                }
+                                                if (! img) {
+                                                    return "Hmm, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                                }
+
                                                 if (typeof img == "boolean") return ".rerun";
                                                 // Update the scale
                                                 let scaleX = sprite.width / img.width;
@@ -413,7 +433,14 @@ Bagel = {
                                                     sprite[property] = 1;
                                                     return;
                                                 }
-                                                let img = Bagel.get.asset.img(sprite.img);
+                                                let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
+                                                if (! img) {
+                                                    img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
+                                                }
+                                                if (! img) {
+                                                    return "Oh no! Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                                }
+
                                                 if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * sprite.scale;
 
@@ -434,21 +461,26 @@ Bagel = {
                                     },
                                     img: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (sprite.img) {
-                                                let img = Bagel.get.asset.img(sprite.img, game, true);
-                                                if (typeof img == "boolean") {
-                                                    if (img) { // Loading
-                                                        return ".rerun";
-                                                    }
-                                                    else { // No asset
-                                                        img = Bagel.internal.render.texture.get(sprite.img, game);
-                                                        if (! img) {
-                                                            return "Oh no! Bagel.js couldn't find an image asset or a texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                            if (! initialTrigger) {
+                                                if (value) {
+                                                    let img = Bagel.get.asset.img(value, triggerSprite.game, true);
+                                                    if (typeof img == "boolean") {
+                                                        if (img) { // Loading
+                                                            return ".rerun";
+                                                        }
+                                                        else { // No asset
+                                                            img = Bagel.internal.render.texture.get(value, triggerSprite.game);
+                                                            if (! img) {
+                                                                if (triggerSprite.game.loaded) {
+                                                                    return "Oh no! Bagel.js couldn't find an image asset or a texture with the id " + JSON.stringify(value) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                                                }
+                                                                else {
+                                                                    return ".rerun"; // It might exist when the game has loaded
+                                                                }
+                                                            }
                                                         }
                                                     }
-                                                }
 
-                                                if (! initialTrigger) {
                                                     let scale = sprite.scale;
                                                     triggerSprite.width = img.width * scale;
                                                     triggerSprite.height = img.height * scale;
@@ -468,13 +500,19 @@ Bagel = {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                             if (value == null) {
                                                 if (sprite.width || sprite.height) {
-                                                    let img = Bagel.get.asset.img(sprite.img);
+                                                    let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
+                                                    if (! img) {
+                                                        img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
+                                                    }
                                                     if (img) {
                                                         if (typeof img == "boolean") return ".rerun";
 
                                                         let scaleX = sprite.width / img.width;
                                                         let scaleY = sprite.height / img.height;
                                                         sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
+                                                    }
+                                                    else {
+                                                        return "Huh, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + " (Sprite.img must be set in order to change the sprite scale). Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
                                                     }
                                                 }
                                                 else {
@@ -488,7 +526,13 @@ Bagel = {
 
                                                 if (typeof value == "number") {
                                                     if (sprite.img) {
-                                                        let img = Bagel.get.asset.img(sprite.img);
+                                                        let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
+                                                        if (! img) {
+                                                            img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
+                                                        }
+                                                        if (! img) {
+                                                            return "Hmm, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + " (Sprite.img must be set in order to change the sprite scale). Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                                        }
                                                         if (typeof img == "boolean") return ".rerun";
 
                                                         // Update the scale
@@ -601,6 +645,12 @@ Bagel = {
                                     ],
                                     description: "The height for the canvas. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height * 0.2\""
                                 },
+                                angle: {
+                                    required: false,
+                                    default: 90,
+                                    types: ["number"],
+                                    description: "The angle of the canvas. In degrees. 0º = up. 180º = down. -90º = left. 90º = right (not rotated)."
+                                },
                                 alpha: {
                                     required: false,
                                     default: 1,
@@ -641,6 +691,12 @@ Bagel = {
                                 height: {
                                     syntax: {
                                         description: "The height for the clone. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height * 0.2\""
+                                    },
+                                    mode: "replace"
+                                },
+                                angle: {
+                                    syntax: {
+                                        description: "The angle of the clone. In degrees. 0º = up. 180º = down. -90º = left. 90º = right (not rotated)."
                                     },
                                     mode: "replace"
                                 },
@@ -720,6 +776,19 @@ Bagel = {
                                     },
                                     height: {
                                         set: "dimensions"
+                                    },
+                                    angle: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite) => {
+                                            let cache = triggerSprite.internal.cache;
+                                            // Update the cached stuff
+                                            let rad = Bagel.maths.degToRad(sprite.angle + 90);
+                                            cache.cos = Math.cos(rad);
+                                            cache.sin = Math.sin(rad);
+
+                                            sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
+
+                                            triggerSprite.internal.renderUpdate = true;
+                                        }
                                     }
                                 },
                                 events: {
@@ -747,7 +816,10 @@ Bagel = {
                                 canvas.height = sprite.height;
                                 sprite.ctx = ctx;
                                 sprite.internal.canvasID = ".Internal.canvas." + sprite.id;
-                                sprite.internal.last = {};
+                                sprite.internal.last = {
+                                    collision: null
+                                };
+                                sprite.internal.cache = {};
                             },
                             render: {
                                 init: (sprite, newBitmap) => {
@@ -766,7 +838,7 @@ Bagel = {
                                         width: sprite.width,
                                         height: sprite.height,
                                         image: sprite.internal.canvasID,
-                                        rotation: 90,
+                                        rotation: sprite.angle,
                                         alpha: sprite.alpha
                                     }, sprite.game, false);
                                 },
@@ -809,7 +881,7 @@ Bagel = {
                                             width: sprite.width,
                                             height: sprite.height,
                                             image: sprite.internal.canvasID,
-                                            rotation: 90,
+                                            rotation: sprite.angle,
                                             alpha: sprite.alpha
                                         }, sprite.game, false);
                                     }
@@ -1844,7 +1916,10 @@ Bagel = {
                     sprite: {
                         move: {
                             fn: {
-                                appliesTo: ["sprite"],
+                                appliesTo: [
+                                    "sprite",
+                                    "canvas"
+                                ],
                                 obArg: false,
                                 args: {
                                     amount: {
@@ -2337,7 +2412,7 @@ Bagel = {
                             let sprite = scripts[i].sprite;
                             if (sprite.type == "sprite") {
                                 if (sprite.img) {
-                                    Bagel.get.asset.img(sprite.img, game, true); // Requesting it will trigger loading
+                                    Bagel.get.asset.img(sprite.img, game, true); // Requesting it will trigger loading. The check argument is used because it could be a texture rather than an image asset
                                 }
                             }
                             if (sprite.request) {
@@ -3490,6 +3565,10 @@ Bagel = {
                         loadingScreen = Bagel.init(loadingScreen);
                         game.internal.loadingScreen = loadingScreen;
 
+                        if (game.internal.pluginsDone) {
+                            Bagel.internal.subFunctions.init.rendererInit(game);
+                        }
+
                         Bagel.internal.loadCurrent();
                     }
                 },
@@ -3537,9 +3616,13 @@ Bagel = {
                     }
 
                     let missingImage = new Image();
-                    missingImage.onload = _ => {
-                        Bagel.internal.render.texture.new(".Internal.missing", missingImage, game);
-                    };
+                    (game => {
+                        missingImage.onload = _ => {
+                            if (! Bagel.internal.render.texture.get(".Internal.missing", game)) {
+                                Bagel.internal.render.texture.new(".Internal.missing", missingImage, game);
+                            }
+                        };
+                    })(game);
                     missingImage.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAF0lEQVQYVwXBAQEAAACCIPo/2mAoWWrmOPoF/8JfnIkAAAAASUVORK5CYII=";
 
                     let loadingScreen = game.internal.loadingScreen;
@@ -3556,7 +3639,6 @@ Bagel = {
                                 rotation: 90,
                                 alpha: 1
                             }, game, false);
-                            console.log(game.internal.loadingScreenRenderID)
                         }
                     }
                 },
