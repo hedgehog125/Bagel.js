@@ -7,8 +7,6 @@ TODO:
 == Bugs ==
 Pause videos on state change
 
-Queue texturemap changes before uploading to GPU
-
 = Features =
 game.debug.textures.displayCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
@@ -2985,7 +2983,8 @@ Bagel = {
                                 bitmap: {
                                     new: [],
                                     delete: {}
-                                }
+                                },
+                                texturemapsUpdated: []
                             },
                             queueLengths: {
                                 add: 0,
@@ -4906,6 +4905,23 @@ Bagel = {
                                     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
                                     renderer.verticesUpdated = false;
                                 }
+                            },
+                            texturemaps: game => {
+                                let renderer = game.internal.renderer;
+                                let gl = renderer.gl;
+                                let queue = renderer.queue.texturemapsUpdated;
+
+                                let updated = {};
+                                for (let i in queue) {
+                                    let id = queue[i];
+                                    if (! updated[id]) {
+                                        gl.activeTexture(gl.TEXTURE0 + id);
+                                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, renderer.textureSlots[id].canvas);
+
+                                        updated[id] = true;
+                                    }
+                                }
+                                renderer.queue.texturemapsUpdated = [];
                             }
                         },
                         rotateVertices: (vertices, i, angle, cx, cy) => {
@@ -5051,8 +5067,10 @@ Bagel = {
                         tick: game => {
                             let renderer = game.internal.renderer;
                             let gl = renderer.gl;
-                            Bagel.internal.subFunctions.tick.render.webgl.queues.bitmap(game);
-                            Bagel.internal.subFunctions.tick.render.webgl.queues.bitmapLayers(game);
+                            let queues = Bagel.internal.subFunctions.tick.render.webgl.queues;
+                            queues.bitmap(game);
+                            queues.bitmapLayers(game);
+                            queues.texturemaps(game);
 
 
                             renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
@@ -7401,8 +7419,7 @@ Bagel = {
                                 ctx.drawImage(texture, textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
                                 ctx.imageSmoothingEnabled = false;
 
-                                gl.activeTexture(gl.TEXTURE0 + textures[id][1]);
-                                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                                renderer.queue.texturemapsUpdated.push(textures[id][1]);
                             }
                         }
                         else {
@@ -7499,8 +7516,7 @@ Bagel = {
                                     ctx.drawImage(texture, drawX, drawY, width, height);
                                     ctx.imageSmoothingEnabled = false;
 
-                                    gl.activeTexture(gl.TEXTURE0 + index);
-                                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                                    renderer.queue.texturemapsUpdated.push(index);
 
                                     textures[id] = [combinedTexture.webgltexture, index, drawX / canvas.width, drawY / canvas.height, (drawX + width) / canvas.width, (drawY + height) / canvas.height, width / canvas.width, height / canvas.height, drawX, drawY, width, height];
 
@@ -7594,8 +7610,7 @@ Bagel = {
 
                         ctx.clearRect(texture[8], texture[9], texture[10], texture[11]);
 
-                        gl.activeTexture(gl.TEXTURE0 + texture[1]);
-                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                        renderer.queue.texturemapsUpdated.push(texture[1]);
 
                         // Update the lines to make the space available
                         let newLines = [];
