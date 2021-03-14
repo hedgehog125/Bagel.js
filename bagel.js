@@ -12,10 +12,6 @@ Spritemaps don't work
 First 15 or so frames are rendered but not displayed to the user sometimes. Seems to be outside of Bagel.js's control as it seems to be somewhat random. Maybe can detect page render?
 
 = Features =
-Reverse changes to lines when removing textures
-
-Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
-
 game.debug.textures.displayCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
 
@@ -33,6 +29,8 @@ Canvas renderer
 Context lost handling
 
 The ability to remove or replace a default argument for a sprite type. Maybe only for some?
+
+Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
 
 enableSet option for assets
 
@@ -436,16 +434,25 @@ Bagel = {
                                     },
                                     img: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                if (sprite.img) {
-                                                    let img = Bagel.get.asset.img(sprite.img, game);
-                                                    if (typeof img == "boolean") return ".rerun";
+                                            if (sprite.img) {
+                                                let img = Bagel.get.asset.img(sprite.img, game, true);
+                                                if (typeof img == "boolean") {
+                                                    if (img) { // Loading
+                                                        return ".rerun"
+                                                    }
+                                                    else { // No asset
+                                                        img = Bagel.internal.render.texture.get(sprite.img, game);
+                                                        if (! img) {
+                                                            return "Oh no! Bagel.js couldn't find an image asset or a texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                                        }
+                                                    }
+                                                }
 
+                                                if (! initialTrigger) {
                                                     triggerSprite.width = img.width * sprite.scale;
                                                     triggerSprite.height = img.height * sprite.scale;
 
                                                     triggerSprite.internal.renderUpdate = true;
-                                                    return;
                                                 }
                                             }
                                         }
@@ -4801,7 +4808,7 @@ Bagel = {
                             }
                         },
                         rotateVertices: (vertices, i, angle, cx, cy) => {
-                            let rad = Bagel.maths.degToRad(angle - 90);
+                            let rad = -Bagel.maths.degToRad(angle - 90); // Not really sure why this needs to be a minus, but hey, it works!
                             let sin = Math.sin(rad);
                             let cos = Math.cos(rad);
 
@@ -7546,6 +7553,34 @@ Bagel = {
                     else {
                         console.error("Huh, looks like that texture doesn't exist. You tried to delete a texture with the id " + JSON.stringify(id) + ".");
                         Bagel.internal.oops(game);
+                    }
+                },
+                get: (id, game) => {
+                    if (Bagel.internal.getTypeOf(game) != "object") {
+                        if (game) {
+                            console.error("Hmm, looks like you didn't specify the game properly (it's the 2nd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
+                        }
+                        else {
+                            console.error("Huh, looks like you forgot to specify the game object. (2nd argument)");
+                        }
+                        Bagel.internal.oops(Bagel.internal.current.game);
+                    }
+                    if (typeof id != "string") {
+                        console.error(":/ looks like you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + " for the id argument (the first). It should be a string.");
+                        Bagel.internal.oops(game);
+                    }
+
+                    let renderer = game.internal.renderer;
+                    let texture = renderer.textures[id];
+                    if (texture) {
+                        return {
+                            width: texture[10],
+                            height: texture[11],
+                            internal: texture
+                        };
+                    }
+                    else {
+                        return false;
                     }
                 }
             }
