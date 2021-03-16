@@ -5,7 +5,7 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
-Poor performance on loading screen in non chromium browsers
+Poor performance on loading screen in non chromium browsers. Seems to be related to updating textures. Maybe the texture needs to be separate since it's being updated? Draw image can take tens of miliseconds on firefox! Use webgl for making the changes
 
 Pause videos on state change
 
@@ -5370,16 +5370,16 @@ Bagel = {
                     let renderer = game.internal.renderer;
                     let canvas = renderer.canvas;
                     //if (canvas.width != renderWidth || canvas.height != renderHeight) {
-                    if (renderer.waitingWidth == renderWidth && renderer.waitingHeight == renderHeight) {
-                        if (canvas.width != renderWidth || canvas.height != renderHeight) {
+                    if (canvas.width != renderWidth || canvas.height != renderHeight) {
+                        if (renderer.waitingWidth == renderWidth && renderer.waitingHeight == renderHeight) {
                             canvas.width = renderWidth;
                             canvas.height = renderHeight;
-
-                            canvas.style.width = width + "px";
-                            canvas.style.height = height + "px";
-                            renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
-                            renderer.styleHeight = height;
                         }
+
+                        canvas.style.width = width + "px";
+                        canvas.style.height = height + "px";
+                        renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
+                        renderer.styleHeight = height;
                     }
                     renderer.waitingWidth = renderWidth;
                     renderer.waitingHeight = renderHeight;
@@ -7478,6 +7478,7 @@ Bagel = {
                                 }
 
                                 ctx.clearRect(textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
+
                                 ctx.drawImage(texture, textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
                                 ctx.imageSmoothingEnabled = false;
 
