@@ -7,9 +7,11 @@ TODO:
 == Bugs ==
 Poor performance on loading screen in non chromium browsers. Seems to be related to updating textures. Maybe the texture needs to be separate since it's being updated? Draw image can take tens of miliseconds on firefox! Use webgl for making the changes
 
+Lose texture webgl contexts on game deletion. Lose when inactive for a few seconds?
+
 Pause videos on state change
 
-Don't use lines and the 1px gap between textures for textures larger or equal to 4096x4096, otherwise low end devices effectively only support 4095x4095 textures. Also unnecessary extra processing. Make sure to modify remove logic
+Don't use lines and the 1px gap between textures for textures larger or equal to 4096x4096, otherwise low end devices effectively only support 4095x4095 textures. Also unnecessary extra processing. Make sure to modify remove logic. Also update singleTexture value. Does this work on low end devices with textures above their limit? WebGL being used to render texture into index.
 
 = Features =
 game.debug.textures.hideCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
@@ -18,6 +20,8 @@ Game.config.display.minimumLimits
 Should assets be able to be set? The video plugin could create a texture? Image sprites should look for textures instead of images?
 
 Asset preload, runs before init. Runs even when assets aren't being initialised
+
+Auto, static and animated canvas sprite modes
 
 
 Reserve dot prefix for textures
@@ -3064,6 +3068,8 @@ Bagel = {
                             lastBackgroundColour: null,
                             verticesUpdated: false,
                             displayedDownscaleWarning: false,
+                            activeGLTextureContexts: [],
+                            glTextureContexts: 0,
 
                             bitmapLayerQueue: [],
                             textures: {},
@@ -5015,7 +5021,6 @@ Bagel = {
                                 attribute vec2 a_vertices;
                                 attribute vec4 a_textcoord;
 
-                                uniform float u_time;
                                 uniform vec2 u_resolution;
 
                                 varying vec4 v_texcoord;
@@ -5105,6 +5110,7 @@ Bagel = {
                             let blankTexture = document.createElement("canvas");
                             blankTexture.width = 1;
                             blankTexture.height = 1;
+                            renderer.blankTexture = blankTexture;
 
                             let i = 0;
                             while (i < textureCount) { // Fill the webgl textures with blank textures
@@ -7429,11 +7435,14 @@ Bagel = {
                         let downscaled = false;
                         if (width > maxSize || height > maxSize) {
                             downscaled = true;
-                            if (width > maxSize) {
+                            let ratio = width / height;
+                            if (width > height) {
                                 width = maxSize;
+                                height = width / ratio;
                             }
-                            if (height > maxSize) {
+                            else {
                                 height = maxSize;
+                                width = height * ratio;
                             }
 
                             if (! renderer.displayedDownscaleWarning) {
@@ -7454,7 +7463,6 @@ Bagel = {
                         if (textures[id]) { // Replace the current texture
                             let slot = renderer.textureSlots[textures[id][1]]
                             let canvas = slot.canvas;
-                            let ctx = slot.ctx;
 
                             if (textures[id][10] != width || textures[id][11] != height) { // Resolution's changed, so the texture needs to be reallocated
                                 let render = Bagel.internal.render.texture;
@@ -7473,14 +7481,10 @@ Bagel = {
                                 renderer.bitmapsUsingTextures[id] = newUsingTextures;
                             }
                             else {
-                                if (downscaled) {
-                                    ctx.imageSmoothingEnabled = true;
-                                }
+                                let functions = Bagel.internal.render.texture.internal;
+                                let slotGL = functions.initTexture(slot, renderer, textures[id][1], game);
 
-                                ctx.clearRect(textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
-
-                                ctx.drawImage(texture, textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
-                                ctx.imageSmoothingEnabled = false;
+                                functions.drawImage(slotGL, texture, slot, renderer, textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
 
                                 renderer.queue.texturemapsUpdated.push(textures[id][1]);
                             }
@@ -7500,8 +7504,6 @@ Bagel = {
                                         canvas.width = 4096;
                                         canvas.height = 4096;
                                     }
-                                    let ctx = canvas.getContext("2d");
-                                    ctx.imageSmoothingEnabled = false;
 
                                     let lines = [];
                                     let i = 0;
@@ -7514,15 +7516,18 @@ Bagel = {
 
                                     renderer.textureSlots[index] = {
                                         canvas: canvas,
-                                        ctx: ctx,
+                                        gl: null,
                                         lines: lines,
-                                        webgltexture: renderer.textureSlots[index][1]
+                                        webgltexture: renderer.textureSlots[index][1],
+                                        singleTexture: false,
+
+                                        locations: {},
+                                        buffers: {}
                                     };
                                 }
 
                                 let combinedTexture = renderer.textureSlots[index];
                                 let canvas = combinedTexture.canvas;
-                                let ctx = combinedTexture.ctx;
 
                                 let foundPosition = false;
                                 let i = 0;
@@ -7572,16 +7577,26 @@ Bagel = {
                                 }
 
                                 if (foundPosition) {
-                                    if (downscaled) {
-                                        ctx.imageSmoothingEnabled = true;
-                                    }
+                                    let functions = Bagel.internal.render.texture.internal;
+                                    let slotGL = functions.initTexture(combinedTexture, renderer, index, game);
+
                                     let line = combinedTexture.lines[i][a];
-                                    ctx.drawImage(texture, drawX, drawY, width, height);
-                                    ctx.imageSmoothingEnabled = false;
+                                    functions.drawImage(slotGL, texture, combinedTexture, renderer, drawX, drawY, width, height);
 
                                     renderer.queue.texturemapsUpdated.push(index);
 
-                                    textures[id] = [combinedTexture.webgltexture, index, drawX / canvas.width, drawY / canvas.height, (drawX + width) / canvas.width, (drawY + height) / canvas.height, width / canvas.width, height / canvas.height, drawX, drawY, width, height];
+                                    textures[id] = [
+                                        combinedTexture.webgltexture,
+                                        index,
+                                        drawX / canvas.width,
+                                        drawY / canvas.height,
+                                        (drawX + width) / canvas.width,
+                                        (drawY + height) / canvas.height,
+                                        width / canvas.width,
+                                        height / canvas.height,
+                                        drawX, drawY,
+                                        width, height
+                                    ];
 
                                     // Update the lines
                                     let newLines = [];
@@ -7666,12 +7681,12 @@ Bagel = {
                     let renderer = game.internal.renderer;
                     let texture = renderer.textures[id];
                     if (texture) {
-                        let slot = renderer.textureSlots[texture[1]]
+                        let slot = renderer.textureSlots[texture[1]];
                         let canvas = slot.canvas;
                         let ctx = slot.ctx;
-                        let gl = renderer.gl;
 
-                        ctx.clearRect(texture[8], texture[9], texture[10], texture[11]);
+                        let functions = Bagel.internal.render.texture.internal;
+                        functions.drawImage(functions.initTexture(slot, renderer, texture[1], game), null, slot, renderer, texture[8], texture[9], texture[10], texture[11]);
 
                         renderer.queue.texturemapsUpdated.push(texture[1]);
 
@@ -7792,6 +7807,153 @@ Bagel = {
                     }
                     else {
                         return false;
+                    }
+                },
+                internal: {
+                    initTexture: (slot, renderer, slotID, game) => {
+                        if (slot.gl) {
+                            return slot.gl;
+                        }
+
+                        let settings = {
+                            powerPreference: "high-performance",
+                            depth: false,
+                            antialiasing: false
+                        };
+                        let slotGL = slot.canvas.getContext("webgl", settings) || slot.canvas.getContext("experimental-webgl", settings);
+                        slot.gl = slotGL;
+
+
+                        let compileShader = Bagel.internal.subFunctions.tick.render.webgl.compileShader;
+                        let vertex = compileShader(slotGL.VERTEX_SHADER, `
+                            attribute vec2 a_vertices;
+                            attribute vec2 a_textcoord;
+
+                            uniform float u_size;
+                            uniform vec2 u_resolution;
+
+                            varying vec2 v_texcoord;
+
+                            void main () {
+                                v_texcoord = a_textcoord;
+                                gl_Position = vec4(
+                                    (((a_vertices / u_resolution) * 2.0) - 1.0) * vec2(1, -1),
+                                    0,
+                                    1
+                                );
+                                gl_PointSize = u_size;
+                            }
+                        `, slotGL, game);
+
+                        let fragment = compileShader(slotGL.FRAGMENT_SHADER, `
+                            precision mediump float;
+                            uniform sampler2D u_image;
+
+                            varying vec2 v_texcoord;
+
+                            void main () {
+                                gl_FragColor = texture2D(u_image, v_texcoord);
+                            }
+                        `, slotGL, game);
+
+                        let program = slotGL.createProgram();
+                        slotGL.attachShader(program, vertex);
+                        slotGL.attachShader(program, fragment);
+                        slotGL.linkProgram(program);
+                        if (! slotGL.getProgramParameter(program, slotGL.LINK_STATUS)) { // Error
+                            console.error("Err... a Bagel.js shader program failed to link. That wasn't supposed to happen.");
+                            console.log(slotGL.getProgramInfoLog(program));
+                            slotGL.deleteProgram(program); // Delete the program
+                            Bagel.internal.oops(game);
+                        }
+                        slotGL.useProgram(program);
+
+                        //slotGL.blendFunc(slotGL.ONE, slotGL.ONE_MINUS_SRC_ALPHA);
+                        //slotGL.enable(slotGL.BLEND);
+                        slotGL.uniform2f(slotGL.getUniformLocation(program, "u_resolution"), slot.canvas.width, slot.canvas.height);
+                        slot.locations.size = slotGL.getUniformLocation(program, "u_size");
+                        slotGL.uniform1f(slot.locations.size, 1);
+
+                        let textureLocation = slotGL.getAttribLocation(program, "a_textcoord");
+                        slotGL.enableVertexAttribArray(textureLocation); // Enable it
+                        slot.buffers.images = slotGL.createBuffer();
+                        slotGL.bindBuffer(slotGL.ARRAY_BUFFER, slot.buffers.images);
+                        slotGL.vertexAttribPointer(textureLocation, 2, slotGL.FLOAT, false, 0, 0);
+                        slotGL.bufferData(slotGL.ARRAY_BUFFER, new Float32Array([
+                            -1, 1,
+                            1, 1,
+                            -1, -1,
+
+                            1, 1,
+                            1, -1,
+                            -1, -1
+                        ]), slotGL.STATIC_DRAW);
+
+                        let verticesLocation = slotGL.getAttribLocation(program, "a_vertices");
+                        slotGL.enableVertexAttribArray(verticesLocation); // Enable it
+                        slot.buffers.vertices = slotGL.createBuffer();
+                        slotGL.bindBuffer(slotGL.ARRAY_BUFFER, slot.buffers.vertices);
+                        slotGL.vertexAttribPointer(verticesLocation, 2, slotGL.FLOAT, false, 0, 0);
+                        slotGL.bufferData(slotGL.ARRAY_BUFFER, new Float32Array(), slotGL.DYNAMIC_DRAW);
+
+                        let blankTexture = renderer.blankTexture;
+
+                        let webgltexture = slotGL.createTexture();
+                        slotGL.activeTexture(slotGL.TEXTURE0);
+                        slotGL.bindTexture(slotGL.TEXTURE_2D, webgltexture);
+                        slotGL.texParameteri(slotGL.TEXTURE_2D, slotGL.TEXTURE_WRAP_S, slotGL.CLAMP_TO_EDGE);
+                        slotGL.texParameteri(slotGL.TEXTURE_2D, slotGL.TEXTURE_WRAP_T, slotGL.CLAMP_TO_EDGE);
+                        slotGL.texParameteri(slotGL.TEXTURE_2D, slotGL.TEXTURE_MIN_FILTER, slotGL.NEAREST);
+                        slotGL.texParameteri(slotGL.TEXTURE_2D, slotGL.TEXTURE_MAG_FILTER, slotGL.NEAREST);
+                        slotGL.texImage2D(slotGL.TEXTURE_2D, 0, slotGL.RGBA, slotGL.RGBA, slotGL.UNSIGNED_BYTE, blankTexture);
+
+                        slotGL.viewport(0, 0, slot.canvas.width, slot.canvas.height);
+
+
+                        if (renderer.glTextureContexts == 2) { // Maximum of 2 active contexts
+                            deactivateID = 0;
+                            for (let i in renderer.activeGLTextureContexts) {
+                                let id = renderer.activeGLTextureContexts[deactivateID];
+                                if (renderer.textureSlots[id].singleTexture) { // Single textures should be deactivated first
+                                    deactivateID = i;
+                                    break;
+                                }
+                            }
+                            let deactivateSlot = renderer.textureSlots[renderer.activeGLTextureContexts[deactivateID]];
+                            deactivateSlot.gl.getExtension("WEBGL_lose_context").loseContext();
+                            delete deactivateSlot.gl;
+                            renderer.activeGLTextureContexts[deactivateID] = null;
+                            renderer.activeGLTextureContexts = renderer.activeGLTextureContexts.filter(item => item != null);
+                        }
+                        else {
+                            renderer.glTextureContexts++;
+                        }
+                        renderer.activeGLTextureContexts.push(slotID);
+
+
+                        return slotGL;
+                    },
+                    drawImage: (gl, img, slot, renderer, x, y, width, height) => {
+                        if (img == null) {
+                            img = renderer.blankTexture;
+                        }
+
+                        let size = Math.max(width, height);
+
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+                        gl.uniform1f(slot.locations.size, size);
+                        let halfWidth = width / 2;
+                        let halfHeight = height / 2;
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                            x - halfWidth, y + halfHeight,
+                            x + halfWidth, y + halfHeight,
+                            x - halfWidth, y - halfHeight,
+
+                            x + halfWidth, y + halfHeight,
+                            x + halfWidth, y - halfHeight,
+                            x - halfWidth, y - halfHeight
+                        ]), gl.STREAM_DRAW);
+                        gl.drawArrays(gl.TRIANGLES, 0, 6);
                     }
                 }
             }
