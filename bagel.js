@@ -19,8 +19,6 @@ Game.config.display.minimumLimits
 
 Switch between storing in combined texture maps and single textures depending on usage
 
-Should assets be able to be set? The video plugin could create a texture? Image sprites should look for textures instead of images?
-
 Asset preload, runs before init. Runs even when assets aren't being initialised
 
 Auto, static and animated canvas sprite modes
@@ -35,8 +33,6 @@ Context lost handling
 The ability to remove or replace a default argument for a sprite type. Maybe only for some? Prevent setting some attributes like "type"
 
 Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
-
-enableSet option for assets
 
 Built in FPS counter
 
@@ -3867,37 +3863,6 @@ Bagel = {
                                             if (! where) where = "the function Game.add.asset." + typeJSON.get;
                                             let plural = game.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
                                             Bagel.internal.loadAsset(asset, boundGame, plural, where, true);
-                                        };
-                                        boundGame.set.asset[typeJSON.get] = (id, asset, overwrite, check, where) => {
-                                            if (asset == null) {
-                                                console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the value for this asset to be set to.");
-                                                Bagel.internal.oops(game);
-                                            }
-                                            if (id == null) {
-                                                console.error("Hmm, looks like you forgot the \"id\" argument (the second argument). It's the id of the asset to be changed.");
-                                                Bagel.internal.oops(game);
-                                            }
-                                            if (typeof id != "string") {
-                                                console.error("Oops, looks like you used the wrong type for the \"id\" argument (the second argument). It's the id of the asset to be changed. It's supposed to be a string but you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + ".");
-                                                Bagel.internal.oops(game);
-                                            }
-                                            if (! where) where = "the function Game.set.asset." + typeJSON.get;
-
-                                            let assets = boundGame.internal.assets.assets;
-                                            let plural = boundGame.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
-                                            if (assets[plural] == null) assets[plural] = {};
-                                            if (assets[plural][id]) {
-                                                if (! overwrite) {
-                                                    if (check) {
-                                                        return true;
-                                                    }
-                                                    else {
-                                                        console.error("Huh, looks like that id is already being used. You can try setting the \"overwrite\" argument (the 3rd one) to true if you're happy with overwriting. Otherwise check the id or use the \"check\" argument (the 4th) to return true instead of an error when the asset already exists.");
-                                                        Bagel.internal.oops(game);
-                                                    }
-                                                }
-                                            }
-                                            assets[plural][id] = asset;
                                         };
                                     })(newType, game, typeJSON, plugin);
                                 }
