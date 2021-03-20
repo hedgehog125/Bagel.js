@@ -11,11 +11,13 @@ Lose texture webgl contexts on game deletion. Lose when inactive for a few secon
 
 Pause videos on state change
 
-Don't use lines and the 1px gap between textures for textures larger or equal to 4096x4096, otherwise low end devices effectively only support 4095x4095 textures. Also unnecessary extra processing. Make sure to modify remove logic. Also update singleTexture value. Does this work on low end devices with textures above their limit? WebGL being used to render texture into index.
+Test texture downscaling on low end devices
 
 = Features =
 game.debug.textures.hideCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
+
+Switch between storing in combined texture maps and single textures depending on usage
 
 Should assets be able to be set? The video plugin could create a texture? Image sprites should look for textures instead of images?
 
@@ -848,7 +850,7 @@ Bagel = {
                                     canvas.width = sprite.width;
                                     canvas.height = sprite.height;
 
-                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game);
+                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game, false, true);
                                     sprite.internal.renderUpdate = false;
                                 },
                                 onVisible: (sprite, newBitmap) => {
@@ -1052,7 +1054,7 @@ Bagel = {
                                 sprite.internal.canvasID = ".Internal.text." + sprite.id;
                             },
                             render: {
-                                init: (sprite) => {
+                                init: sprite => {
                                     Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, sprite.game);
 
                                     let internal = sprite.internal;
@@ -3606,6 +3608,15 @@ Bagel = {
                         loadingScreen.id = ".Internal.loadingScreen." + game.id;
                         loadingScreen.width = game.width;
                         loadingScreen.height = game.height;
+
+                        let backgroundColour;
+                        if (game.config.display.backgroundColour == "transparent") {
+                            backgroundColour = document.body.bgColor;
+                        }
+                        else {
+                            backgroundColour = game.config.display.backgroundColour;
+                        }
+
                         loadingScreen.config = {
                             loading: {
                                 skip: true,
@@ -3614,7 +3625,7 @@ Bagel = {
                             display: {
                                 resolution: "fixed",
                                 dom: false,
-                                backgroundColour: "transparent"
+                                backgroundColour: backgroundColour
                             },
                             disableBagelJSMessage: true // Otherwise there would be 2 per game
                         };
@@ -3695,7 +3706,7 @@ Bagel = {
                     let loadingScreen = game.internal.loadingScreen;
                     if (loadingScreen) {
                         if (game.internal.renderer.type == "webgl") {
-                            Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game);
+                            Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game, false, true);
 
                             game.internal.loadingScreenRenderID = Bagel.internal.render.bitmapSprite.new({
                                 x: game.width / 2,
@@ -4984,7 +4995,11 @@ Bagel = {
                                     let id = queue[i];
                                     if (! updated[id]) {
                                         gl.activeTexture(gl.TEXTURE0 + id);
-                                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, renderer.textureSlots[id].canvas);
+                                        let canvas = renderer.textureSlots[id].canvas;
+                                        if (canvas == null) {
+                                            canvas = renderer.blankTexture;
+                                        }
+                                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
 
                                         updated[id] = true;
                                     }
@@ -5087,6 +5102,7 @@ Bagel = {
 
                             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                             gl.enable(gl.BLEND);
+                            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
                             gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), game.width, game.height);
 
                             // https://stackoverflow.com/questions/19592850/how-to-bind-an-array-of-textures-to-a-webgl-shader-uniform
@@ -5818,13 +5834,7 @@ Bagel = {
                                                         canvas.width = img.width;
                                                         canvas.height = img.height;
 
-                                                        let gameConfig = game.vars.loading.game.config;
-                                                        if (gameConfig.display.backgroundColour == "transparent") {
-                                                            ctx.fillStyle = document.body.bgColor;
-                                                        }
-                                                        else {
-                                                            ctx.fillStyle = gameConfig.display.backgroundColour;
-                                                        }
+                                                        ctx.fillStyle = game.config.display.backgroundColour;
                                                         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                                                         if (game.vars.stage == 0) {
@@ -7395,7 +7405,7 @@ Bagel = {
                 }
             },
             texture: {
-                new: (id, texture, game, overwrite) => {
+                new: (id, texture, game, overwrite, singleTexture=false) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Hmm, looks like you didn't specify the game properly (it's the 3rd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
@@ -7425,6 +7435,7 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
                     let combinedTexture = renderer.combinedTextures[texture[1]];
+                    let functions = Bagel.internal.render.texture.internal;
 
                     if (renderer.type == "webgl") {
                         let gl = renderer.gl;
@@ -7435,6 +7446,8 @@ Bagel = {
                         let downscaled = false;
                         if (width > maxSize || height > maxSize) {
                             downscaled = true;
+                            singleTexture = true;
+
                             let ratio = width / height;
                             if (width > height) {
                                 width = maxSize;
@@ -7466,7 +7479,7 @@ Bagel = {
 
                             if (textures[id][10] != width || textures[id][11] != height) { // Resolution's changed, so the texture needs to be reallocated
                                 let render = Bagel.internal.render.texture;
-                                render.delete(id, game, false);
+                                render.delete(id, game, false, true);
                                 render.new(id, texture, game);
 
                                 let newUsingTextures = [];
@@ -7481,10 +7494,15 @@ Bagel = {
                                 renderer.bitmapsUsingTextures[id] = newUsingTextures;
                             }
                             else {
-                                let functions = Bagel.internal.render.texture.internal;
-                                let slotGL = functions.initTexture(slot, renderer, textures[id][1], game);
+                                if (slot.singleTexture) {
+                                    slot.canvas = texture;
+                                }
+                                else {
+                                    let slotGL = functions.initTexture(slot, renderer, textures[id][1], game);
 
-                                functions.drawImage(slotGL, texture, slot, renderer, textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
+                                    functions.drawImage(slotGL, null, slot, renderer, textures[id][8], textures[id][9], textures[id][10], textures[id][11]); // Remove the previous
+                                    functions.drawImage(slotGL, texture, slot, renderer, textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
+                                }
 
                                 renderer.queue.texturemapsUpdated.push(textures[id][1]);
                             }
@@ -7495,35 +7513,11 @@ Bagel = {
                             let index = 0;
                             while (index < renderer.maxTextureSlots) {
                                 if (renderer.textureSlots[index][0]) { // Not initialised
-                                    let canvas = document.createElement("canvas");
-                                    if (width >= 4096 || height >= 4096) { // The texture is too big for a normal sized combined texture
-                                        canvas.width = width + 1;
-                                        canvas.height = height + 1;
-                                    }
-                                    else {
-                                        canvas.width = 4096;
-                                        canvas.height = 4096;
-                                    }
-
-                                    let lines = [];
-                                    let i = 0;
-                                    while (i < canvas.height) {
-                                        let line = [0, i, canvas.width]; // x positon, y position, x pixels available
-
-                                        lines.push([line]);
-                                        i++;
-                                    }
-
-                                    renderer.textureSlots[index] = {
-                                        canvas: canvas,
-                                        gl: null,
-                                        lines: lines,
-                                        webgltexture: renderer.textureSlots[index][1],
-                                        singleTexture: false,
-
-                                        locations: {},
-                                        buffers: {}
-                                    };
+                                    functions.initCombined(index, renderer, width, height, singleTexture);
+                                }
+                                if ((! renderer.textureSlots[index].singleTexture) && singleTexture) { // Needs to be a single texture
+                                    index++;
+                                    continue;
                                 }
 
                                 let combinedTexture = renderer.textureSlots[index];
@@ -7534,57 +7528,113 @@ Bagel = {
                                 let a = 0;
                                 let drawX = 0;
                                 let drawY = 0;
-                                for (i in combinedTexture.lines) {
-                                    for (a in combinedTexture.lines[i]) {
-                                        let line = combinedTexture.lines[i][a];
+                                if (renderer.textureSlots[index].singleTexture) { // If it's going to be the only texture in the combined texture then it can just go at 0, 0
+                                    if (renderer.textureSlots[index].textureCount == 0) {
+                                        foundPosition = true;
+                                    }
+                                }
+                                else {
+                                    for (i in combinedTexture.lines) {
+                                        for (a in combinedTexture.lines[i]) {
+                                            let line = combinedTexture.lines[i][a];
 
-                                        if (width + 1 <= line[2]) {
-                                            let c = 0;
-                                            let d = i;
-                                            let y = line[1];
+                                            if (width + 1 <= line[2]) {
+                                                let c = 0;
+                                                let d = i;
+                                                let y = line[1];
 
-                                            drawX = line[0];
-                                            drawY = line[1];
+                                                drawX = line[0];
+                                                drawY = line[1];
 
-                                            let valid = false;
-                                            while (c < height + 1) { // Check the rows to see if there's space
-                                                y++;
-                                                d++;
-                                                valid = false;
-                                                for (let b in combinedTexture.lines[d]) {
-                                                    let newLine = combinedTexture.lines[d][b];
-                                                    if (newLine[1] == y) { // Make sure a row hasn't been skipped
-                                                        if (newLine[0] <= line[0]) { // Make sure the line starts at the same x position or before
-                                                            valid = true;
-                                                            break;
+                                                let valid = false;
+                                                while (c < height + 1) { // Check the rows to see if there's space
+                                                    y++;
+                                                    d++;
+                                                    valid = false;
+                                                    for (let b in combinedTexture.lines[d]) {
+                                                        let newLine = combinedTexture.lines[d][b];
+                                                        if (newLine[1] == y) { // Make sure a row hasn't been skipped
+                                                            if (newLine[0] <= line[0]) { // Make sure the line starts at the same x position or before
+                                                                valid = true;
+                                                                break;
+                                                            }
                                                         }
                                                     }
+                                                    if (! valid) {
+                                                        break;
+                                                    }
+                                                    c++;
                                                 }
-                                                if (! valid) {
+                                                if (valid) {
+                                                    foundPosition = true;
                                                     break;
                                                 }
-                                                c++;
-                                            }
-                                            if (valid) {
-                                                foundPosition = true;
-                                                break;
                                             }
                                         }
-                                    }
-                                    if (foundPosition) {
-                                        break;
+                                        if (foundPosition) {
+                                            break;
+                                        }
                                     }
                                 }
 
+
+
                                 if (foundPosition) {
-                                    let functions = Bagel.internal.render.texture.internal;
-                                    let slotGL = functions.initTexture(combinedTexture, renderer, index, game);
+                                    if (singleTexture) {
+                                        combinedTexture.canvas = texture;
+                                    }
+                                    else {
+                                        let slotGL = functions.initTexture(combinedTexture, renderer, index, game);
 
-                                    let line = combinedTexture.lines[i][a];
-                                    functions.drawImage(slotGL, texture, combinedTexture, renderer, drawX, drawY, width, height);
+                                        functions.drawImage(slotGL, texture, combinedTexture, renderer, drawX, drawY, width, height);
 
+                                        // Update the lines
+                                        let newLines = [];
+                                        while (i < combinedTexture.lines.length) { // i is deliberately not reset
+                                            newLines.push([]);
+                                            for (a in combinedTexture.lines[i]) { // a is reset
+                                                let line = combinedTexture.lines[i][a];
+                                                let needsSorting = false;
+                                                if (drawX > line[0] + line[2]
+                                                    || drawX + width < line[0]
+                                                    || drawY > line[1] + 1
+                                                    || drawY + height < line[1] - 1
+                                                ) { // Ignore lines where it doesn't overlap with the image bounding box
+                                                    newLines[newLines.length - 1].push(line);
+                                                    continue;
+                                                }
+
+                                                if (line[0] < drawX) { // There's a part of the line to the left of the image
+                                                    let lineWidth = (drawX - line[0]) - 1;
+                                                    if (lineWidth != 0) {
+                                                        newLines[newLines.length - 1].push([line[0] + 1, line[1], lineWidth - 1]);
+                                                        needsSorting = true;
+                                                    }
+                                                }
+                                                if (line[0] + line[2] > drawX + width) { // Part to the right
+                                                    let lineWidth = (line[2] - ((drawX + width) - line[0])) - 1;
+                                                    if (lineWidth != 0) {
+                                                        newLines[newLines.length - 1].push([drawX + width + 1, line[1], lineWidth]);
+                                                        needsSorting = true;
+                                                    }
+                                                }
+
+                                                if (needsSorting) {
+                                                    newLines[newLines.length - 1].sort((first, second) => first[0] - second[0]);
+                                                }
+                                            }
+                                            if (newLines[newLines.length - 1].length == 0) {
+                                                newLines.pop();
+                                            }
+                                            i++;
+                                        }
+                                        combinedTexture.lines = newLines;
+                                    }
+
+
+
+                                    combinedTexture.textureCount++;
                                     renderer.queue.texturemapsUpdated.push(index);
-
                                     textures[id] = [
                                         combinedTexture.webgltexture,
                                         index,
@@ -7597,48 +7647,6 @@ Bagel = {
                                         drawX, drawY,
                                         width, height
                                     ];
-
-                                    // Update the lines
-                                    let newLines = [];
-                                    while (i < combinedTexture.lines.length) { // i is deliberately not reset
-                                        newLines.push([]);
-                                        for (a in combinedTexture.lines[i]) { // a is reset
-                                            let line = combinedTexture.lines[i][a];
-                                            let needsSorting = false;
-                                            if (drawX > line[0] + line[2]
-                                                || drawX + width < line[0]
-                                                || drawY > line[1] + 1
-                                                || drawY + height < line[1] - 1
-                                            ) { // Ignore lines where it doesn't overlap with the image bounding box
-                                                newLines[newLines.length - 1].push(line);
-                                                continue;
-                                            }
-
-                                            if (line[0] < drawX) { // There's a part of the line to the left of the image
-                                                let lineWidth = (drawX - line[0]) - 1;
-                                                if (lineWidth != 0) {
-                                                    newLines[newLines.length - 1].push([line[0] + 1, line[1], lineWidth - 1]);
-                                                    needsSorting = true;
-                                                }
-                                            }
-                                            if (line[0] + line[2] > drawX + width) { // Part to the right
-                                                let lineWidth = (line[2] - ((drawX + width) - line[0])) - 1;
-                                                if (lineWidth != 0) {
-                                                    newLines[newLines.length - 1].push([drawX + width + 1, line[1], lineWidth]);
-                                                    needsSorting = true;
-                                                }
-                                            }
-
-                                            if (needsSorting) {
-                                                newLines[newLines.length - 1].sort((first, second) => first[0] - second[0]);
-                                            }
-                                        }
-                                        if (newLines[newLines.length - 1].length == 0) {
-                                            newLines.pop();
-                                        }
-                                        i++;
-                                    }
-                                    combinedTexture.lines = newLines;
                                     return;
                                 }
 
@@ -7659,7 +7667,7 @@ Bagel = {
                     }
                 },
                 update: (id, texture, game) => Bagel.internal.render.texture.new(id, texture, game, true),
-                delete: (id, game, replaceSpriteTextures=true) => {
+                delete: (id, game, replaceSpriteTextures=true, keepGL=false) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Oops, looks like you didn't specify the game properly (it's the 2nd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
@@ -7685,81 +7693,88 @@ Bagel = {
                         let canvas = slot.canvas;
                         let ctx = slot.ctx;
 
+
                         let functions = Bagel.internal.render.texture.internal;
-                        functions.drawImage(functions.initTexture(slot, renderer, texture[1], game), null, slot, renderer, texture[8], texture[9], texture[10], texture[11]);
-
-                        renderer.queue.texturemapsUpdated.push(texture[1]);
-
-                        // Update the lines to make the space available
-                        let newLines = [];
-                        let b = 0;
-                        let keys = Object.keys(slot.lines);
-                        while (b < keys.length) {
-                            let line = slot.lines[keys[b]];
-
-                            let y = line[0][1];
-                            if (y == texture[9]) { // First row affected by the texture
-                                break;
-                            }
-                            if (y > texture[9]) { // Gone past it
-                                break;
-                            }
-                            newLines.push(line);
-                            b++;
+                        slot.textureCount--;
+                        if (slot.textureCount == 0) {
+                            functions.deactivateCombined(texture[1], renderer, keepGL);
                         }
+                        else {
+                            functions.drawImage(functions.initTexture(slot, renderer, texture[1], game), null, slot, renderer, texture[8], texture[9], texture[10], texture[11]);
 
-                        let c = 0;
-                        while (b < keys.length) {
-                            let i = keys[b];
-                            if (c > texture[11]) { // Processed all the rows affected by the image
-                                break;
-                            }
-                            newLines.push([]);
-                            if (slot.lines[i][0][1] != texture[9] + c) {
-                                newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // Just add the line from the texture if there's no other lines to combine it with
-                                c++;
-                                continue;
-                            }
-                            let addedLine = false;
-                            for (let a in slot.lines[i]) {
-                                let line = slot.lines[i][a];
+                            // Update the lines to make the space available
+                            let newLines = [];
+                            let b = 0;
+                            let keys = Object.keys(slot.lines);
+                            while (b < keys.length) {
+                                let line = slot.lines[keys[b]];
 
-                                let justAddedLine = false;
-                                if (! addedLine) {
-                                    if (texture[9] > line[1] + 1
-                                        || texture[9] + texture[11] < line[1] - 1
-                                    ) { // The texure is within the y requirements
-                                        if (line[0] > texture[8] + texture[10]) { // Past where the line would've been
-                                            newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // insert the line that would be there if the texture wasn't there
+                                let y = line[0][1];
+                                if (y == texture[9]) { // First row affected by the texture
+                                    break;
+                                }
+                                if (y > texture[9]) { // Gone past it
+                                    break;
+                                }
+                                newLines.push(line);
+                                b++;
+                            }
+
+                            let c = 0;
+                            while (b < keys.length) {
+                                let i = keys[b];
+                                if (c > texture[11]) { // Processed all the rows affected by the image
+                                    break;
+                                }
+                                newLines.push([]);
+                                if (slot.lines[i][0][1] != texture[9] + c) {
+                                    newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // Just add the line from the texture if there's no other lines to combine it with
+                                    c++;
+                                    continue;
+                                }
+                                let addedLine = false;
+                                for (let a in slot.lines[i]) {
+                                    let line = slot.lines[i][a];
+
+                                    let justAddedLine = false;
+                                    if (! addedLine) {
+                                        if (texture[9] > line[1] + 1
+                                            || texture[9] + texture[11] < line[1] - 1
+                                        ) { // The texure is within the y requirements
+                                            if (line[0] > texture[8] + texture[10]) { // Past where the line would've been
+                                                newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // insert the line that would be there if the texture wasn't there
+                                                newLines[newLines.length - 1].push(line);
+                                                addedLine = true;
+                                                justAddedLine = true;
+                                            }
+                                        }
+                                    }
+
+
+                                    if (addedLine) {
+                                        let prevLine = newLines[newLines.length - 1][newLines[newLines.length - 1].length - 2];
+                                        if (prevLine[0] + prevLine[2] + 1 == line[0]) { // Directly next to each other so join the two lines
+                                            prevLine[2] += line[0] + 1;
+                                            newLines[newLines.length - 1].pop();
+                                        }
+                                    }
+                                    else {
+                                        if (! justAddedLine) {
                                             newLines[newLines.length - 1].push(line);
-                                            addedLine = true;
-                                            justAddedLine = true;
                                         }
                                     }
                                 }
-
-
-                                if (addedLine) {
-                                    let prevLine = newLines[newLines.length - 1][newLines[newLines.length - 1].length - 2];
-                                    if (prevLine[0] + prevLine[2] + 1 == line[0]) { // Directly next to each other so join the two lines
-                                        prevLine[2] += line[0] + 1;
-                                        newLines[newLines.length - 1].pop();
-                                    }
-                                }
-                                else {
-                                    if (! justAddedLine) {
-                                        newLines[newLines.length - 1].push(line);
-                                    }
-                                }
+                                c++;
+                                b++;
                             }
-                            c++;
-                            b++;
+                            while (b < keys.length) { // Add any lines back in that were skipped
+                                newLines.push(slot.lines[keys[b]]);
+                                b++;
+                            }
+                            slot.lines = newLines;
                         }
-                        while (b < keys.length) { // Add any lines back in that were skipped
-                            newLines.push(slot.lines[keys[b]]);
-                            b++;
-                        }
-                        slot.lines = newLines;
+
+                        renderer.queue.texturemapsUpdated.push(texture[1]);
 
                         if (replaceSpriteTextures) {
                             for (let i in renderer.bitmapsUsingTextures[id]) { // Update the texture of sprites using this texture to a missing texture
@@ -7868,8 +7883,9 @@ Bagel = {
                         }
                         slotGL.useProgram(program);
 
-                        //slotGL.blendFunc(slotGL.ONE, slotGL.ONE_MINUS_SRC_ALPHA);
-                        //slotGL.enable(slotGL.BLEND);
+                        slotGL.blendFunc(slotGL.ONE, slotGL.ZERO); // Replace existing pixels
+                        slotGL.enable(slotGL.BLEND);
+
                         slotGL.uniform2f(slotGL.getUniformLocation(program, "u_resolution"), slot.canvas.width, slot.canvas.height);
                         slot.locations.size = slotGL.getUniformLocation(program, "u_size");
                         slotGL.uniform1f(slot.locations.size, 1);
@@ -7880,13 +7896,13 @@ Bagel = {
                         slotGL.bindBuffer(slotGL.ARRAY_BUFFER, slot.buffers.images);
                         slotGL.vertexAttribPointer(textureLocation, 2, slotGL.FLOAT, false, 0, 0);
                         slotGL.bufferData(slotGL.ARRAY_BUFFER, new Float32Array([
-                            -1, 1,
+                            0, 1,
                             1, 1,
-                            -1, -1,
+                            0, 0,
 
                             1, 1,
-                            1, -1,
-                            -1, -1
+                            1, 0,
+                            0, 0
                         ]), slotGL.STATIC_DRAW);
 
                         let verticesLocation = slotGL.getAttribLocation(program, "a_vertices");
@@ -7894,7 +7910,7 @@ Bagel = {
                         slot.buffers.vertices = slotGL.createBuffer();
                         slotGL.bindBuffer(slotGL.ARRAY_BUFFER, slot.buffers.vertices);
                         slotGL.vertexAttribPointer(verticesLocation, 2, slotGL.FLOAT, false, 0, 0);
-                        slotGL.bufferData(slotGL.ARRAY_BUFFER, new Float32Array(), slotGL.DYNAMIC_DRAW);
+                        slotGL.bufferData(slotGL.ARRAY_BUFFER, new Float32Array(), slotGL.STREAM_DRAW);
 
                         let blankTexture = renderer.blankTexture;
 
@@ -7933,6 +7949,63 @@ Bagel = {
 
                         return slotGL;
                     },
+                    initCombined: (index, renderer, width, height, singleTexture) => {
+                        let slot = renderer.textureSlots[index];
+                        let canvas, gl;
+                        let locations = {};
+                        let buffers = {};
+
+                        if (slot[2]) { // Some extra stuff saved
+                            canvas = slot[3];
+                            gl = slot[2];
+                            locations = slot[4];
+                            buffers = slot[5];
+                        }
+                        else {
+                            canvas = document.createElement("canvas");
+                        }
+
+                        let lines = [];
+                        if (singleTexture) {
+                            canvas.width = width;
+                            canvas.height = height;
+                        }
+                        else {
+                            canvas.width = 4096;
+                            canvas.height = 4096;
+                            let i = 0;
+                            while (i < canvas.height) {
+                                let line = [0, i, canvas.width]; // x positon, y position, x pixels available
+
+                                lines.push([line]);
+                                i++;
+                            }
+                        }
+
+                        renderer.textureSlots[index] = {
+                            canvas: canvas,
+                            gl: gl,
+                            lines: lines,
+                            webgltexture: renderer.textureSlots[index][1],
+                            singleTexture: singleTexture,
+                            textureCount: 0,
+
+                            locations: locations,
+                            buffers: buffers
+                        };
+                    },
+                    deactivateCombined: (index, renderer, keepGL) => {
+                        let slot = renderer.textureSlots[index];
+                        if (slot.gl) {
+                            slot.gl.getExtension("WEBGL_lose_context").loseContext();
+                        }
+                        if (keepGL) {
+                            renderer.textureSlots[index] = [true, slot.webgltexture, slot.gl, slot.canvas, slot.locations, slot.buffers];
+                        }
+                        else {
+                            renderer.textureSlots[index] = [true, slot.webgltexture, ];
+                        }
+                    },
                     drawImage: (gl, img, slot, renderer, x, y, width, height) => {
                         if (img == null) {
                             img = renderer.blankTexture;
@@ -7942,16 +8015,14 @@ Bagel = {
 
                         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
                         gl.uniform1f(slot.locations.size, size);
-                        let halfWidth = width / 2;
-                        let halfHeight = height / 2;
                         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-                            x - halfWidth, y + halfHeight,
-                            x + halfWidth, y + halfHeight,
-                            x - halfWidth, y - halfHeight,
+                            x, y + height,
+                            x + width, y + height,
+                            x, y,
 
-                            x + halfWidth, y + halfHeight,
-                            x + halfWidth, y - halfHeight,
-                            x - halfWidth, y - halfHeight
+                            x + width, y + height,
+                            x + width, y,
+                            x, y
                         ]), gl.STREAM_DRAW);
                         gl.drawArrays(gl.TRIANGLES, 0, 6);
                     }
