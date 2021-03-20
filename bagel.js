@@ -5,9 +5,7 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
-Poor performance on loading screen in non chromium browsers. Seems to be related to updating textures. Maybe the texture needs to be separate since it's being updated? Draw image can take tens of miliseconds on firefox! Use webgl for making the changes
-
-Lose texture webgl contexts on game deletion. Lose when inactive for a few seconds?
+Poor performance on loading screen in non chromium browsers. Seems to be related to updating textures. Still not sure how to fix it. https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Animating_textures_in_WebGL seems to work fine in firefox so maybe can see what that does differently
 
 Pause videos on state change
 
@@ -3404,6 +3402,12 @@ Bagel = {
                             }
                             if (game.internal.renderer.type == "webgl") {
                                 game.internal.renderer.gl.getExtension("WEBGL_lose_context").loseContext();
+                                let slots = game.internal.renderer.textureSlots;
+                                for (let i in slots) {
+                                    if (slots[i].gl) {
+                                        slots[i].gl.getExtension("WEBGL_lose_context").loseContext();
+                                    }
+                                }
                             }
 
                             delete Bagel.internal.games[game.id];
