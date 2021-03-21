@@ -5,8 +5,6 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
-Poor performance on loading screen in non chromium browsers. Seems to be related to updating textures. Still not sure how to fix it. https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Animating_textures_in_WebGL seems to work fine in firefox so maybe can see what that does differently
-
 Pause videos on state change
 
 Test texture downscaling on low end devices
@@ -4968,6 +4966,7 @@ Bagel = {
                                         if (canvas == null) {
                                             canvas = renderer.blankTexture;
                                         }
+
                                         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
 
                                         updated[id] = true;
@@ -7403,7 +7402,6 @@ Bagel = {
                         console.error("Hmm, you tried to overwrite a texture without setting the \"overwrite\" argument (the 4th) to true. If this was deliberate, try setting it to true. Otherwise you can use the \"check\" function which returns true if a texture with that id already exists.");
                         Bagel.internal.oops(game);
                     }
-                    let combinedTexture = renderer.combinedTextures[texture[1]];
                     let functions = Bagel.internal.render.texture.internal;
 
                     if (renderer.type == "webgl") {
@@ -7448,8 +7446,9 @@ Bagel = {
 
                             if (textures[id][10] != width || textures[id][11] != height) { // Resolution's changed, so the texture needs to be reallocated
                                 let render = Bagel.internal.render.texture;
+                                let singleTexture = renderer.textureSlots[textures[id][1]].singleTexture;
                                 render.delete(id, game, false, true);
-                                render.new(id, texture, game);
+                                render.new(id, texture, game, false, singleTexture);
 
                                 let newUsingTextures = [];
 
