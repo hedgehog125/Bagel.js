@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="A simple layer test in Bagel.js">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>
+            A simple Bagel.js test of texture downscaling when using the WebGL renderer
+        </title>
+    </head>
+    <body bgColor="white"></body>
+</html>
+<script src="../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "game",
+    game: {
+        assets: {
+            imgs: [],
+            snds: []
+        },
+        sprites: [
+            {
+                id: "canvas",
+                type: "canvas",
+                width: 4096,
+                height: 4096,
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ]
+                },
+                render: me => {
+                    me.ctx.fillStyle = "red";
+                    me.ctx.fillRect(0, 0, me.canvas.width, me.canvas.height);
+                    me.canvas.width = me.canvas.width;
+                }
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    state: "game"
+});
+
+</script>

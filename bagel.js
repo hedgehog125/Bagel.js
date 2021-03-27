@@ -5,6 +5,10 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Bugs ==
+How can you prerender graphics on a canvas sprite? Should the canvas width and height be multiplied by the device pixel ratio by default?
+
+Can scroll on touch devices. Some of the CSS from Phaser is missing? In phaser, it's only blocked when scrolling on the canvas
+
 Pause videos on state change
 
 Test texture downscaling on low end devices
@@ -12,6 +16,8 @@ Test texture downscaling on low end devices
 = Features =
 game.debug.textures.hideCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
+
+last.collisionSide says which side of the rectangle the collision was on
 
 Switch between storing in combined texture maps and single textures depending on usage
 
@@ -79,7 +85,12 @@ Bagel = {
                 rendererText += " (via auto mode)";
             }
 
-            console.log("| Bagel.js | <hp> | <renderer> |\nhttps://github.com/hedgehog125/Bagel.js".replace("<hp>", hpText).replace("<renderer>", rendererText));
+            console.log(
+                "| Bagel.js <version> | <hp> | <renderer> |\nhttps://github.com/hedgehog125/Bagel.js"
+                .replace("<hp>", hpText)
+                .replace("<renderer>", rendererText)
+                .replace("<version>", Bagel.version)
+            );
         }
         Bagel.internal.loadCurrent();
         return game;
@@ -1012,7 +1023,7 @@ Bagel = {
                                     },
                                     rerender: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (! initialTrigger) {
-                                            triggerSprite.internal.prerender(triggerSprite, game.internal.renderer.canvas);
+                                            triggerSprite.internal.needsRerender = true;
                                         }
                                     }
                                 },
@@ -1043,24 +1054,25 @@ Bagel = {
                             description: "A text sprite. Allows you to easily display text onscreen.",
                             init: (sprite, game) => {
                                 sprite.internal.last = {};
+                                sprite.last = {
+                                    collision: null
+                                };
                                 sprite.internal.canvasID = ".Internal.text." + sprite.id;
                             },
                             render: {
                                 init: sprite => {
-                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, sprite.game);
-
                                     let internal = sprite.internal;
                                     internal.canvas = document.createElement("canvas");
                                     internal.canvas.width = 1;
                                     internal.canvas.height = 1;
 
+                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, sprite.game);
+
                                     internal.ctx = internal.canvas.getContext("2d");
-                                    internal.prerender = (sprite, mainCanvas) => {
+                                    internal.prerender = (sprite, scaleX, scaleY) => {
                                         let last = sprite.internal.last;
                                         let canvas = sprite.internal.canvas;
                                         let ctx = sprite.internal.ctx;
-                                        let scaleX = mainCanvas.width / sprite.game.width;
-                                        let scaleY = mainCanvas.height / sprite.game.height;
 
                                         ctx.font = sprite.font;
                                         let size = (ctx.measureText("M").width * 1.5) * scaleY;
@@ -1080,10 +1092,15 @@ Bagel = {
                                         sprite.width = Math.round(canvas.width / scaleX);
                                         sprite.height = Math.round(canvas.height / scaleY);
 
-                                        Bagel.internal.render.texture.update(sprite.internal.canvasID, canvas, sprite.game);
+                                        if (canvas.width != 0) { // No text, having a texture this small would cause an error
+                                            Bagel.internal.render.texture.update(sprite.internal.canvasID, canvas, sprite.game);
+                                        }
                                         sprite.internal.renderUpdate = true;
                                     };
-                                    internal.prerender(sprite, sprite.game.internal.renderer.canvas);
+                                    let mainCanvas = game.internal.renderer.canvas;
+                                    let scaleX = mainCanvas.width / sprite.game.width;
+                                    let scaleY = mainCanvas.height / sprite.game.height;
+                                    internal.prerender(sprite, scaleX, scaleY);
                                 },
                                 onVisible: (sprite, newBitmap) => {
                                     sprite.internal.renderUpdate = false;
@@ -1099,14 +1116,23 @@ Bagel = {
                                 },
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
                                 whileVisible: (sprite, updateBitmap) => {
-                                    if (sprite.internal.renderUpdate) {
-                                        sprite.internal.renderUpdate = false;
-                                        updateBitmap(sprite.internal.Bagel.renderID, {
+                                    let mainCanvas = game.internal.renderer.canvas;
+                                    let scaleX = mainCanvas.width / sprite.game.width;
+                                    let scaleY = mainCanvas.height / sprite.game.height;
+
+                                    let internal = sprite.internal;
+                                    if (internal.needsRerender || internal.last.scaleX != scaleX || internal.last.scaleY != scaleY) {
+                                        internal.needsRerender = false;
+                                        internal.prerender(sprite, scaleX, scaleY);
+                                    }
+                                    if (internal.renderUpdate) {
+                                        internal.renderUpdate = false;
+                                        updateBitmap(internal.Bagel.renderID, {
                                             x: sprite.x,
                                             y: sprite.y,
                                             width: sprite.width,
                                             height: sprite.height,
-                                            image: sprite.internal.canvasID,
+                                            image: internal.canvasID,
                                             rotation: 90,
                                             alpha: sprite.alpha
                                         }, sprite.game, false);
@@ -1900,8 +1926,8 @@ Bagel = {
                                                     current.plugin = plugin;
 
                                                     plugin.vars.audio.autoPlay = false;
+                                                    plugin.vars.audio.createUnmute(plugin, game);
                                                     if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                        plugin.vars.audio.createUnmute(plugin, game);
                                                         plugin.vars.audio.queue.push(args.id);
                                                     }
                                                     Bagel.internal.loadCurrent();
@@ -2140,7 +2166,8 @@ Bagel = {
                                     fn: {
                                         appliesTo: [
                                             "sprite",
-                                            "canvas"
+                                            "canvas",
+                                            "text"
                                         ],
                                         obArg: true,
                                         args: {
@@ -2247,7 +2274,8 @@ Bagel = {
                                     fn: {
                                         appliesTo: [
                                             "sprite",
-                                            "canvas"
+                                            "canvas",
+                                            "text"
                                         ],
                                         obArg: true,
                                         args: {
@@ -2320,7 +2348,8 @@ Bagel = {
                                     fn: {
                                         appliesTo: [
                                             "sprite",
-                                            "canvas"
+                                            "canvas",
+                                            "text"
                                         ],
                                         obArg: false,
                                         args: {
@@ -2521,18 +2550,35 @@ Bagel = {
                         if (sprite) {
                             let vars = sprite.vars;
                             if (vars.buttonClicked) {
-                                for (let i in plugin.vars.audio.queue) {
-                                    let snd = Bagel.get.asset.snd(plugin.vars.audio.queue[i], game);
-                                    ((snd, vars, sprite) => {
+                                let queue = plugin.vars.audio.queue;
+                                if (queue.length == 0) {
+                                    let snd = Bagel.get.asset.snd(".Internal.unmuteButtonClickUp", game); // Can be any sound, this is just to test for autoplay
+                                    ((snd, vars, sprite, plugin) => {
                                         snd.play().catch(_ => {
                                             snd.pause();
                                             plugin.vars.audio.autoPlay = false;
                                         }).then(_ => {
+                                            snd.pause();
                                             plugin.vars.audio.queue = [];
                                             plugin.vars.audio.autoPlay = true;
                                             sprite.img = ".Internal.unmuteButton"; // Change to the unmuted image
                                         }); // Play it
-                                    })(snd, vars, sprite);
+                                    })(snd, vars, sprite, plugin);
+                                }
+                                else {
+                                    for (let i in queue) {
+                                        let snd = Bagel.get.asset.snd(queue[i], game);
+                                        ((snd, vars, sprite, plugin) => {
+                                            snd.play().catch(_ => {
+                                                snd.pause();
+                                                plugin.vars.audio.autoPlay = false;
+                                            }).then(_ => {
+                                                plugin.vars.audio.queue = [];
+                                                plugin.vars.audio.autoPlay = true;
+                                                sprite.img = ".Internal.unmuteButton"; // Change to the unmuted image
+                                            }); // Play it
+                                        })(snd, vars, sprite, plugin);
+                                    }
                                 }
                                 vars.buttonClicked = false;
                             }
@@ -3354,7 +3400,7 @@ Bagel = {
 
                     renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // CSS from Phaser (https://phaser.io)
                     if (config.display.mode == "fill") {
-                        renderer.canvas.style += "margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp
+                        renderer.canvas.style += "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp
                     }
                     Bagel.internal.subFunctions.tick.scaleCanvas(game);
 
@@ -3668,12 +3714,10 @@ Bagel = {
                             document.getElementById(game.config.display.htmlElementID).appendChild(game.internal.renderer.canvas);
                         }
                         else {
-                            if (document.body != null) {
-                                document.body.appendChild(game.internal.renderer.canvas);
+                            if (document.body == null) {
+                                document.body = document.createElement("body");
                             }
-                            else {
-                                document.appendChild(game.internal.renderer.canvas);
-                            }
+                            document.body.appendChild(game.internal.renderer.canvas);
                         }
                     }
                     Bagel.internal.subFunctions.init.plugins(game);
@@ -5070,7 +5114,7 @@ Bagel = {
 
                             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                             gl.enable(gl.BLEND);
-                            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+                            //gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
                             gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), game.width, game.height);
 
                             // https://stackoverflow.com/questions/19592850/how-to-bind-an-array-of-textures-to-a-webgl-shader-uniform
@@ -7391,6 +7435,14 @@ Bagel = {
                         console.error("Huh, looks like you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(id)) + " for the id argument (the first). It should be a string.");
                         Bagel.internal.oops(game);
                     }
+                    if (typeof texture.width != "number" || texture.width <= 0) {
+                        console.error("Hmm, the texture.width property is invalid. It needs be a number greater than 0. Value: " + texture.width + ".");
+                        Bagel.internal.oops(game);
+                    }
+                    if (typeof texture.height != "number" || texture.height <= 0) {
+                        console.error("Huh, the texture.height property is invalid. It needs be a number greater than 0. Value: " + texture.height + ".");
+                        Bagel.internal.oops(game);
+                    }
 
                     if (! Bagel.internal.games[game.id]) { // Game deleted
                         return;
@@ -7409,7 +7461,7 @@ Bagel = {
 
                         let width = texture.width;
                         let height = texture.height;
-                        let maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) - 1;
+                        let maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
                         let downscaled = false;
                         if (width > maxSize || height > maxSize) {
                             downscaled = true;
@@ -7425,13 +7477,19 @@ Bagel = {
                                 width = height * ratio;
                             }
 
+                            let downscaleCanvas = document.createElement("canvas");
+                            downscaleCanvas.width = width;
+                            downscaleCanvas.height = height;
+                            downscaleCanvas.getContext("2d").drawImage(texture, 0, 0, width, height);
+                            texture = downscaleCanvas;
+
                             if (! renderer.displayedDownscaleWarning) {
                                 console.warn(
                                     "FYI, the texture "
                                     + JSON.stringify(id)
                                     + " just got downscaled to "
-                                    + maxSize + "x" + maxSize
-                                    + " to keep it within the WebGL dimension limit for this computer."
+                                    + width + "x" + height
+                                    + " to keep it within the WebGL dimension limit for this device, affecting performance."
                                     + "\nIf you want this behaviour without the warning, cap the texture width and height before running this method using \"Bagel.device.webgl.textureSizeLimit\" to find the maximum width/height."
                                     + "\nIf it has to be the full resolution, you can either set a minimum WebGL resolution limit in \"Game.config.display.minimumLimits.textureSize\" (keep in mind that almost no machines support textures more than 16384 pixels wide due to a texture that size taking up around 4GB of VRAM. However, most desktops and laptops do support 16K textures so this can be your minimum if you're willing to exclude mostly phones and tablets.). Or you can set \"Game.config.display.renderer\" to \"canvas\" to get lower performance but have no texture limits (besides RAM and VRAM like WebGL)."
                                     + "\n\nFuture downscales won't be reported for this game. But you can view the list using \"Game.debug.textures.listDownscaled\"."
@@ -7451,7 +7509,6 @@ Bagel = {
                                 render.new(id, texture, game, false, singleTexture);
 
                                 let newUsingTextures = [];
-
                                 for (let i in renderer.bitmapsUsingTextures[id]) { // Regenerate the texture coordinates
                                     let bitmapID = renderer.bitmapsUsingTextures[id][i];
                                     if (bitmapID != null) {
@@ -7812,7 +7869,6 @@ Bagel = {
                             attribute vec2 a_vertices;
                             attribute vec2 a_textcoord;
 
-                            uniform float u_size;
                             uniform vec2 u_resolution;
 
                             varying vec2 v_texcoord;
@@ -7824,7 +7880,6 @@ Bagel = {
                                     0,
                                     1
                                 );
-                                gl_PointSize = u_size;
                             }
                         `, slotGL, game);
 
@@ -7855,8 +7910,6 @@ Bagel = {
                         slotGL.enable(slotGL.BLEND);
 
                         slotGL.uniform2f(slotGL.getUniformLocation(program, "u_resolution"), slot.canvas.width, slot.canvas.height);
-                        slot.locations.size = slotGL.getUniformLocation(program, "u_size");
-                        slotGL.uniform1f(slot.locations.size, 1);
 
                         let textureLocation = slotGL.getAttribLocation(program, "a_textcoord");
                         slotGL.enableVertexAttribArray(textureLocation); // Enable it
@@ -7979,10 +8032,9 @@ Bagel = {
                             img = renderer.blankTexture;
                         }
 
-                        let size = Math.max(width, height);
 
                         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-                        gl.uniform1f(slot.locations.size, size);
+
                         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
                             x, y + height,
                             x + width, y + height,
