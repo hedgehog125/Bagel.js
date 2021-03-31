@@ -7,13 +7,13 @@ TODO:
 == Bugs ==
 How can you prerender graphics on a canvas sprite? Should the canvas width and height be multiplied by the device pixel ratio by default?
 
-Can scroll on touch devices. Some of the CSS from Phaser is missing? In phaser, it's only blocked when scrolling on the canvas
-
 Pause videos on state change
 
 Test texture downscaling on low end devices
 
 = Features =
+Canvas optimisation modes inc. copying
+
 game.debug.textures.hideCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
 
@@ -23,7 +23,7 @@ Switch between storing in combined texture maps and single textures depending on
 
 Asset preload, runs before init. Runs even when assets aren't being initialised
 
-Auto, static and animated canvas sprite modes
+Auto, static and animated canvas sprite modes. And advanced auto where you have to tell Bagel.js about updates? Same as static???
 
 
 Reserve dot prefix for textures
@@ -46,6 +46,8 @@ Gamepad support
 
 
 = Tweaks =
+Update readme, Phaser is smaller than I thought? Even the version used in Frontier is fairly small (smaller than the current version), nowhere near 800KB???
+
 Fix spelling errors
 
 = Testing =
@@ -693,6 +695,17 @@ Bagel = {
                                     required: false,
                                     types: ["function"],
                                     description: "Renders each frame for the canvas. The arguments provided are: \"sprite\", \"game\", \"ctx\" and \"canvas\"."
+                                },
+                                mode: {
+                                    required: false,
+                                    default: "auto",
+                                    check: value => {
+                                        if (! ["auto", "static", "animated"].includes(value)) {
+                                            return "Huh, that's not a valid value. It has to be \"auto\", \"static\" or \"animated\". You tried to use " + JSON.stringify(value) + ".";
+                                        }
+                                    },
+                                    types: ["string"],
+                                    description: "Tells Bagel.js how to optimise for this canvas. It's not important in the canvas renderer but in the WebGL renderer, the value determines how the texture is handled internally.\n\"auto\" will detect when you render to the canvas and update the texture after. This adds a slight overhead.\n\"static\" will assume the canvas won't be updated frequently but you can still update it by returning true from the function you set for your \"render\" argument.\nLastly \"animated\" will assume the canvas will be updated every frame, you can return true if you haven't though.\n\nFor all of these modes, Bagel.js can optimise differently depending on how you use it on a second by second basis. A the texture of even a static canvas can become a more memory intensive but faster to update single texture if there are if it's updated on 3 consecutive frames. If any canvas isn't updated at all for a whole second, it'll become part of a combined texture to reduce memory usage. \"auto\" will also use a single texture if less than 80% of the total textures supported by the GPU are being used. Both \"auto\" and \"static\" canvases will be moved to a combined texture once updated if 80% of textures are being used or will be moved before an update if 100% of textures are full and a new WebGL texture is required.\nIn most circumstances, the \"mode\" argument only specifies the start point and in the case of \"auto\", how the renders will be detected."
                                 }
                             },
                             cloneArgs: {
@@ -739,6 +752,9 @@ Bagel = {
                                     syntax: {
                                         description: "Renders each frame for the clone. The arguments provided are: \"sprite\", \"game\", \"ctx\" and \"canvas\"."
                                     },
+                                    mode: "replace"
+                                },
+                                mode: {
                                     mode: "replace"
                                 }
                             },
@@ -830,18 +846,73 @@ Bagel = {
                             init: (sprite, game) => {
                                 let canvas = document.createElement("canvas");
                                 let ctx = canvas.getContext("2d");
+                                if (sprite.mode == "auto") { // Create the listener methods
+                                    ((sprite, canvas, ctx) => {
+                                        let fns = {
+                                            clearRect: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalclearRect(...args);
+                                            },
+                                            drawFocusIfNeeded: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internaldrawFocusIfNeeded(...args);
+                                            },
+                                            drawImage: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internaldrawImage(...args);
+                                            },
+                                            fill: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalfill(...args);
+                                            },
+                                            fillRect: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalfillRect(...args);
+                                            },
+                                            fillText: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalfillText(...args);
+                                            },
+                                            putImageData: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalputImageData(...args);
+                                            },
+                                            rect: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalrect(...args);
+                                            },
+                                            stroke: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalstroke(...args);
+                                            },
+                                            strokeRect: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalstrokeRect(...args);
+                                            },
+                                            strokeText: (...args) => {
+                                                sprite.internal.canvasUpdated = true;
+                                                ctx.internalstrokeText(...args);
+                                            }
+                                        };
+                                        for (let i in fns) {
+                                            ctx["internal" + i] = ctx[i];
+                                            ctx[i] = fns[i];
+                                        }
+                                    })(sprite, canvas, ctx);
+                                }
 
                                 let scaleX = game.internal.renderer.canvas.width / game.width;
                                 let scaleY = game.internal.renderer.canvas.height / game.height;
+                                sprite.canvas = canvas;
+                                canvas.width = sprite.width;
+                                canvas.height = sprite.height;
                                 if (sprite.fullRes) {
                                     canvas.width *= scaleX;
                                     canvas.height *= scaleY;
                                 }
-                                sprite.canvas = canvas;
-                                canvas.width = sprite.width;
-                                canvas.height = sprite.height;
                                 sprite.ctx = ctx;
                                 sprite.internal.canvasID = ".Internal.canvas." + sprite.id;
+                                sprite.internal.canvasUpdated = false;
                                 sprite.internal.last = {
                                     collision: null
                                 };
@@ -873,12 +944,12 @@ Bagel = {
                                     let width;
                                     let height;
                                     if (sprite.fullRes) {
-                                        width = sprite.width * scaleX;
-                                        height = sprite.height * scaleY;
+                                        width = sprite.width * scaleX * window.devicePixelRatio;
+                                        height = sprite.height * scaleY * window.devicePixelRatio;
                                     }
                                     else {
-                                        width = sprite.width * window.devicePixelRatio;
-                                        height = sprite.height * window.devicePixelRatio;
+                                        width = sprite.width;
+                                        height = sprite.height;
                                     }
                                     let last = sprite.internal.last;
                                     if (last.width != width || last.height != height) {
@@ -896,9 +967,10 @@ Bagel = {
                                     Bagel.internal.loadCurrent();
 
 
-                                    Bagel.internal.render.texture.update(sprite.internal.canvasID, sprite.canvas, sprite.game);
-
-
+                                    if (sprite.internal.canvasUpdated || sprite.mode == "animated") {
+                                        Bagel.internal.render.texture.update(sprite.internal.canvasID, sprite.canvas, sprite.game);
+                                        sprite.internal.canvasUpdated = false;
+                                    }
                                     if (sprite.internal.renderUpdate) {
                                         sprite.internal.renderUpdate = false;
                                         updateBitmap(sprite.internal.Bagel.renderID, {
@@ -3398,9 +3470,11 @@ Bagel = {
                         renderer.ctx.imageSmoothingEnabled = antialiasing;
                     }
 
-                    renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // CSS from Phaser (https://phaser.io)
                     if (config.display.mode == "fill") {
-                        renderer.canvas.style += "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp
+                        renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp and Phaser
+                    }
+                    else {
+                        renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // CSS from Phaser (https://phaser.io)
                     }
                     Bagel.internal.subFunctions.tick.scaleCanvas(game);
 
