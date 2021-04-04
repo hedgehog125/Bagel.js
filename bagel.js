@@ -8,6 +8,8 @@ TODO:
 Moving textures back into combined automatically (and to I guess?)
 
 == Bugs ==
+Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Put debugger statement in main script to frame advance
+
 How can you prerender graphics on a canvas sprite? Should the canvas width and height be multiplied by the device pixel ratio by default?
 
 Pause videos on state change
@@ -22,11 +24,7 @@ touching.spriteSides and touching.gameSides sets last.collisionSide
 
 Remove initial delay logic and syntax
 
-Switch between storing in combined texture maps and single textures depending on usage
-
-Asset preload, runs before init. Runs even when assets aren't being initialised
-
-Auto, static and animated canvas sprite modes. And advanced auto where you have to tell Bagel.js about updates? Same as static???
+Asset preload, runs before init. Runs even when assets aren't being initialised. Sounds should preload their metadata and then wait until oncanplaythrough before they're considered loaded?
 
 
 Reserve dot prefix for textures
@@ -37,13 +35,11 @@ Context lost handling
 
 The ability to remove or replace a default argument for a sprite type. Maybe only for some? Prevent setting some attributes like "type"
 
-Render textures into texture map using a webgl renderer. Webgl is still about 10x as fast even when just rendering one image. (although that doesn't account for loading the textures in to render onto the map)
-
 Built in FPS counter
 
 FPS stabilisation. Use the time elapsed to calcuate how many times to run the main code before rendering. 30hz displays would run the main code twice and then render and 120hz would run the code once then render but only on every other frame. Should Bagel.js attempt to catch up if it lags? Should frames be able to be dropped?
 
-Display render options in Bagel.js console message. Dynamic resolution and antialiasing. Warn when game is downscaled?
+Display render options in Bagel.js console message. Antialiasing and fps stabilisation?
 
 Gamepad support
 
@@ -694,6 +690,12 @@ Bagel = {
                                     types: ["boolean"],
                                     description: "If true, the canvas width and height will be automatically changed to ensure it's rendered at the full resolution."
                                 },
+                                updateRes: {
+                                    required: false,
+                                    default: true,
+                                    types: ["boolean"],
+                                    description: "If the canvas width and height should be changed after the sprite is made. Disabling this is useful for prerendering things onto this canvas as the canvas is cleared when the resolution is changed. Overwrites fullRes except when the canvas is first created."
+                                },
                                 render: {
                                     required: false,
                                     types: ["function"],
@@ -749,6 +751,9 @@ Bagel = {
                                     mode: "replace"
                                 },
                                 fullRes: {
+                                    mode: "replace"
+                                },
+                                updateRes: {
                                     mode: "replace"
                                 },
                                 render: {
@@ -924,8 +929,25 @@ Bagel = {
                             render: {
                                 init: (sprite, newBitmap) => {
                                     let canvas = sprite.canvas;
-                                    canvas.width = sprite.width;
-                                    canvas.height = sprite.height;
+
+                                    let mainCanvas = sprite.game.internal.renderer.canvas;
+                                    let scaleX = mainCanvas.width / sprite.game.width;
+                                    let scaleY = mainCanvas.height / sprite.game.height;
+
+                                    let width;
+                                    let height;
+                                    if (sprite.fullRes) {
+                                        width = sprite.width * scaleX * window.devicePixelRatio;
+                                        height = sprite.height * scaleY * window.devicePixelRatio;
+                                    }
+                                    else {
+                                        width = sprite.width;
+                                        height = sprite.height;
+                                    }
+                                    canvas.width = width;
+                                    canvas.height = height;
+                                    sprite.internal.last.width = width;
+                                    sprite.internal.last.height = height;
 
                                     Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game, false, sprite.mode);
                                     sprite.internal.renderUpdate = false;
@@ -944,33 +966,43 @@ Bagel = {
                                 },
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, game),
                                 whileVisible: (sprite, updateBitmap) => {
-                                    let width;
-                                    let height;
-                                    if (sprite.fullRes) {
-                                        width = sprite.width * scaleX * window.devicePixelRatio;
-                                        height = sprite.height * scaleY * window.devicePixelRatio;
-                                    }
-                                    else {
-                                        width = sprite.width;
-                                        height = sprite.height;
-                                    }
-                                    let last = sprite.internal.last;
-                                    if (last.width != width || last.height != height) {
-                                        sprite.canvas.width = width;
-                                        sprite.canvas.height = height;
-                                        last.width = width;
-                                        last.height = height;
+                                    if (sprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
+                                        let mainCanvas = sprite.game.internal.renderer.canvas;
+                                        let scaleX = mainCanvas.width / sprite.game.width;
+                                        let scaleY = mainCanvas.height / sprite.game.height;
+
+                                        let width;
+                                        let height;
+                                        if (sprite.fullRes) {
+                                            width = sprite.width * scaleX * window.devicePixelRatio;
+                                            height = sprite.height * scaleY * window.devicePixelRatio;
+                                        }
+                                        else {
+                                            width = sprite.width;
+                                            height = sprite.height;
+                                        }
+                                        let last = sprite.internal.last;
+                                        if (last.width != width || last.height != height) {
+                                            sprite.canvas.width = width;
+                                            sprite.canvas.height = height;
+                                            last.width = width;
+                                            last.height = height;
+                                        }
                                     }
 
                                     let current = Bagel.internal.current;
                                     Bagel.internal.saveCurrent();
                                     current.plugin = null;
                                     current.sprite = sprite;
-                                    if (sprite.render) sprite.render(sprite, sprite.game, sprite.ctx, sprite.canvas);
+
+                                    let output;
+                                    if (sprite.render) {
+                                        output = sprite.render(sprite, sprite.game, sprite.ctx, sprite.canvas);
+                                    }
                                     Bagel.internal.loadCurrent();
 
 
-                                    if (sprite.internal.canvasUpdated || sprite.mode == "animated") {
+                                    if (sprite.internal.canvasUpdated || (sprite.mode == "animated" && output !== true) || (sprite.mode != "animated" && output === true)) {
                                         Bagel.internal.render.texture.update(sprite.internal.canvasID, sprite.canvas, sprite.game);
                                         sprite.internal.canvasUpdated = false;
                                     }
@@ -7769,10 +7801,18 @@ Bagel = {
                                 }
 
 
+                                let canvasWidth;
+                                let canvasHeight;
+                                if (canvas) {
+                                    canvasWidth = canvas.width;
+                                    canvasHeight = canvas.height;
+                                }
 
                                 if (foundPosition) {
                                     if (singleTexture) {
                                         combinedTexture.canvas = texture;
+                                        canvasWidth = texture.width;
+                                        canvasHeight = texture.height;
                                     }
                                     else {
                                         let slotGL = functions.initTexture(combinedTexture, renderer, index, game);
@@ -7829,12 +7869,12 @@ Bagel = {
                                     textures[id] = [
                                         combinedTexture.webgltexture,
                                         index,
-                                        drawX / canvas.width,
-                                        drawY / canvas.height,
-                                        (drawX + width) / canvas.width,
-                                        (drawY + height) / canvas.height,
-                                        width / canvas.width,
-                                        height / canvas.height,
+                                        drawX / canvasWidth,
+                                        drawY / canvasHeight,
+                                        (drawX + width) / canvasWidth,
+                                        (drawY + height) / canvasHeight,
+                                        width / canvasWidth,
+                                        height / canvasHeight,
                                         drawX, drawY,
                                         width, height,
                                         singleTexture,
@@ -8155,15 +8195,13 @@ Bagel = {
                             buffers = slot[5];
                         }
                         else {
-                            canvas = document.createElement("canvas");
+                            if (! singleTexture) {
+                                canvas = document.createElement("canvas");
+                            }
                         }
 
                         let lines = [];
-                        if (singleTexture) {
-                            canvas.width = width;
-                            canvas.height = height;
-                        }
-                        else {
+                        if (! singleTexture) {
                             canvas.width = 4096;
                             canvas.height = 4096;
                             let i = 0;

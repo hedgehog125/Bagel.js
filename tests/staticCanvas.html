@@ -2,10 +2,10 @@
 <html lang="en" dir="ltr">
     <head>
         <meta charset="utf-8">
-        <meta name="description" content="A simple texture downscaling test in Bagel.js">
+        <meta name="description" content="A simple layer static canvas test in Bagel.js">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>
-            A simple Bagel.js test of texture downscaling when using the WebGL renderer
+            A simple Bagel.js test of static canvases
         </title>
     </head>
     <body bgColor="white"></body>
@@ -24,20 +24,19 @@ let game = Bagel.init({
             {
                 id: "canvas",
                 type: "canvas",
-                width: 4096,
-                height: 4096,
+                width: 50,
+                height: 50,
+                updateRes: false,
                 scripts: {
                     init: [
                         {
-                            code: null,
+                            code: me => {
+                                me.ctx.fillStyle = "red";
+                                me.ctx.fillRect(0, 0, me.canvas.width, me.canvas.height);
+                            },
                             stateToRun: "game"
                         }
                     ]
-                },
-                render: me => {
-                    me.ctx.fillStyle = "red";
-                    me.ctx.fillRect(0, 0, me.canvas.width, me.canvas.height);
-                    me.canvas.width = me.canvas.width;
                 }
             }
         ]
