@@ -4,20 +4,23 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_test
 
 TODO:
+== Testing ==
+Moving textures back into combined automatically (and to I guess?)
+
 == Bugs ==
 How can you prerender graphics on a canvas sprite? Should the canvas width and height be multiplied by the device pixel ratio by default?
 
 Pause videos on state change
 
-Test texture downscaling on low end devices
-
 = Features =
-Canvas optimisation modes inc. copying
+Copy canvas mode
 
 game.debug.textures.hideCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
 
-last.collisionSide says which side of the rectangle the collision was on
+touching.spriteSides and touching.gameSides sets last.collisionSide
+
+Remove initial delay logic and syntax
 
 Switch between storing in combined texture maps and single textures depending on usage
 
@@ -705,7 +708,7 @@ Bagel = {
                                         }
                                     },
                                     types: ["string"],
-                                    description: "Tells Bagel.js how to optimise for this canvas. It's not important in the canvas renderer but in the WebGL renderer, the value determines how the texture is handled internally.\n\"auto\" will detect when you render to the canvas and update the texture after. This adds a slight overhead.\n\"static\" will assume the canvas won't be updated frequently but you can still update it by returning true from the function you set for your \"render\" argument.\nLastly \"animated\" will assume the canvas will be updated every frame, you can return true if you haven't though.\n\nFor all of these modes, Bagel.js can optimise differently depending on how you use it on a second by second basis. A the texture of even a static canvas can become a more memory intensive but faster to update single texture if there are if it's updated on 3 consecutive frames. If any canvas isn't updated at all for a whole second, it'll become part of a combined texture to reduce memory usage. \"auto\" will also use a single texture if less than 80% of the total textures supported by the GPU are being used. Both \"auto\" and \"static\" canvases will be moved to a combined texture once updated if 80% of textures are being used or will be moved before an update if 100% of textures are full and a new WebGL texture is required.\nIn most circumstances, the \"mode\" argument only specifies the start point and in the case of \"auto\", how the renders will be detected."
+                                    description: "Tells Bagel.js how to optimise for this canvas. It's not important in the canvas renderer but in the WebGL renderer, the value determines how the texture is handled internally.\n\"auto\" will detect when you render to the canvas and update the texture after. This adds a slight overhead.\n\"static\" will assume the canvas won't be updated frequently but you can still update it by returning true from the function you set for your \"render\" argument.\nLastly \"animated\" will assume the canvas will be updated every frame, you can return true if you haven't though.\n\nFor all of these modes, Bagel.js can optimise differently depending on how you use it on a second by second basis. A the texture of even a static canvas can become a more memory intensive but faster to update single texture if it's updated on 3 consecutive frames. If any canvas isn't updated at all for a whole second, it'll become part of a combined texture to reduce memory usage. \"auto\" will also use a single texture if less than 80% of the total textures supported by the GPU are being used. Both \"auto\" and \"static\" canvases will be moved to a combined texture once updated if 90% of textures are being used or will be moved before an update if 100% of textures are full and a new WebGL texture is required.\nIn most circumstances, the \"mode\" argument only specifies the start point and in the case of \"auto\", how the renders will be detected."
                                 }
                             },
                             cloneArgs: {
@@ -924,7 +927,7 @@ Bagel = {
                                     canvas.width = sprite.width;
                                     canvas.height = sprite.height;
 
-                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game, false, true);
+                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game, false, sprite.mode);
                                     sprite.internal.renderUpdate = false;
                                 },
                                 onVisible: (sprite, newBitmap) => {
@@ -3186,7 +3189,7 @@ Bagel = {
                             bitmapLayerQueue: [],
                             textures: {},
                             textureSlots: [],
-                            combinedTextures: [],
+                            textureSlotsUsed: 0,
                             bitmapsUsingTextures: {},
                             maxTextureSlots: null,
 
@@ -5112,6 +5115,52 @@ Bagel = {
                             }
                             return vertices;
                         },
+                        processTextures: (game, renderer) => {
+                            let functions = Bagel.internal.render.texture.internal;
+                            for (let id in renderer.textures) {
+                                let texture = renderer.textures[id];
+                                if (texture[12]) { // Single texture
+                                    if (! texture[16]) { // Not updated this frame
+                                        texture[17]++; // Idle counter
+                                        if (texture[17] == 60) { // Not updated for a second
+                                            let render = Bagel.internal.render.texture;
+                                            let tmpTexture = texture[15];
+                                            let tmpMode = texture[13];
+                                            let tmpBitmapsUsing = renderer.bitmapsUsingTextures[id];
+
+                                            render.delete(id, game, false, true);
+                                            render.new(id, tmpTexture, game, false, tmpMode, false);
+
+                                            renderer.bitmapsUsingTextures[id] = tmpBitmapsUsing;
+                                            functions.regenerateBitmapCoords(id, renderer, game);
+                                        }
+                                    }
+                                }
+                                else {
+                                    if (! texture[16]) { // Not updated this frame
+                                        texture[14] = 0; // Reset the update counter
+                                    }
+                                    if (texture[14] == 3) { // 3 consecutive updates
+                                        if (renderer.textureSlotsUsed / renderer.maxTextureSlots < 0.9 || texture[13] == "animated") {
+                                            let render = Bagel.internal.render.texture;
+                                            let tmpTexture = texture[15];
+                                            let tmpMode = texture[13];
+                                            let tmpBitmapsUsing = renderer.bitmapsUsingTextures[id];
+
+                                            render.delete(id, game, false, true);
+                                            render.new(id, tmpTexture, game, false, tmpMode, true);
+
+                                            renderer.bitmapsUsingTextures[id] = tmpBitmapsUsing;
+                                            functions.regenerateBitmapCoords(id, renderer, game);
+                                        }
+                                        else {
+                                            texture[16] = 2; // So it can try again next frame
+                                        }
+                                    }
+                                }
+                                renderer.textures[id][16] = false; // Reset if it's updated or not this frame (the object might not exist because of the deletion so texture isn't used)
+                            }
+                        },
                         init: game => {
                             let renderer = game.internal.renderer;
                             let gl = renderer.gl;
@@ -5138,6 +5187,7 @@ Bagel = {
 
                             let textureCount = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
                             renderer.maxTextureSlots = textureCount;
+                            renderer.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
 
                             let textureCode = "";
                             let c = 1;
@@ -5232,15 +5282,18 @@ Bagel = {
                             renderer.locations.vertices = verticesLocation;
                             renderer.locations.textures = textureLocation;
 
+
                             renderer.webGLInitialised = true;
                         },
                         tick: game => {
                             let renderer = game.internal.renderer;
                             let gl = renderer.gl;
-                            let queues = Bagel.internal.subFunctions.tick.render.webgl.queues;
+                            let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
+                            let queues = subFunctions.queues;
                             queues.bitmap(game);
                             queues.bitmapLayers(game);
                             queues.texturemaps(game);
+                            subFunctions.processTextures(game, renderer);
 
 
                             renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
@@ -7491,7 +7544,7 @@ Bagel = {
                 }
             },
             texture: {
-                new: (id, texture, game, overwrite, singleTexture=false) => {
+                new: (id, texture, game, overwrite, mode="static", startSingleTexture=null) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Hmm, looks like you didn't specify the game properly (it's the 3rd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
@@ -7530,12 +7583,49 @@ Bagel = {
                     }
                     let functions = Bagel.internal.render.texture.internal;
 
+                    let singleTexture = startSingleTexture;
+                    if (singleTexture == null) {
+                        if (textures[id]) {
+                            singleTexture = textures[id][12];
+                        }
+                        else {
+                            singleTexture = false;
+                        }
+                    }
+                    if (mode == "auto") {
+                        if (renderer.textureSlotsUsed / renderer.maxTextureSlots <= 0.8) { // less than 80% used
+                            singleTexture = true;
+                        }
+                    }
+                    else if (mode == "animated") {
+                        singleTexture = true;
+                        if (renderer.textureSlotsUsed == renderer.maxTextureSlots) { // Need to free up a texture
+                            let textureFreed = false;
+                            for (let id in textures) {
+                                if (textures[id][12] || textures[id][13] != "animated") { // Is a single texture and isn't animated, as they take priority
+                                    let moveTexture = textures[id][15];
+                                    render.delete(id, game, false, false);
+                                    render.new(id, moveTexture, game, false, mode, false); // Start it as a combined texture but it still has the same mode
+                                    textureFreed = true;
+                                    break;
+                                }
+                            }
+                            if (! textureFreed) {
+                                singleTexture = false;
+                                if (! renderer.displayedCombinedWarning) {
+                                    console.warn("There's no empty texture slots left. In order to try and keep the game running, Bagel.js is using a combined texture for this animated texture. This will likely have a significant performance penalty depending on the size. If you're using a lot of animated textures, the \"canvas\" renderer may be faster (Game.config.display.renderer).\nFuture animated textures going into combined textures won't be logged but will be recorded and can be displayed using: \"Game.debug.textures.listAnimatedIntoCombined()\".");
+                                    renderer.displayedCombinedWarning = true;
+                                }
+                            }
+                        }
+                    }
+
                     if (renderer.type == "webgl") {
                         let gl = renderer.gl;
 
                         let width = texture.width;
                         let height = texture.height;
-                        let maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                        let maxSize = renderer.maxTextureSize;
                         let downscaled = false;
                         if (width > maxSize || height > maxSize) {
                             downscaled = true;
@@ -7566,31 +7656,28 @@ Bagel = {
                                     + " to keep it within the WebGL dimension limit for this device, affecting performance."
                                     + "\nIf you want this behaviour without the warning, cap the texture width and height before running this method using \"Bagel.device.webgl.textureSizeLimit\" to find the maximum width/height."
                                     + "\nIf it has to be the full resolution, you can either set a minimum WebGL resolution limit in \"Game.config.display.minimumLimits.textureSize\" (keep in mind that almost no machines support textures more than 16384 pixels wide due to a texture that size taking up around 4GB of VRAM. However, most desktops and laptops do support 16K textures so this can be your minimum if you're willing to exclude mostly phones and tablets.). Or you can set \"Game.config.display.renderer\" to \"canvas\" to get lower performance but have no texture limits (besides RAM and VRAM like WebGL)."
-                                    + "\n\nFuture downscales won't be reported for this game. But you can view the list using \"Game.debug.textures.listDownscaled\"."
+                                    + "\n\nFuture downscales won't be reported for this game. But you can view the list using \"Game.debug.textures.listDownscaled()\"."
                                 );
                                 renderer.displayedDownscaleWarning = true;
                             }
                         }
 
                         if (textures[id]) { // Replace the current texture
-                            let slot = renderer.textureSlots[textures[id][1]]
+                            let slot = renderer.textureSlots[textures[id][1]];
                             let canvas = slot.canvas;
 
-                            if (textures[id][10] != width || textures[id][11] != height) { // Resolution's changed, so the texture needs to be reallocated
-                                let render = Bagel.internal.render.texture;
-                                let singleTexture = renderer.textureSlots[textures[id][1]].singleTexture;
-                                render.delete(id, game, false, true);
-                                render.new(id, texture, game, false, singleTexture);
+                            if (textures[id][10] != width || textures[id][11] != height || textures[id][12] != singleTexture) { // Resolution's changed, so the texture needs to be reallocated. Or it's become or is no longer a single texuture
+                                let updateCount = textures[id][14]; // Keep the update count
+                                let tmpBitmapsUsing = renderer.bitmapsUsingTextures[id];
 
-                                let newUsingTextures = [];
-                                for (let i in renderer.bitmapsUsingTextures[id]) { // Regenerate the texture coordinates
-                                    let bitmapID = renderer.bitmapsUsingTextures[id][i];
-                                    if (bitmapID != null) {
-                                        Bagel.internal.render.bitmapSprite.update(bitmapID, renderer.bitmapSpriteData[bitmapID], game, false);
-                                        newUsingTextures.push(bitmapID)
-                                    }
-                                }
-                                renderer.bitmapsUsingTextures[id] = newUsingTextures;
+                                let render = Bagel.internal.render.texture;
+                                render.delete(id, game, false, true);
+                                render.new(id, texture, game, false, mode, singleTexture);
+                                textures[id][14] = updateCount;
+                                textures[id][16] = true;
+
+                                renderer.bitmapsUsingTextures[id] = tmpBitmapsUsing;
+                                functions.regenerateBitmapCoords(id, renderer, game);
                             }
                             else {
                                 if (slot.singleTexture) {
@@ -7605,6 +7692,11 @@ Bagel = {
 
                                 renderer.queue.texturemapsUpdated.push(textures[id][1]);
                             }
+
+                            textures[id][15] = texture;
+                            textures[id][14]++;
+                            textures[id][16] = true;
+                            textures[id][17] = 0; // Reset the idle timer
                         }
                         else {
                             renderer.bitmapsUsingTextures[id] = [];
@@ -7744,7 +7836,13 @@ Bagel = {
                                         width / canvas.width,
                                         height / canvas.height,
                                         drawX, drawY,
-                                        width, height
+                                        width, height,
+                                        singleTexture,
+                                        mode,
+                                        0, // How many times it's been updated in the last second
+                                        texture,
+                                        false, // If it's been updated this frame
+                                        0 // Delay in frames before becoming a combined texture
                                     ];
                                     return;
                                 }
@@ -8088,6 +8186,7 @@ Bagel = {
                             locations: locations,
                             buffers: buffers
                         };
+                        renderer.textureSlotsUsed++;
                     },
                     deactivateCombined: (index, renderer, keepGL) => {
                         let slot = renderer.textureSlots[index];
@@ -8100,6 +8199,8 @@ Bagel = {
                         else {
                             renderer.textureSlots[index] = [true, slot.webgltexture, ];
                         }
+
+                        renderer.textureSlotsUsed--;
                     },
                     drawImage: (gl, img, slot, renderer, x, y, width, height) => {
                         if (img == null) {
@@ -8119,6 +8220,17 @@ Bagel = {
                             x, y
                         ]), gl.STREAM_DRAW);
                         gl.drawArrays(gl.TRIANGLES, 0, 6);
+                    },
+                    regenerateBitmapCoords: (id, renderer, game) => {
+                        let newUsingTextures = [];
+                        for (let i in renderer.bitmapsUsingTextures[id]) { // Regenerate the texture coordinates
+                            let bitmapID = renderer.bitmapsUsingTextures[id][i];
+                            if (bitmapID != null) {
+                                Bagel.internal.render.bitmapSprite.update(bitmapID, renderer.bitmapSpriteData[bitmapID], game, false);
+                                newUsingTextures.push(bitmapID);
+                            }
+                        }
+                        renderer.bitmapsUsingTextures[id] = newUsingTextures;
                     }
                 }
             }
