@@ -8,16 +8,13 @@ TODO:
 Moving textures back into combined automatically (and to I guess?)
 
 == Bugs ==
-Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Put debugger statement in main script to frame advance
-
-How can you prerender graphics on a canvas sprite? Should the canvas width and height be multiplied by the device pixel ratio by default?
+Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Put debugger statement in main script to frame advance. Maybe flush needed??? Only applies to canvases?
 
 Pause videos on state change
 
 = Features =
 Copy canvas mode
 
-game.debug.textures.hideCombined, game.debug.textures.listDownscaled, Bagel.device.webgl.textureCountLimit, textureSizeLimit, supported and Bagel.device.is.webglSupported.
 Game.config.display.minimumLimits
 
 touching.spriteSides and touching.gameSides sets last.collisionSide
@@ -2075,10 +2072,10 @@ Bagel = {
                                                             let textureSlots = game.internal.renderer.textureSlots;
                                                             let combinedTexture = textureSlots[value];
                                                             if (combinedTexture == null || combinedTexture.canvas == null) {
-                                                                return "Huh, that combined texture doesn't seem to exist. Make sure the index is between 0 and " + (textureSlots.length - 1) + ". Also make sure that that combined texture has been activated.";
+                                                                return "Huh, that combined texture doesn't seem to exist or is currently inactive. Make sure the index is between 0 and " + (textureSlots.length - 1) + ". Also make sure that that combined texture has been activated.";
                                                             }
                                                         },
-                                                        description: "The index number of the combined texture to display."
+                                                        description: "The index number of the combined texture or single texture to display."
                                                     }
                                                 },
                                                 fn: (game, args, plugin) => {
@@ -2096,8 +2093,102 @@ Bagel = {
                                                     combinedTexture.canvas.style.width = (width - 2) + "px";
                                                     combinedTexture.canvas.style.height = (height - 2) + "px";
 
-                                                    document.body.appendChild(combinedTexture.canvas);
-                                                    game.internal.renderer.canvas.hidden = true;
+                                                    combinedTexture.canvas.className = ".Bagel.js.debug.combinedTextureCanvas";
+                                                    combinedTexture.canvas.id = ".Bagel.js.debug.combinedTextureCanvas " + game.id + " " + args.index;
+
+                                                    console.log(
+                                                        "Also, here's some info about this " + (combinedTexture.singleTexture? "single texture" : "combined texture")
+                                                        + ":\n"
+                                                        + "Single texture: " + combinedTexture.singleTexture + "\n"
+                                                        + ((! combinedTexture.singleTexture)? ("Texture count: " + combinedTexture.textureCount + "\n") : "")
+                                                        + "Resolution: " + combinedTexture.canvas.width + "x" + combinedTexture.canvas.height + "\n"
+                                                        + "GL context active: " + (combinedTexture.gl != null) + "\n"
+                                                    );
+                                                    if ([...document.getElementsByClassName(".Bagel.js.debug.combinedTextureCanvas")].find(e => e.id == combinedTexture.canvas.id)) { // Already in DOM
+                                                        return false;
+                                                    }
+                                                    else {
+                                                        document.body.appendChild(combinedTexture.canvas);
+                                                        game.internal.renderer.canvas.hidden = true;
+                                                        game.internal.renderer.canvas.style.display = "";
+                                                        return true;
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        hideCombined: {
+                                            fn: {
+                                                obArg: false,
+                                                args: {
+                                                    index: {
+                                                        required: true,
+                                                        types: ["number"],
+                                                        check: (value, ob, argID, game, prev, args) => {
+                                                            let textureSlots = game.internal.renderer.textureSlots;
+                                                            let combinedTexture = textureSlots[value];
+                                                            if (combinedTexture == null || combinedTexture.canvas == null) {
+                                                                return "Huh, that combined texture doesn't seem to exist. Make sure the index is between 0 and " + (textureSlots.length - 1) + ". Also make sure that that combined texture has been activated.";
+                                                            }
+                                                        },
+                                                        description: "The index number of the combined texture or single texture to hide."
+                                                    }
+                                                },
+                                                fn: (game, args, plugin) => {
+                                                    let combinedTexture = game.internal.renderer.textureSlots[args.index];
+
+                                                    if ( [...document.getElementsByClassName(".Bagel.js.debug.combinedTextureCanvas")].find(e => e.id == combinedTexture.canvas.id)) {
+                                                        document.body.removeChild(combinedTexture.canvas);
+                                                        if (document.getElementsByClassName(".Bagel.js.debug.combinedTextureCanvas").length == 0) {
+                                                            game.internal.renderer.canvas.hidden = false;
+                                                            game.internal.renderer.canvas.style.display = "block";
+                                                        }
+                                                        return true;
+                                                    }
+                                                    else {
+                                                        return false;
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        listDownscaled: {
+                                            fn: {
+                                                obArg: false,
+                                                args: {},
+                                                fn: (game, args, plugin) => {
+                                                    let renderer = game.internal.renderer;
+                                                    if (Object.keys(renderer.downscaled).length == 0) {
+                                                        console.log("No textures have had to be downscaled yet.");
+                                                        if (game.config.display.renderer == "canvas") {
+                                                            console.log("However, since you're using the \"canvas\" renderer at the moment, textures don't ever need to be downscaled.");
+                                                        }
+                                                    }
+                                                    else {
+                                                        console.log("These textures were downscaled this many times (including the initial texture if it was over the limit):");
+                                                        for (let i in renderer.downscaled) {
+                                                            console.log(i + ": " + renderer.downscaled[i]);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        listAnimatedIntoCombined: {
+                                            fn: {
+                                                obArg: false,
+                                                args: {},
+                                                fn: (game, args, plugin) => {
+                                                    let renderer = game.internal.renderer;
+                                                    if (Object.keys(renderer.animatedIntoCombined).length == 0) {
+                                                        console.log("No animated textures have had to use a combined texture yet.");
+                                                        if (game.config.display.renderer == "canvas") {
+                                                            console.log("However, since you're using the \"canvas\" renderer at the moment, the texture modes don't matter.");
+                                                        }
+                                                    }
+                                                    else {
+                                                        console.log("These animated textures became combined textures:");
+                                                        for (let i in renderer.animatedIntoCombined) {
+                                                            console.log(i);
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -3225,6 +3316,10 @@ Bagel = {
                             bitmapsUsingTextures: {},
                             maxTextureSlots: null,
 
+                            downscaled: {},
+                            animatedIntoCombined: {},
+
+
                             width: game.width,
                             height: game.height,
                             renderWidth: null,
@@ -3471,12 +3566,44 @@ Bagel = {
                         }) || canvas.getContext("experimental-webgl", {
                             failIfMajorPerformanceCaveat: true
                         });
+
+                        let deviceWebGL = Bagel.device.webgl;
                         if (gl == null) { // No webgl
-                            game.config.display.renderer = "canvas";
+                            if (Bagel.device.webgl.supported == null) {
+                                game.config.display.renderer = "canvas";
+                                deviceWebGL.supported = false;
+                                Bagel.device.is.webGLSupported = false;
+                            }
                         }
                         else {
                             game.config.display.renderer = "webgl";
+
+                            if (Bagel.device.webgl.supported == null) {
+                                deviceWebGL.supported = true;
+                                Bagel.device.is.webGLSupported = true;
+                                deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+                                deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                            }
+
                             gl.getExtension("WEBGL_lose_context").loseContext();
+                        }
+                    }
+                    else {
+                        if (Bagel.device.webgl.supported == null) {
+                            let gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+                            let deviceWebGL = Bagel.device.webgl;
+                            if (gl) {
+                                deviceWebGL.supported = true;
+                                Bagel.device.is.webGLSupported = true;
+                                deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+                                deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+
+                                gl.getExtension("WEBGL_lose_context").loseContext();
+                            }
+                            else {
+                                deviceWebGL.supported = false;
+                                Bagel.device.is.webGLSupported = false;
+                            }
                         }
                     }
 
@@ -3857,7 +3984,7 @@ Bagel = {
                     let loadingScreen = game.internal.loadingScreen;
                     if (loadingScreen) {
                         if (game.internal.renderer.type == "webgl") {
-                            Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game, false, true);
+                            Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game, false, "animated");
 
                             game.internal.loadingScreenRenderID = Bagel.internal.render.bitmapSprite.new({
                                 x: game.width / 2,
@@ -5217,9 +5344,9 @@ Bagel = {
                                 }
                             `, gl, game);
 
-                            let textureCount = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+                            let textureCount = Bagel.device.webgl.textureCountLimit;
                             renderer.maxTextureSlots = textureCount;
-                            renderer.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                            renderer.maxTextureSize = Bagel.device.webgl.textureSizeLimit;
 
                             let textureCode = "";
                             let c = 1;
@@ -7633,17 +7760,18 @@ Bagel = {
                         singleTexture = true;
                         if (renderer.textureSlotsUsed == renderer.maxTextureSlots) { // Need to free up a texture
                             let textureFreed = false;
-                            for (let id in textures) {
-                                if (textures[id][12] || textures[id][13] != "animated") { // Is a single texture and isn't animated, as they take priority
-                                    let moveTexture = textures[id][15];
-                                    render.delete(id, game, false, false);
-                                    render.new(id, moveTexture, game, false, mode, false); // Start it as a combined texture but it still has the same mode
+                            for (let i in textures) {
+                                if (textures[i][12] || textures[i][13] != "animated") { // Is a single texture and isn't animated, as they take priority
+                                    let moveTexture = textures[i][15];
+                                    render.delete(i, game, false, false);
+                                    render.new(i, moveTexture, game, false, mode, false); // Start it as a combined texture but it still has the same mode
                                     textureFreed = true;
                                     break;
                                 }
                             }
                             if (! textureFreed) {
                                 singleTexture = false;
+                                renderer.animatedIntoCombined[id] = true;
                                 if (! renderer.displayedCombinedWarning) {
                                     console.warn("There's no empty texture slots left. In order to try and keep the game running, Bagel.js is using a combined texture for this animated texture. This will likely have a significant performance penalty depending on the size. If you're using a lot of animated textures, the \"canvas\" renderer may be faster (Game.config.display.renderer).\nFuture animated textures going into combined textures won't be logged but will be recorded and can be displayed using: \"Game.debug.textures.listAnimatedIntoCombined()\".");
                                     renderer.displayedCombinedWarning = true;
@@ -7666,11 +7794,11 @@ Bagel = {
                             let ratio = width / height;
                             if (width > height) {
                                 width = maxSize;
-                                height = width / ratio;
+                                height = Math.floor(width / ratio);
                             }
                             else {
                                 height = maxSize;
-                                width = height * ratio;
+                                width = Math.floor(height * ratio);
                             }
 
                             let downscaleCanvas = document.createElement("canvas");
@@ -7679,6 +7807,14 @@ Bagel = {
                             downscaleCanvas.getContext("2d").drawImage(texture, 0, 0, width, height);
                             texture = downscaleCanvas;
 
+                             // Store which textures have been downscaled
+                            if (renderer.downscaled[id]) {
+                                renderer.downscaled[id]++;
+                            }
+                            else {
+                                renderer.downscaled[id] = 1;
+                            }
+
                             if (! renderer.displayedDownscaleWarning) {
                                 console.warn(
                                     "FYI, the texture "
@@ -7686,8 +7822,8 @@ Bagel = {
                                     + " just got downscaled to "
                                     + width + "x" + height
                                     + " to keep it within the WebGL dimension limit for this device, affecting performance."
-                                    + "\nIf you want this behaviour without the warning, cap the texture width and height before running this method using \"Bagel.device.webgl.textureSizeLimit\" to find the maximum width/height."
-                                    + "\nIf it has to be the full resolution, you can either set a minimum WebGL resolution limit in \"Game.config.display.minimumLimits.textureSize\" (keep in mind that almost no machines support textures more than 16384 pixels wide due to a texture that size taking up around 4GB of VRAM. However, most desktops and laptops do support 16K textures so this can be your minimum if you're willing to exclude mostly phones and tablets.). Or you can set \"Game.config.display.renderer\" to \"canvas\" to get lower performance but have no texture limits (besides RAM and VRAM like WebGL)."
+                                    + "\nIf you want this behaviour without the warning, cap the texture width and height before running this method using \"Bagel.device.webgl.textureSizeLimit\" to find the maximum width/height (it's the same for both)."
+                                    + "\nIf it has to be the full resolution, you can either set a minimum WebGL resolution limit in \"Game.config.display.minimumLimits.textureSize\" (keep in mind that almost no machines support textures more than 16384 pixels wide due to a texture that size taking up around 4GB of VRAM. However, most new desktops and laptops do support 16K textures so this can be your minimum if you're willing to exclude or accept using a canvas renderer for mostly phones and tablets.). Or you can set \"Game.config.display.renderer\" to \"canvas\" to get lower performance but have no texture limits (besides RAM and VRAM like WebGL)."
                                     + "\n\nFuture downscales won't be reported for this game. But you can view the list using \"Game.debug.textures.listDownscaled()\"."
                                 );
                                 renderer.displayedDownscaleWarning = true;
@@ -8787,7 +8923,13 @@ Bagel = {
     },
     device: {
         is: {
-            touchscreen: document.ontouchstart === null
+            touchscreen: document.ontouchstart === null,
+            webGLSupported: null
+        },
+        webgl: {
+            textureCountLimit: null,
+            textureSizeLimit: null,
+            supported: null
         }
     },
     events: {
