@@ -12,21 +12,27 @@ Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Pu
 
 Pause videos on state change
 
+Canvas width/heights can be 0, causing an error
+
+Cap alpha values during runtime, use an error?
+
 = Features =
 Copy canvas mode
 
-Game.config.display.minimumLimits
 
-touching.spriteSides and touching.gameSides sets last.collisionSide
+Implement Game.config.display.minimumLimits, tidy up renderer choosing logic, put into own function. Display message in console when game can't initialise due to this or not supporting webgl when the renderer it set to it
+
+Prerender function for canvases, runs when shown and when the resolution is changed
 
 Remove initial delay logic and syntax
 
 Asset preload, runs before init. Runs even when assets aren't being initialised. Sounds should preload their metadata and then wait until oncanplaythrough before they're considered loaded?
 
-
 Reserve dot prefix for textures
 
 Canvas renderer
+
+touching.spriteSides and touching.gameSides sets last.collisionSide
 
 Context lost handling
 
@@ -110,7 +116,7 @@ Bagel = {
                                 ((img, asset, game) => {
                                     img.onload = _ => {
                                         ready(img);
-                                        Bagel.internal.render.texture.new(asset.id, img, game);
+                                        Bagel.internal.render.texture.new(asset.id, img, game, false, "static");
                                     };
                                 })(img, asset, game);
                                 img.src = asset.src;
@@ -793,9 +799,10 @@ Bagel = {
                                         Bagel.internal.oops(game);
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                        let valid = false;
                                         if (typeof value == "number") {
                                             triggerSprite.internal.renderUpdate = true;
-                                            return;
+                                            valid = true;
                                         }
                                         if ((! game.loaded) || initialTrigger) { // Make sure the game has loaded for the next one
                                             return ".rerun";
@@ -804,11 +811,40 @@ Bagel = {
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
                                             triggerSprite.internal.renderUpdate = true;
-                                            return;
+                                            valid = true;
                                         }
 
-                                        console.error("Oops, this can only be a function or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
-                                        Bagel.internal.oops(game);
+                                        if (triggerSprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
+                                            let mainCanvas = triggerSprite.game.internal.renderer.canvas;
+                                            let scaleX = mainCanvas.width / triggerSprite.game.width;
+                                            let scaleY = mainCanvas.height / triggerSprite.game.height;
+
+                                            let width;
+                                            let height;
+                                            if (triggerSprite.fullRes) {
+                                                width = sprite.width * scaleX * window.devicePixelRatio;
+                                                height = sprite.height * scaleY * window.devicePixelRatio;
+                                            }
+                                            else {
+                                                width = sprite.width;
+                                                height = sprite.height;
+                                            }
+                                            let last = triggerSprite.internal.last;
+                                            if (last.width != width || last.height != height) {
+                                                triggerSprite.canvas.width = width;
+                                                triggerSprite.canvas.height = height;
+                                                last.width = width;
+                                                last.height = height;
+
+                                                triggerSprite.scaleX = triggerSprite.canvas.width / sprite.width;
+                                                triggerSprite.scaleY = triggerSprite.canvas.height / sprite.height;
+                                            }
+                                        }
+
+                                        if (! valid) {
+                                            console.error("Oops, this can only be a function or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                            Bagel.internal.oops(game);
+                                        }
                                     }
                                 },
                                 property: {
@@ -922,6 +958,10 @@ Bagel = {
                                     collision: null
                                 };
                                 sprite.internal.cache = {};
+
+                                sprite.scaleX = sprite.canvas.width / sprite.width;
+                                sprite.scaleY = sprite.canvas.height / sprite.height;
+                                sprite.updated = false;
                             },
                             render: {
                                 init: (sprite, newBitmap) => {
@@ -961,8 +1001,13 @@ Bagel = {
                                         alpha: sprite.alpha
                                     }, sprite.game, false);
                                 },
-                                onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, game),
+                                onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
                                 whileVisible: (sprite, updateBitmap) => {
+                                    let current = Bagel.internal.current;
+                                    Bagel.internal.saveCurrent();
+                                    current.plugin = null;
+                                    current.sprite = sprite;
+
                                     if (sprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
                                         let mainCanvas = sprite.game.internal.renderer.canvas;
                                         let scaleX = mainCanvas.width / sprite.game.width;
@@ -984,13 +1029,11 @@ Bagel = {
                                             sprite.canvas.height = height;
                                             last.width = width;
                                             last.height = height;
+
+                                            sprite.scaleX = sprite.canvas.width / sprite.width;
+                                            sprite.scaleY = sprite.canvas.height / sprite.height;
                                         }
                                     }
-
-                                    let current = Bagel.internal.current;
-                                    Bagel.internal.saveCurrent();
-                                    current.plugin = null;
-                                    current.sprite = sprite;
 
                                     let output;
                                     if (sprite.render) {
@@ -999,9 +1042,10 @@ Bagel = {
                                     Bagel.internal.loadCurrent();
 
 
-                                    if (sprite.internal.canvasUpdated || (sprite.mode == "animated" && output !== true) || (sprite.mode != "animated" && output === true)) {
+                                    if (sprite.updated || sprite.internal.canvasUpdated || (sprite.mode == "animated" && output !== true) || (sprite.mode != "animated" && output === true)) {
                                         Bagel.internal.render.texture.update(sprite.internal.canvasID, sprite.canvas, sprite.game);
                                         sprite.internal.canvasUpdated = false;
+                                        sprite.updated = false;
                                     }
                                     if (sprite.internal.renderUpdate) {
                                         sprite.internal.renderUpdate = false;
@@ -1098,7 +1142,7 @@ Bagel = {
                             },
                             listeners: {
                                 fns: {
-                                    xy: (sprite, value, property, game, plugin, triggerSprite, step) => {
+                                    xy: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (typeof value == "number") {
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
@@ -1170,7 +1214,7 @@ Bagel = {
                                     internal.canvas.width = 1;
                                     internal.canvas.height = 1;
 
-                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, sprite.game);
+                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, sprite.game, false, "static");
 
                                     internal.ctx = internal.canvas.getContext("2d");
                                     internal.prerender = (sprite, scaleX, scaleY) => {
@@ -1201,7 +1245,7 @@ Bagel = {
                                         }
                                         sprite.internal.renderUpdate = true;
                                     };
-                                    let mainCanvas = game.internal.renderer.canvas;
+                                    let mainCanvas = sprite.game.internal.renderer.canvas;
                                     let scaleX = mainCanvas.width / sprite.game.width;
                                     let scaleY = mainCanvas.height / sprite.game.height;
                                     internal.prerender(sprite, scaleX, scaleY);
@@ -1220,7 +1264,7 @@ Bagel = {
                                 },
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
                                 whileVisible: (sprite, updateBitmap) => {
-                                    let mainCanvas = game.internal.renderer.canvas;
+                                    let mainCanvas = sprite.game.internal.renderer.canvas;
                                     let scaleX = mainCanvas.width / sprite.game.width;
                                     let scaleY = mainCanvas.height / sprite.game.height;
 
@@ -3382,7 +3426,7 @@ Bagel = {
 
                     game = Bagel.check({
                         ob: game,
-                        where: "GameJSON",
+                        where: "Game",
                         syntax: Bagel.internal.checks.game
                     }, Bagel.internal.checks.disableArgCheck);
 
@@ -3569,8 +3613,8 @@ Bagel = {
 
                         let deviceWebGL = Bagel.device.webgl;
                         if (gl == null) { // No webgl
+                            game.config.display.renderer = "canvas";
                             if (Bagel.device.webgl.supported == null) {
-                                game.config.display.renderer = "canvas";
                                 deviceWebGL.supported = false;
                                 Bagel.device.is.webGLSupported = false;
                             }
@@ -3578,20 +3622,25 @@ Bagel = {
                         else {
                             game.config.display.renderer = "webgl";
 
-                            if (Bagel.device.webgl.supported == null) {
+                            if (deviceWebGL.supported == null) {
                                 deviceWebGL.supported = true;
                                 Bagel.device.is.webGLSupported = true;
                                 deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
                                 deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
                             }
 
+                            let limits = game.config.display.webgl.minimumLimits;
+                            if (deviceWebGL.textureSizeLimit < limits.textureSize || deviceWebGL.textureCountLimit < limits.textureCount) {
+                                game.config.display.renderer = "canvas";
+                            }
+
                             gl.getExtension("WEBGL_lose_context").loseContext();
                         }
                     }
-                    else {
-                        if (Bagel.device.webgl.supported == null) {
+                    else if (game.config.display.renderer != "webgl") {
+                        let deviceWebGL = Bagel.device.webgl;
+                        if (deviceWebGL.supported == null) {
                             let gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-                            let deviceWebGL = Bagel.device.webgl;
                             if (gl) {
                                 deviceWebGL.supported = true;
                                 Bagel.device.is.webGLSupported = true;
@@ -3612,24 +3661,52 @@ Bagel = {
                     let antialiasing = config.display.antialiasing;
                     if (renderer.type == "webgl") {
                         let settings = {
-                            antialiasing: antialiasing,
+                            antialias: antialiasing,
                             //alpha: config.display.backgroundColour == "transparent", //Disabling alpha seems to hurt performance sometimes so it's left off for now
                             powerPreference: "high-performance",
                             depth: false
                         };
-                        renderer.gl = renderer.canvas.getContext("webgl", settings) || renderer.canvas.getContext("experimental-webgl", settings);
-                        renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+                        let gl = renderer.canvas.getContext("webgl", settings) || renderer.canvas.getContext("experimental-webgl", settings)
+                        renderer.gl = gl;
+                        if (gl) {
+                            gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
 
-                        renderer.colourCanvas = document.createElement("canvas");
-                        renderer.colourCanvas.width = 1;
-                        renderer.colourCanvas.height = 1;
-                        renderer.colourCtx = renderer.colourCanvas.getContext("2d");
-                    }
-                    else {
-                        renderer.ctx = renderer.canvas.getContext("2d", {
-                            alpha: game.config.display.backgroundColour == "transparent"
-                        });
-                        renderer.ctx.imageSmoothingEnabled = antialiasing;
+
+                            let deviceWebGL = Bagel.device.webgl;
+                            if (deviceWebGL.supported == null) {
+                                if (gl) {
+                                    deviceWebGL.supported = true;
+                                    Bagel.device.is.webGLSupported = true;
+                                    deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+                                    deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                                }
+                                else {
+                                    deviceWebGL.supported = false;
+                                    Bagel.device.is.webGLSupported = false;
+                                }
+                            }
+                            let limits = game.config.display.webgl.minimumLimits;
+                            if (deviceWebGL.textureSizeLimit < limits.textureSize || deviceWebGL.textureCountLimit < limits.textureCount
+
+
+                            || game.id == "Bagel") { // TODO
+                                game.config.loading.animation = Bagel.internal.errorGameObject; // So a message can be displayed to the user
+                                game.internal.assets.loading++; // So the loading screen triggers
+                                game.config.loading.skip = false;
+                                game.internal.errorCode = 0;
+                            }
+                            renderer.colourCanvas = document.createElement("canvas");
+                            renderer.colourCanvas.width = 1;
+                            renderer.colourCanvas.height = 1;
+                            renderer.colourCtx = renderer.colourCanvas.getContext("2d");
+                        }
+                        else {
+                            game.config.loading.animation = Bagel.internal.errorGameObject; // So a message can be displayed to the user
+                            game.internal.assets.loading++; // So the loading screen triggers
+                            game.config.loading.skip = false;
+                            game.internal.errorCode = 0;
+                            renderer.type = "canvas";
+                        }
                     }
 
                     if (config.display.mode == "fill") {
@@ -3752,7 +3829,7 @@ Bagel = {
 
                         for (let i in assets) {
                             let asset = assets[i];
-                            Bagel.internal.loadAsset(asset, game, type, "GameJSON.game.assets." + type + " item " + i, i, false, dontLoad);
+                            Bagel.internal.loadAsset(asset, game, type, "Game.game.assets." + type + " item " + i, i, false, dontLoad);
                         }
                     }
                     if (game.internal.assets.loading == 0) {
@@ -3876,7 +3953,7 @@ Bagel = {
                 },
                 initSprites: game => {
                     for (let i in game.game.sprites) {
-                        let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "GameJSON.game.sprites item " + i, false, parseInt(i));
+                        let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "Game.game.sprites item " + i, false, parseInt(i));
                     }
                 },
                 loadingScreen: game => {
@@ -3885,6 +3962,15 @@ Bagel = {
                         Bagel.internal.current.plugin = game.internal.plugins.Internal;
 
                         let loadingScreen = Bagel.internal.deepClone(game.config.loading.animation);
+                        let resolution = "fixed";
+                        if (loadingScreen.config) {
+                            if (loadingScreen.config.display) {
+                                if (loadingScreen.config.display != null) {
+                                    resolution = loadingScreen.config.display.resolution;
+                                }
+                            }
+                        }
+
                         loadingScreen.id = ".Internal.loadingScreen." + game.id;
                         loadingScreen.width = game.width;
                         loadingScreen.height = game.height;
@@ -3903,7 +3989,7 @@ Bagel = {
                                 mode: "preload"
                             },
                             display: {
-                                resolution: "fixed",
+                                resolution: resolution,
                                 dom: false,
                                 backgroundColour: backgroundColour
                             },
@@ -3975,7 +4061,7 @@ Bagel = {
                     (game => {
                         missingImage.onload = _ => {
                             if (! Bagel.internal.render.texture.get(".Internal.missing", game)) {
-                                Bagel.internal.render.texture.new(".Internal.missing", missingImage, game);
+                                Bagel.internal.render.texture.new(".Internal.missing", missingImage, game, false, "static");
                             }
                         };
                     })(game);
@@ -4018,7 +4104,7 @@ Bagel = {
                     plugin = Bagel.check({
                         ob: plugin,
                         syntax: Bagel.internal.checks.plugin,
-                        where: (plugin.info && plugin.info.id)? ("plugin " + plugin.info.id) : "GameJSON.game.plugins item " + index
+                        where: (plugin.info && plugin.info.id)? ("plugin " + plugin.info.id) : "Game.game.plugins item " + index
                     }, Bagel.internal.checks.disableArgCheck);
 
                     Bagel.internal.loadCurrent();
@@ -4874,6 +4960,12 @@ Bagel = {
                 },
                 render: {
                     canvas: {
+                        init: game => {
+                            let renderer = game.internal.renderer;
+
+                            renderer.ctx = renderer.canvas.getContext("2d");
+                            renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing;
+                        },
                         tick: game => {
                             let renderer = game.internal.renderer;
                             let canvas = renderer.canvas;
@@ -5306,7 +5398,7 @@ Bagel = {
                                             let tmpMode = texture[13];
                                             let tmpBitmapsUsing = renderer.bitmapsUsingTextures[id];
 
-                                            render.delete(id, game, false, true);
+                                            render.delete(id, game, false);
                                             render.new(id, tmpTexture, game, false, tmpMode, true);
 
                                             renderer.bitmapsUsingTextures[id] = tmpBitmapsUsing;
@@ -5449,10 +5541,10 @@ Bagel = {
                             let gl = renderer.gl;
                             let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
                             let queues = subFunctions.queues;
+                            subFunctions.processTextures(game, renderer);
                             queues.bitmap(game);
                             queues.bitmapLayers(game);
                             queues.texturemaps(game);
-                            subFunctions.processTextures(game, renderer);
 
 
                             renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
@@ -5537,6 +5629,20 @@ Bagel = {
                                 sprite.internal.Bagel.rendererNotInitialised = false;
                                 Bagel.internal.subFunctions.createSprite.initRender(sprite, game);
                             }
+                        }
+
+                        // Run the tick function
+                        let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+                        if (handler.tick) {
+                            let plugin = handler.internal.plugin;
+                            Bagel.internal.saveCurrent();
+                            let current = Bagel.internal.current;
+                            current.sprite = sprite;
+                            current.plugin = plugin;
+                            current.game = game;
+                            handler.tick(sprite, game, plugin);
+
+                            Bagel.internal.loadCurrent();
                         }
                     }
                 },
@@ -5706,7 +5812,9 @@ Bagel = {
 
 
                     if (renderer.type == "canvas") {
-                        renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing; // It needs to be reset when the canvas is resized
+                        if (renderer.ctx) {
+                            renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing; // It needs to be reset when the canvas is resized
+                        }
                     }
                 }
             },
@@ -5792,7 +5900,7 @@ Bagel = {
                     check: value => {
                         if (Bagel.internal.games[value] != null) {
                             // This id is being used already
-                            return "Oh no! You used an id for your game that is already being used. Try and think of something else.\nYou used " + JSON.stringify(value) + " in \"GameJSON.id\".";
+                            return "Oh no! You used an id for your game that is already being used. Try and think of something else.\nYou used " + JSON.stringify(value) + " in \"Game.id\".";
                         }
                         let current = Bagel.internal.current;
                         let prefix = value.split(".")[1];
@@ -5804,7 +5912,7 @@ Bagel = {
                             if (lastPluginID == null) {
                                 console.error("This is awkward... IDs starting with a dot are only for plugins. You tried to use the id "
                                 + JSON.stringify(value)
-                                + ". In GameJSON.id.\nIf it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
+                                + ". In Game.id.\nIf it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
                                 + JSON.stringify(prefix)
                                 + " ;)");
                                 Bagel.internal.oops();
@@ -5812,7 +5920,7 @@ Bagel = {
                             else {
                                 if (prefix != lastPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
                                     console.error("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + lastPluginID) + " and you tried to use the id " + JSON.stringify(value)
-                                    + "In GameJSON.id.\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".");
+                                    + "In Game.id.\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".");
                                     Bagel.internal.oops();
                                 }
                             }
@@ -6057,8 +6165,39 @@ Bagel = {
                                             default: 0,
                                             types: ["number"],
                                             description: "The number of frames to delay rendering and scripts by when the game is initialised in order to allow WebGL to initialise first."
+                                        },
+                                        minimumLimits: {
+                                            required: false,
+                                            default: {},
+                                            types: ["object"],
+                                            subcheck: {
+                                                textureCount: {
+                                                    required: false,
+                                                    default: 8,
+                                                    types: ["number"],
+                                                    check: value => {
+                                                        if (value < 8) {
+                                                            return "Oh no. It has to be 8 or more as all WebGL compatible GPUs support at least that.";
+                                                        }
+                                                    },
+                                                    description: "The minimum number of WebGL textures the GPU needs to support in order for the WebGL rendererer to be used. Static textures are combined into larger textures to reduce texture usage, however, this may be a limiting factor when using multiple large canvases."
+                                                },
+                                                textureSize: {
+                                                    required: false,
+                                                    default: 4096,
+                                                    types: ["number"],
+                                                    check: value => {
+                                                        if (value < 4096) {
+                                                            return "Huh, it has to be 4096 or more as all WebGL compatible GPUs support at least that.";
+                                                        }
+                                                    },
+                                                    description: "The minimum number limit for the both the width and height of each WebGL texture. Keep in mind that textures about this size take up a lot of VRAM so it will likely become a limiting factor if textures are created at the maximum size. Combined textures will continue to use a 4096x4096 resolution if this value is changed."
+                                                }
+                                            },
+                                            description: "The minimum limits for the GPU. If the \"auto\" renderer mode is being used, the canvas renderer will be used instead if there requirements aren't met. If the \"webgl\" renderer mode is being used, an error will be displayed to the user and the game won't run.\nYou might want to use a tool like https://webglreport.com/ to find out the specs of different devices if you need to change some of these."
                                         }
-                                    }
+                                    },
+                                    description: "A few options for the WebGL renderer."
                                 }
                             },
                             description: "Contains a few options for how the game is displayed."
@@ -6935,6 +7074,12 @@ Bagel = {
                                             types: ["function"],
                                             description: "Initialises the sprite. Is a function. Can be used to define attributes. These are the arguments given: sprite, game and plugin."
                                         },
+                                        tick: {
+                                            required: false,
+                                            default: null,
+                                            types: ["function"],
+                                            description: "Runs every frame the sprite exists, before the sprites scripts are run or it's rendered (use render.whileVisible or render.tick for rendering related processing though). Called with the sprite object, the game object and the plugin object."
+                                        },
                                         render: {
                                             required: false,
                                             default: {},
@@ -7703,7 +7848,7 @@ Bagel = {
                 }
             },
             texture: {
-                new: (id, texture, game, overwrite, mode="static", startSingleTexture=null) => {
+                new: (id, texture, game, overwrite, mode="auto", startSingleTexture) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Hmm, looks like you didn't specify the game properly (it's the 3rd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
@@ -7823,7 +7968,7 @@ Bagel = {
                                     + width + "x" + height
                                     + " to keep it within the WebGL dimension limit for this device, affecting performance."
                                     + "\nIf you want this behaviour without the warning, cap the texture width and height before running this method using \"Bagel.device.webgl.textureSizeLimit\" to find the maximum width/height (it's the same for both)."
-                                    + "\nIf it has to be the full resolution, you can either set a minimum WebGL resolution limit in \"Game.config.display.minimumLimits.textureSize\" (keep in mind that almost no machines support textures more than 16384 pixels wide due to a texture that size taking up around 4GB of VRAM. However, most new desktops and laptops do support 16K textures so this can be your minimum if you're willing to exclude or accept using a canvas renderer for mostly phones and tablets.). Or you can set \"Game.config.display.renderer\" to \"canvas\" to get lower performance but have no texture limits (besides RAM and VRAM like WebGL)."
+                                    + "\nIf it has to be the full resolution, you can either set a minimum WebGL resolution limit in \"Game.config.display.webgl.minimumLimits.textureSize\" (keep in mind that almost no machines support textures more than 16384 pixels wide due to a texture that size taking up around 4GB of VRAM. However, most new desktops and laptops do support 16K textures so this can be your minimum if you're willing to exclude or accept using a canvas renderer for mostly phones and tablets.). Or you can set \"Game.config.display.renderer\" to \"canvas\" to get lower performance but have no texture limits (besides RAM and VRAM like WebGL)."
                                     + "\n\nFuture downscales won't be reported for this game. But you can view the list using \"Game.debug.textures.listDownscaled()\"."
                                 );
                                 renderer.displayedDownscaleWarning = true;
@@ -8206,7 +8351,7 @@ Bagel = {
                         let settings = {
                             powerPreference: "high-performance",
                             depth: false,
-                            antialiasing: false
+                            antialias: false
                         };
                         let slotGL = slot.canvas.getContext("webgl", settings) || slot.canvas.getContext("experimental-webgl", settings);
                         slot.gl = slotGL;
@@ -8365,7 +8510,9 @@ Bagel = {
                     deactivateCombined: (index, renderer, keepGL) => {
                         let slot = renderer.textureSlots[index];
                         if (slot.gl) {
-                            slot.gl.getExtension("WEBGL_lose_context").loseContext();
+                            if (! slot.gl.isContextLost()) {
+                                slot.gl.getExtension("WEBGL_lose_context").loseContext();
+                            }
                         }
                         if (keepGL) {
                             renderer.textureSlots[index] = [true, slot.webgltexture, slot.gl, slot.canvas, slot.locations, slot.buffers];
@@ -8479,6 +8626,220 @@ Bagel = {
                 if (output === true) output = null;
                 sprite.internal.Bagel.renderID = output;
             }
+        },
+
+        errorGameObject: {
+            game: {
+                assets: {
+                    imgs: [
+                        {
+                            id: "Bagel",
+                            src: "data:image/png;base64,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"
+                        }
+                    ]
+                },
+                sprites: [
+                    {
+                        id: "Bagel",
+                        img: "Bagel",
+                        vars: {
+                            vel: 0,
+                            waitTick: 0,
+                            finished: false
+                        },
+                        scripts: {
+                            init: [
+                                {
+                                    code: (me, game) => {
+                                        me.width = Math.min(game.width, game.height) / 3;
+                                        me.height = me.width;
+                                        me.y += me.height / 2;
+
+                                        me.angle = -90;
+                                    },
+                                    stateToRun: "game"
+                                }
+                            ],
+                            main: [
+                                {
+                                    code: me => {
+                                        if (! me.vars.finished) {
+                                            if (me.vars.waitTick == 60) {
+                                                let target = (me.game.height / 2) - (me.height / 2) - (me.height * 0.025);
+                                                if (me.y > target) {
+                                                    me.vars.vel -= me.height / 300;
+                                                }
+
+                                                me.y += me.vars.vel;
+                                                me.angle += me.vars.vel * 1.15;
+                                                me.vars.vel *= 0.9;
+                                                if (me.y < target) {
+                                                    me.y = target;
+                                                    me.angle = 90;
+                                                    me.vars.vel = 0;
+                                                    me.vars.finished = true;
+                                                }
+                                            }
+                                            else {
+                                                me.vars.waitTick++;
+                                            }
+                                        }
+                                    },
+                                    stateToRun: "game"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        id: "DiscSlot",
+                        type: "canvas",
+                        vars: {
+                            shrinkTick: 0,
+                            shrinkVel: 0,
+                            delete: false,
+                            waitTick: 0
+                        },
+                        scripts: {
+                            init: [
+                                {
+                                    code: (me, game) => {
+                                        let canvas = me.canvas;
+                                        let ctx = me.ctx;
+
+                                        let bagelWidth = game.get.sprite("Bagel").width;
+                                        let lineWidth = bagelWidth * 0.05;
+
+                                        me.width = bagelWidth * 1.05;
+                                        me.height = me.width;
+                                        ctx.scale(me.scaleX, me.scaleY);
+                                        me.y += (me.height / 2) - (lineWidth / 2);
+
+
+                                        ctx.fillStyle = game.config.display.backgroundColour;
+                                        ctx.fillRect(0, 0, me.width, me.height);
+
+                                        ctx.strokeStyle = "#6B6B6B";
+                                        ctx.lineCap = "round";
+                                        ctx.lineWidth = lineWidth;
+                                        ctx.beginPath();
+                                        ctx.moveTo(ctx.lineWidth / 2, ctx.lineWidth / 2);
+                                        ctx.lineTo(me.width - (ctx.lineWidth / 2), ctx.lineWidth / 2);
+                                        ctx.stroke();
+
+                                        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+
+                                        me.updated = true;
+                                        me.updateRes = false;
+                                    },
+                                    stateToRun: "game"
+                                }
+                            ]
+                        },
+                        render: (me, game, ctx, canvas) => {
+                            if (me.vars.delete) {
+                                me.delete();
+                                game.get.sprite("Text").vars.ready = true;
+                                return;
+                            }
+                            if (game.get.sprite("Bagel").vars.finished) {
+                                if (me.vars.waitTick == 30) {
+                                    ctx.scale(me.scaleX, me.scaleY);
+
+                                    ctx.fillStyle = game.config.display.backgroundColour;
+                                    ctx.fillRect(0, 0, me.width, me.height);
+
+                                    me.vars.shrinkVel += me.width / 300;
+                                    me.vars.shrinkTick += me.vars.shrinkVel;
+                                    me.vars.shrinkVel *= 0.95;
+
+                                    if (me.vars.shrinkTick + (ctx.lineWidth / 2) >= me.width / 2) {
+                                        me.vars.shrinkTick = (me.width / 2) - (ctx.lineWidth / 2);
+                                        let was = me.ctx.lineWidth;
+                                        me.ctx.lineWidth *= 0.9;
+                                        me.y += (was - me.ctx.lineWidth) / 2;
+
+                                        if (me.ctx.lineWidth < 1) {
+                                            me.vars.delete = true; // Wait until the next frame
+                                        }
+                                    }
+
+                                    ctx.beginPath();
+                                    ctx.moveTo((ctx.lineWidth / 2) + me.vars.shrinkTick, ctx.lineWidth / 2);
+                                    ctx.lineTo(me.width - (ctx.lineWidth / 2) - me.vars.shrinkTick, ctx.lineWidth / 2);
+                                    ctx.stroke();
+
+                                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+                                    return true;
+                                }
+                                else {
+                                    me.vars.waitTick++;
+                                }
+                            }
+                        },
+                        fullRes: true,
+                        width: 1,
+                        height: 1,
+                        mode: "static"
+                    },
+                    {
+                        id: "Text",
+                        type: "text",
+                        y: me => me.game.height / 1.5,
+                        vars: {
+                            ready: false, // Set by the disc slot sprite
+                            alphaVel: 0
+                        },
+                        text: "",
+                        scripts: {
+                            init: [
+                                {
+                                    code: (me, game) => {
+                                        let code = game.vars.loading.game.internal.errorCode;
+                                        me.font = (Math.min(game.width, game.height) / 20) + "px Helvetica";
+                                        if (code == 0) {
+                                            me.text = "Looks like this device doesn't meet this game's minimum requirements.";
+                                            me.visible = false;
+                                        }
+                                    },
+                                    stateToRun: "game"
+                                }
+                            ],
+                            main: [
+                                {
+                                    code: me => {
+                                        if (me.visible) {
+                                            me.vars.alphaVel += 0.005;
+                                            me.alpha += me.vars.alphaVel;
+                                            if (me.alpha > 1) {
+                                                me.alpha = 1;
+                                            }
+                                            else {
+                                                me.y -= me.vars.alphaVel * 50;
+                                            }
+                                            me.vars.alphaVel *= 0.9;
+                                        }
+                                        else {
+                                            if (me.vars.ready) {
+                                                me.visible = true;
+                                                me.alpha = 0;
+                                            }
+                                        }
+                                    },
+                                    stateToRun: "game"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            config: {
+                display: {
+                    resolution: "full"
+                }
+            },
+            state: "game"
         },
 
         requestAnimationFrame: window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,
