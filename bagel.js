@@ -7,16 +7,24 @@ TODO:
 == Testing ==
 Moving textures back into combined automatically (and to I guess?)
 
+Safari and firefox still have poor performance in full resolution loading screens
+
 == Bugs ==
 Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Put debugger statement in main script to frame advance. Maybe flush needed??? Only applies to canvases?
 
 Pause videos on state change
 
-Canvas width/heights can be 0, causing an error
+Canvas width/heights can be 0, causing an error (still happening)
 
 Cap alpha values during runtime, use an error?
 
+Use request idlecallbacks to update renderFPS when using webgl
+
 = Features =
+Don't init the renderer for loading screens as they use the same as the game. Remove texture creating and deleting logic for it that's no longer needed. Remove textures when done, as well as vertices. Keep track of textures created in the loading screen. Still uses it's own game but the same renderer so don't need to remove too much on deletetion. Working better now, review what's happening each frame and if stuff is being repeated
+
+How does the loading screen having a different resolution to the game work?
+
 Copy canvas mode
 
 
@@ -69,6 +77,7 @@ Bagel = {
         Bagel.internal.games[game.id] = game;
 
         subFunctions.misc(game);
+        subFunctions.basicRendererInit(game);
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
@@ -713,7 +722,7 @@ Bagel = {
                                         }
                                     },
                                     types: ["string"],
-                                    description: "Tells Bagel.js how to optimise for this canvas. It's not important in the canvas renderer but in the WebGL renderer, the value determines how the texture is handled internally.\n\"auto\" will detect when you render to the canvas and update the texture after. This adds a slight overhead.\n\"static\" will assume the canvas won't be updated frequently but you can still update it by returning true from the function you set for your \"render\" argument.\nLastly \"animated\" will assume the canvas will be updated every frame, you can return true if you haven't though.\n\nFor all of these modes, Bagel.js can optimise differently depending on how you use it on a second by second basis. A the texture of even a static canvas can become a more memory intensive but faster to update single texture if it's updated on 3 consecutive frames. If any canvas isn't updated at all for a whole second, it'll become part of a combined texture to reduce memory usage. \"auto\" will also use a single texture if less than 80% of the total textures supported by the GPU are being used. Both \"auto\" and \"static\" canvases will be moved to a combined texture once updated if 90% of textures are being used or will be moved before an update if 100% of textures are full and a new WebGL texture is required.\nIn most circumstances, the \"mode\" argument only specifies the start point and in the case of \"auto\", how the renders will be detected."
+                                    description: "Tells Bagel.js how to optimise for this canvas. It's not important in the canvas renderer but in the WebGL renderer, the value determines how the texture is handled internally.\n\"auto\" will detect when you render to the canvas and update the texture after. This adds a slight overhead.\n\"static\" will assume the canvas won't be updated frequently but you can still update it by returning true from the function you set for your \"render\" argument.\nLastly \"animated\" will assume the canvas will be updated every frame, you can return true if you haven't though.\n\nFor all of these modes, Bagel.js can optimise differently depending on how you use it on a second by second basis. A the texture of even a static canvas can become a more memory intensive but faster to update single texture if it's updated on 3 consecutive frames (auto and animated become a single texture after 1). If any canvas isn't updated at all for a whole second, it'll become part of a combined texture to reduce memory usage. \"auto\" will also use a single texture if less than 80% of the total textures supported by the GPU are being used. Both \"auto\" and \"static\" canvases will be moved to a combined texture once updated if 90% of textures are being used or will be moved before an update if 100% of textures are full and a new WebGL texture is required.\nIn most circumstances, the \"mode\" argument only specifies the start point and in the case of \"auto\", how the renders will be detected."
                                 }
                             },
                             cloneArgs: {
@@ -1023,6 +1032,9 @@ Bagel = {
                                             width = sprite.width;
                                             height = sprite.height;
                                         }
+                                        width = Math.max(width, 1); // Must be at least a pixel wide
+                                        height = Math.max(height, 1); // Must be at least a pixel wide
+
                                         let last = sprite.internal.last;
                                         if (last.width != width || last.height != height) {
                                             sprite.canvas.width = width;
@@ -3590,6 +3602,95 @@ Bagel = {
                         }, false);
                     }
                 },
+                basicRendererInit: game => { // Doesn't initialise everything, mostly chooses the renderer to use
+                    let config = game.config;
+
+                    if (! config.isLoadingScreen) {
+                        let renderer = game.internal.renderer;
+                        let subFunctions = Bagel.internal.subFunctions.init;
+                        let gl;
+
+                        let antialiasing = config.display.antialiasing;
+                        let settings = {
+                            antialias: antialiasing,
+                            //alpha: config.display.backgroundColour == "transparent", //Disabling alpha seems to hurt performance sometimes so it's left off for now
+                            powerPreference: "high-performance",
+                            depth: false,
+                            failIfMajorPerformanceCaveat: true
+                        };
+                        let canvas = renderer.canvas;
+
+
+                        if (config.display.renderer == "auto") {
+                            // This is just to test
+                            gl = canvas.getContext("webgl", settings) || canvas.getContext("experimental-webgl", settings);
+
+                            let deviceWebGL = Bagel.device.webgl;
+                            if (gl) {
+                                config.display.renderer = "webgl";
+
+                                subFunctions.findRendererLimits(game, renderer, gl);
+
+                                let limits = config.display.webgl.minimumLimits;
+                                if (deviceWebGL.textureSizeLimit < limits.textureSize || deviceWebGL.textureCountLimit < limits.textureCount) {
+                                    config.display.renderer = "canvas";
+                                    gl.getExtension("WEBGL_lose_context").loseContext();
+                                    gl = null;
+                                }
+                            }
+                            else {
+                                config.display.renderer = "canvas";
+                                subFunctions.findRendererLimits(game, renderer);
+                            }
+                        }
+                        else {
+                            subFunctions.findRendererLimits(game, renderer, gl);
+                        }
+
+                        renderer.type = config.display.renderer;
+                        if (renderer.type == "webgl") {
+                            if (! gl) {
+                                gl = renderer.canvas.getContext("webgl", settings) || renderer.canvas.getContext("experimental-webgl", settings);
+                            }
+                            renderer.gl = gl;
+                            if (gl) {
+                                subFunctions.findRendererLimits(game, renderer, gl);
+                                gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+
+
+                                let deviceWebGL = Bagel.device.webgl;
+                                if (deviceWebGL.supported == null) {
+                                    if (gl) {
+                                        deviceWebGL.supported = true;
+                                        Bagel.device.is.webGLSupported = true;
+                                        deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+                                        deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                                    }
+                                    else {
+                                        deviceWebGL.supported = false;
+                                        Bagel.device.is.webGLSupported = false;
+                                    }
+                                }
+                                let limits = game.config.display.webgl.minimumLimits;
+                                if (deviceWebGL.textureSizeLimit < limits.textureSize || deviceWebGL.textureCountLimit < limits.textureCount
+
+
+                                || game.id == "Bagel") { // TODO
+                                    subFunctions.errorScreen(game, 0);
+                                }
+                                renderer.colourCanvas = document.createElement("canvas");
+                                renderer.colourCanvas.width = 1;
+                                renderer.colourCanvas.height = 1;
+                                renderer.colourCtx = renderer.colourCanvas.getContext("2d");
+                            }
+                            else {
+                                subFunctions.errorScreen(game, 0);
+                                renderer.type = "canvas";
+                            }
+                        }
+                        Bagel.internal.subFunctions.tick.scaleCanvas(game);
+                    }
+                },
                 misc: game => {
                     game.loaded = false;
                     game.paused = false;
@@ -3602,120 +3703,13 @@ Bagel = {
                     renderer.canvas.width = game.width;
                     renderer.canvas.height = game.height;
 
-                    if (game.config.display.renderer == "auto") {
-                        // This is just to test
-                        let canvas = document.createElement("canvas");
-                        let gl = canvas.getContext("webgl", {
-                            failIfMajorPerformanceCaveat: true // It's not worth using if it's going to be slow
-                        }) || canvas.getContext("experimental-webgl", {
-                            failIfMajorPerformanceCaveat: true
-                        });
 
-                        let deviceWebGL = Bagel.device.webgl;
-                        if (gl == null) { // No webgl
-                            game.config.display.renderer = "canvas";
-                            if (Bagel.device.webgl.supported == null) {
-                                deviceWebGL.supported = false;
-                                Bagel.device.is.webGLSupported = false;
-                            }
-                        }
-                        else {
-                            game.config.display.renderer = "webgl";
-
-                            if (deviceWebGL.supported == null) {
-                                deviceWebGL.supported = true;
-                                Bagel.device.is.webGLSupported = true;
-                                deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
-                                deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-                            }
-
-                            let limits = game.config.display.webgl.minimumLimits;
-                            if (deviceWebGL.textureSizeLimit < limits.textureSize || deviceWebGL.textureCountLimit < limits.textureCount) {
-                                game.config.display.renderer = "canvas";
-                            }
-
-                            gl.getExtension("WEBGL_lose_context").loseContext();
-                        }
-                    }
-                    else if (game.config.display.renderer != "webgl") {
-                        let deviceWebGL = Bagel.device.webgl;
-                        if (deviceWebGL.supported == null) {
-                            let gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-                            if (gl) {
-                                deviceWebGL.supported = true;
-                                Bagel.device.is.webGLSupported = true;
-                                deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
-                                deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-
-                                gl.getExtension("WEBGL_lose_context").loseContext();
-                            }
-                            else {
-                                deviceWebGL.supported = false;
-                                Bagel.device.is.webGLSupported = false;
-                            }
-                        }
-                    }
-
-                    let config = game.config;
-                    renderer.type = config.display.renderer;
-                    let antialiasing = config.display.antialiasing;
-                    if (renderer.type == "webgl") {
-                        let settings = {
-                            antialias: antialiasing,
-                            //alpha: config.display.backgroundColour == "transparent", //Disabling alpha seems to hurt performance sometimes so it's left off for now
-                            powerPreference: "high-performance",
-                            depth: false
-                        };
-                        let gl = renderer.canvas.getContext("webgl", settings) || renderer.canvas.getContext("experimental-webgl", settings)
-                        renderer.gl = gl;
-                        if (gl) {
-                            gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
-
-
-                            let deviceWebGL = Bagel.device.webgl;
-                            if (deviceWebGL.supported == null) {
-                                if (gl) {
-                                    deviceWebGL.supported = true;
-                                    Bagel.device.is.webGLSupported = true;
-                                    deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
-                                    deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-                                }
-                                else {
-                                    deviceWebGL.supported = false;
-                                    Bagel.device.is.webGLSupported = false;
-                                }
-                            }
-                            let limits = game.config.display.webgl.minimumLimits;
-                            if (deviceWebGL.textureSizeLimit < limits.textureSize || deviceWebGL.textureCountLimit < limits.textureCount
-
-
-                            || game.id == "Bagel") { // TODO
-                                game.config.loading.animation = Bagel.internal.errorGameObject; // So a message can be displayed to the user
-                                game.internal.assets.loading++; // So the loading screen triggers
-                                game.config.loading.skip = false;
-                                game.internal.errorCode = 0;
-                            }
-                            renderer.colourCanvas = document.createElement("canvas");
-                            renderer.colourCanvas.width = 1;
-                            renderer.colourCanvas.height = 1;
-                            renderer.colourCtx = renderer.colourCanvas.getContext("2d");
-                        }
-                        else {
-                            game.config.loading.animation = Bagel.internal.errorGameObject; // So a message can be displayed to the user
-                            game.internal.assets.loading++; // So the loading screen triggers
-                            game.config.loading.skip = false;
-                            game.internal.errorCode = 0;
-                            renderer.type = "canvas";
-                        }
-                    }
-
-                    if (config.display.mode == "fill") {
+                    if (game.config.display.mode == "fill") {
                         renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp and Phaser
                     }
                     else {
                         renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // CSS from Phaser (https://phaser.io)
                     }
-                    Bagel.internal.subFunctions.tick.scaleCanvas(game);
 
                     (game => {
                         game.add = {
@@ -3989,12 +3983,14 @@ Bagel = {
                                 mode: "preload"
                             },
                             display: {
-                                resolution: resolution,
-                                dom: false,
                                 backgroundColour: backgroundColour
                             },
-                            disableBagelJSMessage: true // Otherwise there would be 2 per game
+                            disableBagelJSMessage: true, // Otherwise there would be 2 per game
+                            isLoadingScreen: true
                         };
+                        game.internal.resolutionModeWas = game.config.display.resolution;
+                        game.config.display.resolution = resolution;
+
                         if (loadingScreen.vars == null) {
                             loadingScreen.vars = {};
                         }
@@ -4008,6 +4004,7 @@ Bagel = {
 
                         loadingScreen = Bagel.init(loadingScreen);
                         game.internal.loadingScreen = loadingScreen;
+                        loadingScreen.internal.renderer = game.internal.renderer; // TODO: remove webgl context or don't init renderer?
 
                         if (game.internal.pluginsDone) {
                             Bagel.internal.subFunctions.init.rendererInit(game);
@@ -4021,14 +4018,15 @@ Bagel = {
                         game.internal.loadingScreen.delete();
                         delete game.internal.loadingScreen;
 
-                        let renderer = game.internal.renderer;
-                        if (renderer.type == "webgl") {
-                            if (game.internal.loadingScreenRenderID != null) { // Make sure the texture and bitmap sprite had actually been made, otherwise they don't need removing
-                                Bagel.internal.render.bitmapSprite.delete(game.internal.loadingScreenRenderID, game);
-                                Bagel.internal.render.texture.delete(".Internal.loadingScreen", game);
-                            }
-                        }
+                        game.config.display.resolution = game.internal.resolutionModeWas;
                     }
+                },
+                errorScreen: (game, code) => {
+                    game.config.loading.animation = Bagel.internal.errorGameObject; // So a message can be displayed to the user
+                    game.internal.assets.loading++; // So the loading screen triggers
+                    game.loaded = false;
+                    game.config.loading.skip = false;
+                    game.internal.errorCode = code;
                 },
                 documentReady: game => {
                     if (game.config.display.dom) {
@@ -4051,6 +4049,10 @@ Bagel = {
                     }
                 },
                 rendererInit: game => {
+                    if (game.config.isLoadingScreen) {
+                        return;
+                    }
+
                     let rendererType = game.internal.renderer.type;
                     let renderers = Bagel.internal.subFunctions.tick.render;
                     if (renderers[rendererType].init) {
@@ -4070,8 +4072,9 @@ Bagel = {
                     let loadingScreen = game.internal.loadingScreen;
                     if (loadingScreen) {
                         if (game.internal.renderer.type == "webgl") {
-                            Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game, false, "animated");
+                            //Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game, false, "animated");
 
+                            /*
                             game.internal.loadingScreenRenderID = Bagel.internal.render.bitmapSprite.new({
                                 x: game.width / 2,
                                 y: game.height / 2,
@@ -4081,7 +4084,22 @@ Bagel = {
                                 rotation: 90,
                                 alpha: 1
                             }, game, false);
+                            */
                         }
+                    }
+                },
+                findRendererLimits: (game, renderer, gl) => {
+                    let deviceWebGL = Bagel.device.webgl;
+                    let supported = false;
+                    if (gl) {
+                        supported = true;
+                        deviceWebGL.textureCountLimit = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+                        deviceWebGL.textureSizeLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                        deviceWebGL.viewportSizeLimit = Math.min(...gl.getParameter(gl.MAX_VIEWPORT_DIMS));
+                    }
+                    if (gl != null) {
+                        deviceWebGL.supported = supported;
+                        Bagel.device.is.webGLSupported = supported;
                     }
                 },
                 onPluginsReady: game => {
@@ -4962,6 +4980,9 @@ Bagel = {
                     canvas: {
                         init: game => {
                             let renderer = game.internal.renderer;
+                            renderer.maxTextureSlots = Infinity; // Canvas renderers don't have limits
+                            renderer.maxTextureSize = Infinity;
+                            renderer.maxViewportSize = Infinity;
 
                             renderer.ctx = renderer.canvas.getContext("2d");
                             renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing;
@@ -5391,7 +5412,7 @@ Bagel = {
                                     if (! texture[16]) { // Not updated this frame
                                         texture[14] = 0; // Reset the update counter
                                     }
-                                    if (texture[14] == 3) { // 3 consecutive updates
+                                    if (texture[14] == 3 || ((texture[13] == "animated" || texture[13] == "auto") && texture[14] >= 1)) { // 3 consecutive updates or 1 update for an animated or auto texture
                                         if (renderer.textureSlotsUsed / renderer.maxTextureSlots < 0.9 || texture[13] == "animated") {
                                             let render = Bagel.internal.render.texture;
                                             let tmpTexture = texture[15];
@@ -5439,6 +5460,7 @@ Bagel = {
                             let textureCount = Bagel.device.webgl.textureCountLimit;
                             renderer.maxTextureSlots = textureCount;
                             renderer.maxTextureSize = Bagel.device.webgl.textureSizeLimit;
+                            renderer.maxViewportSize = Bagel.device.webgl.viewportSizeLimit;
 
                             let textureCode = "";
                             let c = 1;
@@ -5683,7 +5705,9 @@ Bagel = {
                         if (Bagel.internal.games[game.id] == null) return;
 
                         subFunctions.spriteRenderTick(game);
-                        subFunctions.render[game.internal.renderer.type].tick(game);
+                        if (! game.config.isLoadingScreen) {
+                            subFunctions.render[game.internal.renderer.type].tick(game);
+                        }
                     }
                 },
                 loading: game => {
@@ -5727,25 +5751,25 @@ Bagel = {
                         }
 
 
-                        if (renderer.type == "canvas") {
-                            let clearStyle = game.config.display.backgroundColour;
-                            if (clearStyle == "transparent") {
-                                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        if (! game.config.isLoadingScreen) {
+                            if (renderer.type == "canvas") {
+                                let clearStyle = game.config.display.backgroundColour;
+                                if (clearStyle == "transparent") {
+                                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                }
+                                else {
+                                    ctx.fillStyle = clearStyle;
+                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                }
+                                ctx.drawImage(loadingScreen.internal.renderer.canvas, 0, 0, canvas.width, canvas.height);
                             }
                             else {
-                                ctx.fillStyle = clearStyle;
-                                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                            }
-                            ctx.drawImage(loadingScreen.internal.renderer.canvas, 0, 0, canvas.width, canvas.height);
-                        }
-                        else {
-                            if (renderer.waitTick >= game.config.display.webgl.initialDelay) {
-                                Bagel.internal.render.texture.update(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game);
-
-                                Bagel.internal.subFunctions.tick.render.webgl.tick(game);
-                            }
-                            else {
-                                renderer.waitTick++;
+                                if (renderer.waitTick >= game.config.display.webgl.initialDelay) {
+                                    Bagel.internal.subFunctions.tick.render.webgl.tick(game);
+                                }
+                                else {
+                                    renderer.waitTick++;
+                                }
                             }
                         }
 
@@ -5763,7 +5787,8 @@ Bagel = {
                 scaleCanvas: game => {
                     let width = window.innerWidth;
                     let height = window.innerHeight;
-                    let ratio = game.internal.renderer.ratio;
+                    let renderer = game.internal.renderer;
+                    let ratio = renderer.ratio;
                     let wHeight = width / ratio;
                     if (height > wHeight) {
                         height = wHeight;
@@ -5793,7 +5818,18 @@ Bagel = {
                     renderWidth = Math.ceil(renderWidth); // The canvas width has to be a whole number
                     renderHeight = Math.ceil(renderHeight);
 
-                    let renderer = game.internal.renderer;
+                    let max = renderer.maxViewportSize;
+                    if (renderWidth > max || renderHeight > max) { // Cap it
+                        if (renderWidth > renderHeight) {
+                            renderWidth = max;
+                            renderHeight = Math.ceil(renderWidth / ratio);
+                        }
+                        else {
+                            renderHeight = max;
+                            renderWidth = Math.ceil(renderHeight * ratio);
+                        }
+                    }
+
                     let canvas = renderer.canvas;
                     //if (canvas.width != renderWidth || canvas.height != renderHeight) {
                     if (canvas.width != renderWidth || canvas.height != renderHeight) {
@@ -6392,6 +6428,11 @@ Bagel = {
                                             velocity: 0,
                                             stage: 0,
                                             delay: 0
+                                        },
+                                        config: {
+                                            display: {
+                                                resolution: "fixed"
+                                            }
                                         }
                                     },
                                     types: ["object"],
@@ -6406,6 +6447,12 @@ Bagel = {
                             default: false,
                             types: ["boolean"],
                             description: "Disables the console message when the game is initialised. As crediting is required to use Bagel.js, please put a link to the GitHub page somewhere else in your program. e.g in the credits."
+                        },
+                        isLoadingScreen: {
+                            required: false,
+                            default: false,
+                            types: ["boolean"],
+                            description: "If this game is a loading screen or not. Used internally."
                         }
                     },
                     types: ["object"],
@@ -7893,43 +7940,43 @@ Bagel = {
                             singleTexture = textures[id][12];
                         }
                         else {
-                            singleTexture = false;
-                        }
-                    }
-                    if (mode == "auto") {
-                        if (renderer.textureSlotsUsed / renderer.maxTextureSlots <= 0.8) { // less than 80% used
-                            singleTexture = true;
-                        }
-                    }
-                    else if (mode == "animated") {
-                        singleTexture = true;
-                        if (renderer.textureSlotsUsed == renderer.maxTextureSlots) { // Need to free up a texture
-                            let textureFreed = false;
-                            for (let i in textures) {
-                                if (textures[i][12] || textures[i][13] != "animated") { // Is a single texture and isn't animated, as they take priority
-                                    let moveTexture = textures[i][15];
-                                    render.delete(i, game, false, false);
-                                    render.new(i, moveTexture, game, false, mode, false); // Start it as a combined texture but it still has the same mode
-                                    textureFreed = true;
-                                    break;
+                            if (mode == "auto") {
+                                if (renderer.textureSlotsUsed / renderer.maxTextureSlots <= 0.8) { // less than 80% used
+                                    singleTexture = true;
                                 }
                             }
-                            if (! textureFreed) {
-                                singleTexture = false;
-                                renderer.animatedIntoCombined[id] = true;
-                                if (! renderer.displayedCombinedWarning) {
-                                    console.warn("There's no empty texture slots left. In order to try and keep the game running, Bagel.js is using a combined texture for this animated texture. This will likely have a significant performance penalty depending on the size. If you're using a lot of animated textures, the \"canvas\" renderer may be faster (Game.config.display.renderer).\nFuture animated textures going into combined textures won't be logged but will be recorded and can be displayed using: \"Game.debug.textures.listAnimatedIntoCombined()\".");
-                                    renderer.displayedCombinedWarning = true;
+                            else if (mode == "animated") {
+                                singleTexture = true;
+                                if (renderer.textureSlotsUsed == renderer.maxTextureSlots) { // Need to free up a texture
+                                    let textureFreed = false;
+                                    for (let i in textures) {
+                                        if (textures[i][12] || textures[i][13] != "animated") { // Is a single texture and isn't animated, as they take priority
+                                            let moveTexture = textures[i][15];
+                                            render.delete(i, game, false, false);
+                                            render.new(i, moveTexture, game, false, mode, false); // Start it as a combined texture but it still has the same mode
+                                            textureFreed = true;
+                                            break;
+                                        }
+                                    }
+                                    if (! textureFreed) {
+                                        singleTexture = false;
+                                        renderer.animatedIntoCombined[id] = true;
+                                        if (! renderer.displayedCombinedWarning) {
+                                            console.warn("There's no empty texture slots left. In order to try and keep the game running, Bagel.js is using a combined texture for this animated texture. This will likely have a significant performance penalty depending on the size. If you're using a lot of animated textures, the \"canvas\" renderer may be faster (Game.config.display.renderer).\nFuture animated textures going into combined textures won't be logged but will be recorded and can be displayed using: \"Game.debug.textures.listAnimatedIntoCombined()\".");
+                                            renderer.displayedCombinedWarning = true;
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
+
 
                     if (renderer.type == "webgl") {
                         let gl = renderer.gl;
 
-                        let width = texture.width;
-                        let height = texture.height;
+                        let width = Math.ceil(texture.width);
+                        let height = Math.ceil(texture.height);
                         let maxSize = renderer.maxTextureSize;
                         let downscaled = false;
                         if (width > maxSize || height > maxSize) {
@@ -7939,11 +7986,11 @@ Bagel = {
                             let ratio = width / height;
                             if (width > height) {
                                 width = maxSize;
-                                height = Math.floor(width / ratio);
+                                height = Math.ceil(width / ratio);
                             }
                             else {
                                 height = maxSize;
-                                width = Math.floor(height * ratio);
+                                width = Math.ceil(height * ratio);
                             }
 
                             let downscaleCanvas = document.createElement("canvas");
@@ -8781,7 +8828,7 @@ Bagel = {
                         fullRes: true,
                         width: 1,
                         height: 1,
-                        mode: "static"
+                        mode: "auto"
                     },
                     {
                         id: "Text",
@@ -8810,14 +8857,14 @@ Bagel = {
                                 {
                                     code: me => {
                                         if (me.visible) {
-                                            me.vars.alphaVel += 0.005;
+                                            if (me.alpha != 1) {
+                                                me.vars.alphaVel += 0.005;
+                                            }
                                             me.alpha += me.vars.alphaVel;
                                             if (me.alpha > 1) {
                                                 me.alpha = 1;
                                             }
-                                            else {
-                                                me.y -= me.vars.alphaVel * 50;
-                                            }
+                                            me.y -= me.vars.alphaVel * 40;
                                             me.vars.alphaVel *= 0.9;
                                         }
                                         else {
@@ -9287,11 +9334,7 @@ Bagel = {
             touchscreen: document.ontouchstart === null,
             webGLSupported: null
         },
-        webgl: {
-            textureCountLimit: null,
-            textureSizeLimit: null,
-            supported: null
-        }
+        webgl: {}
     },
     events: {
         pwaUpdate: null
