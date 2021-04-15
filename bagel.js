@@ -10,21 +10,19 @@ Moving textures back into combined automatically (and to I guess?)
 Safari and firefox still have poor performance in full resolution loading screens
 
 == Bugs ==
-Loading screen is antialiased
-
-Initial delay bug is back
+Initial delay problem is back (argh)
 
 Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Put debugger statement in main script to frame advance. Maybe flush needed??? Only applies to canvases?
 
 Pause videos on state change
-
-Canvas width/heights can be 0, causing an error (still happening)
 
 Cap alpha values during runtime, use an error?
 
 Use request idlecallbacks to update renderFPS when using webgl
 
 Game flashes when resizing
+
+Allow enabling antialiasing and switching renderers on the fly. Requires reinitialising the webgl context for both
 
 = Features =
 Copy canvas mode
@@ -823,9 +821,8 @@ Bagel = {
                                         }
 
                                         if (triggerSprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
-                                            let mainCanvas = triggerSprite.game.internal.renderer.canvas;
-                                            let scaleX = mainCanvas.width / triggerSprite.game.width;
-                                            let scaleY = mainCanvas.height / triggerSprite.game.height;
+                                            let scaleX = triggerSprite.game.internal.renderer.scaleX;
+                                            let scaleY = triggerSprite.game.internal.renderer.scaleY;
 
                                             let width;
                                             let height;
@@ -950,14 +947,12 @@ Bagel = {
                                     })(sprite, canvas, ctx);
                                 }
 
-                                let scaleX = game.internal.renderer.canvas.width / game.width;
-                                let scaleY = game.internal.renderer.canvas.height / game.height;
                                 sprite.canvas = canvas;
                                 canvas.width = sprite.width;
                                 canvas.height = sprite.height;
                                 if (sprite.fullRes) {
-                                    canvas.width *= scaleX;
-                                    canvas.height *= scaleY;
+                                    canvas.width *= sprite.game.internal.renderer.scaleX;
+                                    canvas.height *= sprite.game.internal.renderer.scaleY;
                                 }
                                 sprite.ctx = ctx;
                                 sprite.internal.canvasID = ".Internal.canvas." + sprite.id;
@@ -975,20 +970,19 @@ Bagel = {
                                 init: (sprite, newBitmap) => {
                                     let canvas = sprite.canvas;
 
-                                    let mainCanvas = sprite.game.internal.renderer.canvas;
-                                    let scaleX = mainCanvas.width / sprite.game.width;
-                                    let scaleY = mainCanvas.height / sprite.game.height;
-
                                     let width;
                                     let height;
                                     if (sprite.fullRes) {
-                                        width = sprite.width * scaleX * window.devicePixelRatio;
-                                        height = sprite.height * scaleY * window.devicePixelRatio;
+                                        width = sprite.width * sprite.game.internal.renderer.scaleX;
+                                        height = sprite.height * sprite.game.internal.renderer.scaleY;
                                     }
                                     else {
                                         width = sprite.width;
                                         height = sprite.height;
                                     }
+                                    width = Math.ceil(width);
+                                    height = Math.ceil(height);
+
                                     canvas.width = width;
                                     canvas.height = height;
                                     sprite.internal.last.width = width;
@@ -1017,15 +1011,11 @@ Bagel = {
                                     current.sprite = sprite;
 
                                     if (sprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
-                                        let mainCanvas = sprite.game.internal.renderer.canvas;
-                                        let scaleX = mainCanvas.width / sprite.game.width;
-                                        let scaleY = mainCanvas.height / sprite.game.height;
-
                                         let width;
                                         let height;
                                         if (sprite.fullRes) {
-                                            width = sprite.width * scaleX * window.devicePixelRatio;
-                                            height = sprite.height * scaleY * window.devicePixelRatio;
+                                            width = sprite.width * sprite.game.internal.renderer.scaleX;
+                                            height = sprite.height * sprite.game.internal.renderer.scaleY;
                                         }
                                         else {
                                             width = sprite.width;
@@ -1256,10 +1246,7 @@ Bagel = {
                                         }
                                         sprite.internal.renderUpdate = true;
                                     };
-                                    let mainCanvas = sprite.game.internal.renderer.canvas;
-                                    let scaleX = mainCanvas.width / sprite.game.width;
-                                    let scaleY = mainCanvas.height / sprite.game.height;
-                                    internal.prerender(sprite, scaleX, scaleY);
+                                    internal.prerender(sprite, sprite.game.internal.renderer.scaleX, sprite.game.internal.renderer.scaleY);
                                 },
                                 onVisible: (sprite, newBitmap) => {
                                     sprite.internal.renderUpdate = false;
@@ -1276,8 +1263,8 @@ Bagel = {
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
                                 whileVisible: (sprite, updateBitmap) => {
                                     let mainCanvas = sprite.game.internal.renderer.canvas;
-                                    let scaleX = mainCanvas.width / sprite.game.width;
-                                    let scaleY = mainCanvas.height / sprite.game.height;
+                                    let scaleX = sprite.game.internal.renderer.scaleX;
+                                    let scaleY = sprite.game.internal.renderer.scaleY;
 
                                     let internal = sprite.internal;
                                     if (internal.needsRerender || internal.last.scaleX != scaleX || internal.last.scaleY != scaleY) {
@@ -2136,6 +2123,18 @@ Bagel = {
                                                 fn: (game, args, plugin) => {
                                                     let combinedTexture = game.internal.renderer.textureSlots[args.index];
                                                     combinedTexture.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);border:1px solid black;";
+                                                    Bagel.internal.tryStyles(combinedTexture.canvas, "image-rendering", [
+                                                        "pixelated",
+                                                        "optimize-contrast",
+                                                        "-moz-crisp-edges",
+                                                        "-o-crisp-edges",
+                                                        "-webkit-optimize-contrast",
+                                                        "optimizeSpeed"
+                                                    ]);
+
+
+
+
                                                     let width = window.innerWidth;
                                                     let height = window.innerHeight;
                                                     if (width > height) {
@@ -3272,7 +3271,9 @@ Bagel = {
                     let game = Bagel.internal.games[i];
                     Bagel.internal.current.game = game;
 
-                    subFunctions.scaleCanvas(game);
+                    if (! game.config.isLoadingScreen) {
+                        subFunctions.scaleCanvas(game);
+                    }
 
                     if (game.internal.pluginsDone) {
                         if (game.state != game.internal.lastPrepState) {
@@ -3978,7 +3979,7 @@ Bagel = {
                         let resolution = "fixed";
                         if (loadingScreen.config) {
                             if (loadingScreen.config.display) {
-                                if (loadingScreen.config.display != null) {
+                                if (loadingScreen.config.display.resolution != null) {
                                     resolution = loadingScreen.config.display.resolution;
                                 }
                             }
@@ -4024,7 +4025,7 @@ Bagel = {
 
                         loadingScreen = Bagel.init(loadingScreen);
                         game.internal.loadingScreen = loadingScreen;
-                        loadingScreen.internal.renderer = game.internal.renderer; // TODO: remove webgl context or don't init renderer?
+                        loadingScreen.internal.renderer = game.internal.renderer;
 
                         if (game.internal.pluginsDone) {
                             Bagel.internal.subFunctions.init.rendererInit(game);
@@ -5012,8 +5013,8 @@ Bagel = {
                             let canvas = renderer.canvas;
                             let ctx = renderer.ctx;
 
-                            let scaleX = canvas.width / game.width;
-                            let scaleY = canvas.height / game.height;
+                            let scaleX = game.internal.renderer.scaleX;
+                            let scaleY = game.internal.renderer.scaleY;
 
                             let layers = renderer.layers;
                             let handlers = game.internal.combinedPlugins.types.sprites;
@@ -5837,6 +5838,8 @@ Bagel = {
 
                     renderWidth = Math.ceil(renderWidth); // The canvas width has to be a whole number
                     renderHeight = Math.ceil(renderHeight);
+                    width = Math.floor(width);
+                    height = Math.floor(height);
 
                     let max = renderer.maxViewportSize;
                     if (renderWidth > max || renderHeight > max) { // Cap it
@@ -5857,14 +5860,28 @@ Bagel = {
                             canvas.width = renderWidth;
                             canvas.height = renderHeight;
                         }
-
-                        canvas.style.width = width + "px";
-                        canvas.style.height = height + "px";
-                        renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
-                        renderer.styleHeight = height;
                     }
+                    canvas.style.width = width + "px";
+                    canvas.style.height = height + "px";
+                    renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
+                    renderer.styleHeight = height;
+
+                    if (! game.config.display.antialiasing) {
+                        Bagel.internal.tryStyles(canvas, "image-rendering", [
+                            "pixelated",
+                            "optimize-contrast",
+                            "-moz-crisp-edges",
+                            "-o-crisp-edges",
+                            "-webkit-optimize-contrast",
+                            "optimizeSpeed"
+                        ]);
+                    }
+
                     renderer.waitingWidth = renderWidth;
                     renderer.waitingHeight = renderHeight;
+
+                    renderer.scaleX = canvas.width / game.width;
+                    renderer.scaleY = canvas.height / game.height;
 
 
                     if (renderer.type == "canvas") {
@@ -6452,7 +6469,7 @@ Bagel = {
                                         },
                                         config: {
                                             display: {
-                                                resolution: "fixed"
+                                                //resolution: "fixed"
                                             }
                                         }
                                     },
@@ -7699,6 +7716,14 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
 
+                    let scaleX = renderer.scaleX;
+                    let scaleY = renderer.scaleY;
+                    data.x = Math.round(data.x * scaleX) / scaleX;
+                    data.y = Math.round(data.y * scaleY) / scaleY;
+                    data.width = Math.round(data.width * scaleX) / scaleX;
+                    data.height = Math.round(data.height * scaleY) / scaleY;
+
+
                     if (renderer.type == "webgl") {
                         let id = 0;
                         while (id < renderer.bitmapIndexes.length) {
@@ -7808,6 +7833,13 @@ Bagel = {
                         console.error("Oh no! Bagel.js couldn't find the texture " + JSON.stringify(box.image) + " for your bitmap sprite. Make sure your \"image\" argument (part of the data argument) is correct.");
                         Bagel.internal.oops(game);
                     }
+
+                    let scaleX = renderer.scaleX;
+                    let scaleY = renderer.scaleY;
+                    box.x = Math.round(box.x * scaleX) / scaleX;
+                    box.y = Math.round(box.y * scaleY) / scaleY;
+                    box.width = Math.round(box.width * scaleX) / scaleX;
+                    box.height = Math.round(box.height * scaleY) / scaleY;
 
                     if (renderer.bitmapIndexes[id] == null) {
                         console.error("Hmm, Bagel.js couldn't find the bitmap sprite with the id " + JSON.stringify(id) + ".");
@@ -8668,6 +8700,15 @@ Bagel = {
                         }
                         renderer.bitmapsUsingTextures[id] = newUsingTextures;
                     }
+                }
+            }
+        },
+
+        tryStyles: (element, property, values) => {
+            for (let i in values) {
+                if (CSS.supports(property, values[i])) {
+                    element.style[property] = values[i];
+                    return;
                 }
             }
         },
