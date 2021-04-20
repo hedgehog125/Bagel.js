@@ -5,20 +5,20 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Testing ==
+Rendering completely broken in Safari. Fine in firefox???
+
 Moving textures back into combined automatically (and to I guess?)
 
 Safari and firefox still have poor performance in full resolution loading screens
 
-== Bugs ==
-Initial delay problem is back (argh)
+Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
+== Bugs ==
 Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Put debugger statement in main script to frame advance. Maybe flush needed??? Only applies to canvases?
 
 Pause videos on state change
 
 Cap alpha values during runtime, use an error?
-
-Use request idlecallbacks to update renderFPS when using webgl
 
 Game flashes when resizing
 
@@ -26,6 +26,8 @@ Allow enabling antialiasing and switching renderers on the fly. Requires reiniti
 
 = Features =
 Copy canvas mode
+
+Auto skip mode
 
 Prerender function for canvases, runs when shown and when the resolution is changed
 
@@ -48,6 +50,8 @@ Built in FPS counter
 FPS stabilisation. Use the time elapsed to calcuate how many times to run the main code before rendering. 30hz displays would run the main code twice and then render and 120hz would run the code once then render but only on every other frame. Should Bagel.js attempt to catch up if it lags? Should frames be able to be dropped?
 
 Display render options in Bagel.js console message. Antialiasing and fps stabilisation?
+
+Dynamic resolution? Non chromium browsers benefit from lower resolutions because of the lower resolution textures?
 
 Gamepad support
 
@@ -78,7 +82,12 @@ Bagel = {
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
         subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
-        subFunctions.loadingScreen(game);
+        if (game.internal.assets.loading == 0) {
+            game.loaded = true;
+        }
+        else {
+            subFunctions.loadingScreen(game);
+        }
 
         if (! game.config.disableBagelJSMessage) { // Display a message that provides an overview of the how the game is running
             let hpText = "🥯🥯";
@@ -3266,8 +3275,20 @@ Bagel = {
 
             let totalStart = new Date();
             if (document.readyState == "complete") {
+                Bagel.internal.frameStartTime = performance.now();
+                let start;
+                if (window.requestIdleCallback) {
+                    requestIdleCallback(_ => {
+                        let fps = 1000 / (performance.now() - Bagel.internal.frameStartTime);
+                        for (let i in Bagel.internal.games) {
+                            Bagel.internal.games[i].maxPossibleFPS = fps;
+                        }
+                    });
+                }
+                else { // Some browsers don't support requestIdleCallback so this is a less accurate workaround
+                    start = performance.now();
+                }
                 for (let i in Bagel.internal.games) {
-                    let start = new Date();
                     let game = Bagel.internal.games[i];
                     Bagel.internal.current.game = game;
 
@@ -3275,16 +3296,23 @@ Bagel = {
                         subFunctions.scaleCanvas(game);
                     }
 
-                    if (game.internal.pluginsDone) {
-                        if (game.state != game.internal.lastPrepState) {
+                    let internal = game.internal;
+                    if (! internal.pluginsDone) {
+                        if (internal.pluginsLoading == 0) {
+                            internal.pluginsDone = true;
+                            Bagel.internal.subFunctions.init.onPluginsReady(game);
+                        }
+                    }
+                    if (internal.pluginsDone) {
+                        if (game.state != internal.lastPrepState) {
                             Bagel.internal.triggerPluginListener("prepState", game, game.state);
-                            if (game.internal.assets.loading != 0) { // Something needs to load
+                            if (internal.assets.loading != 0) { // Something needs to load
                                 game.loaded = false;
-                                if (game.internal.loadingScreen == null) {
+                                if (internal.loadingScreen == null) {
                                     Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
                                 }
                             }
-                            game.internal.lastPrepState = game.state;
+                            internal.lastPrepState = game.state;
                         }
 
 
@@ -3298,20 +3326,24 @@ Bagel = {
                             subFunctions.loading(game);
                         }
                     }
-                    else {
-                        if (game.internal.pluginsLoading == 0) {
-                            game.internal.pluginsDone = true;
-                            Bagel.internal.subFunctions.init.onPluginsReady(game);
-                        }
-                    }
 
-                    let now = new Date();
+                    let now = performance.now();
                     game.internal.FPSFrames++;
-                    game.maxPossibleFPS = 1000 / (now - start);
                     if (now - game.internal.lastFPSUpdate >= 1000) {
                         game.currentFPS = game.internal.FPSFrames;
                         game.internal.FPSFrames = 0;
                         game.internal.lastFPSUpdate = now;
+                    }
+                }
+                if (! window.requestIdleCallback) {
+                    let fps = 1000 / (performance.now() - Bagel.internal.frameStartTime);
+                    for (let i in Bagel.internal.games) {
+                        if (Bagel.internal.games[i].config.display.renderer == "webgl") { // WebGL render times are unknown but usually quite short so just guess a bit
+                            fps *= 0.95;
+                        }
+                    }
+                    for (let i in Bagel.internal.games) {
+                        Bagel.internal.games[i].maxPossibleFPS = fps;
                     }
                 }
             }
@@ -6323,6 +6355,7 @@ Bagel = {
                                                     fullRes: false,
                                                     updateRes: false,
                                                     visible: false,
+                                                    mode: "animated",
                                                     width: 1,
                                                     height: 1,
                                                     scripts: {
@@ -6346,9 +6379,10 @@ Bagel = {
 
                                                         ctx.imageSmoothingEnabled = false;
                                                         ctx.fillStyle = game.config.display.backgroundColour;
-                                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                                                         if (game.vars.stage == 0) {
+                                                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
                                                             if (game.vars.angle != -90) {
                                                                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                                                             }
@@ -6381,7 +6415,6 @@ Bagel = {
                                                                 me.width -= game.vars.velocity;
                                                                 me.height -= game.vars.velocity;
                                                                 game.vars.velocity *= 0.9;
-                                                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                                                                 if (me.width <= 0) {
                                                                     me.width = 1;
@@ -6396,6 +6429,7 @@ Bagel = {
                                                                     game.vars.loading.done = true;
                                                                 }
                                                             }
+                                                            return true;
                                                         }
                                                     }
                                                 },
@@ -6469,7 +6503,7 @@ Bagel = {
                                         },
                                         config: {
                                             display: {
-                                                //resolution: "fixed"
+                                                resolution: "full"
                                             }
                                         }
                                     },
@@ -8646,7 +8680,7 @@ Bagel = {
                             gl: gl,
                             lines: lines,
                             webgltexture: renderer.textureSlots[index][1],
-                            singleTexture: singleTexture,
+                            singleTexture: singleTexture? singleTexture : false,
                             textureCount: 0,
 
                             locations: locations,
