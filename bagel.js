@@ -3386,8 +3386,8 @@ Bagel = {
                     let internal = game.internal;
                     if (! internal.pluginsDone) {
                         if (internal.pluginsLoading == 0) {
-                            internal.pluginsDone = true;
                             Bagel.internal.subFunctions.init.onPluginsReady(game);
+                            internal.pluginsDone = true;
                         }
                     }
                     if (internal.pluginsDone) {
@@ -4107,7 +4107,7 @@ Bagel = {
                 },
                 initSprites: game => {
                     for (let i in game.game.sprites) {
-                        let sprite = Bagel.internal.createSprite(game.game.sprites[i], game, false, "Game.game.sprites item " + i, false, parseInt(i));
+                        Bagel.internal.createSprite(game.game.sprites[i], game, false, "Game.game.sprites item " + i, false, parseInt(i));
                     }
                 },
                 loadingScreen: game => {
@@ -4808,7 +4808,7 @@ Bagel = {
                     if (handler.init) {
                         handler.init(sprite, game, current.plugin);
                     }
-                    if (game.loaded) {
+                    if (game.loaded && game.internal.pluginsDone) {
                         subFunctions.triggerListeners(sprite, game);
                         Bagel.internal.processSprite(sprite);
                     }
