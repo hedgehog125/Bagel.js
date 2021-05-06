@@ -5,31 +5,38 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Testing ==
-Rendering completely broken in Safari. Fine in firefox???
-
-Moving textures back into combined automatically (and to I guess?)
-
 Safari and firefox still have poor performance in full resolution loading screens
 
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
+Fix safari rendering issues by detecting it using the lack of requestIdleCallback (store value in device.browser and also detect chrome and firefox). Then delay updating combined textures if the new texture wasn't created during a frame (e.g an event)
+
+Right clicks register as clicks
+
 Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Put debugger statement in main script to frame advance. Maybe flush needed??? Only applies to canvases?
+Now even longer in breakout?
 
 Pause videos on state change
 
 Cap alpha values during runtime, use an error?
 
-Game flashes when resizing
-
 Allow enabling antialiasing and switching renderers on the fly. Requires reinitialising the webgl context for both
 
+Resume playing audio from the position it would be in rather than the start. Maybe play muted if no autoplay?
+
 = Features =
+Scale coordinates when sending to shader. Correct widths and heights based on position. Recalculate rounding when the resolution is changed
+
 Copy canvas mode
 
 Auto skip mode
 
-Prerender function for canvases, runs when shown and when the resolution is changed
+Include assets loaded in HTML on the current page when generating workers. Especially script tags
+
+Drop texture contexts when they aren't being used for more than a few seconds
+
+Whole number scaling mode for games?
 
 Remove initial delay logic and syntax
 
@@ -57,6 +64,8 @@ Gamepad support
 
 
 = Tweaks =
+Tidy up canvas prerendering by using the prerender property of canvas sprites
+
 Update readme, Phaser is smaller than I thought? Even the version used in Frontier is fairly small (smaller than the current version), nowhere near 800KB???
 
 Fix spelling errors
@@ -75,13 +84,14 @@ Bagel = {
         current.game = game;
         game = subFunctions.check(game);
         let originalRenderer = game.config.display.renderer; // If it's auto, it will get changed in a bit to either webgl or canvas
+        let previousGames = Object.keys(Bagel.internal.games).length;
         Bagel.internal.games[game.id] = game;
 
         subFunctions.misc(game);
         subFunctions.basicRendererInit(game);
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
-        subFunctions.listeners(game, game.internal.renderer.canvas.addEventListener);
+        subFunctions.listeners(game, game.internal.renderer.canvas, previousGames);
         if (game.internal.assets.loading == 0) {
             game.loaded = true;
         }
@@ -717,7 +727,12 @@ Bagel = {
                                 render: {
                                     required: false,
                                     types: ["function"],
-                                    description: "Renders each frame for the canvas. The arguments provided are: \"sprite\", \"game\", \"ctx\" and \"canvas\"."
+                                    description: "Renders each frame for the canvas. The arguments provided are: \"sprite\", \"game\", \"ctx\", \"canvas\", \"scaleX\" and \"scaleY\"."
+                                },
+                                prerender: {
+                                    required: false,
+                                    types: ["function"],
+                                    description: "Prerenders the canvas. Called when the canvas sprite is first made and when the resolution is updated. The arguments provided are: \"sprite\", \"game\", \"ctx\", \"canvas\", \"scaleX\" and \"scaleY\"."
                                 },
                                 mode: {
                                     required: false,
@@ -777,6 +792,12 @@ Bagel = {
                                 render: {
                                     syntax: {
                                         description: "Renders each frame for the clone. The arguments provided are: \"sprite\", \"game\", \"ctx\" and \"canvas\"."
+                                    },
+                                    mode: "replace"
+                                },
+                                prerender: {
+                                    syntax: {
+                                        description: "Prerenders the canvas. Called when the clone is first made and when the resolution is updated. The arguments provided are: \"sprite\", \"game\", \"ctx\", \"canvas\", \"scaleX\" and \"scaleY\"."
                                     },
                                     mode: "replace"
                                 },
@@ -960,8 +981,8 @@ Bagel = {
                                 canvas.width = sprite.width;
                                 canvas.height = sprite.height;
                                 if (sprite.fullRes) {
-                                    canvas.width *= sprite.game.internal.renderer.scaleX;
-                                    canvas.height *= sprite.game.internal.renderer.scaleY;
+                                    canvas.width *= game.internal.renderer.scaleX;
+                                    canvas.height *= game.internal.renderer.scaleY;
                                 }
                                 sprite.ctx = ctx;
                                 sprite.internal.canvasID = ".Internal.canvas." + sprite.id;
@@ -970,6 +991,33 @@ Bagel = {
                                     collision: null
                                 };
                                 sprite.internal.cache = {};
+                                sprite.last = {
+                                    collision: null
+                                };
+
+                                sprite.internal.prerenderBase = sprite.prerender;
+                                (sprite => {
+                                    Object.defineProperty(sprite, "prerender", {
+                                        set: value => {
+                                            sprite.internal.prerenderBase = value;
+                                            if (typeof value == "function") {
+                                                sprite.internal.prerender = _ => {
+                                                    Bagel.internal.saveCurrent();
+                                                    let current = Bagel.internal.current;
+                                                    current.game = sprite.game;
+                                                    current.plugin = null;
+                                                    current.sprite = sprite;
+
+                                                    sprite.internal.prerenderBase(sprite, sprite.game, sprite.ctx, sprite.canvas, sprite.scaleX, sprite.scaleY);
+                                                    sprite.updated = true;
+                                                    Bagel.internal.loadCurrent();
+                                                }
+                                            }
+                                        },
+                                        get: _ => sprite.internal.prerender
+                                    });
+                                })(sprite);
+                                sprite.prerender = sprite.internal.prerenderBase;
 
                                 sprite.scaleX = sprite.canvas.width / sprite.width;
                                 sprite.scaleY = sprite.canvas.height / sprite.height;
@@ -996,6 +1044,18 @@ Bagel = {
                                     canvas.height = height;
                                     sprite.internal.last.width = width;
                                     sprite.internal.last.height = height;
+                                    sprite.scaleX = canvas.width / sprite.width;
+                                    sprite.scaleY = canvas.height / sprite.height;
+
+                                    Bagel.internal.saveCurrent();
+                                    let current = Bagel.internal.current;
+                                    current.plugin = null;
+                                    current.sprite = sprite;
+
+                                    if (sprite.prerender) {
+                                        sprite.prerender(sprite, sprite.game, sprite.ctx, canvas, sprite.scaleX, sprite.scaleY);
+                                    }
+                                    Bagel.internal.loadCurrent();
 
                                     Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game, false, sprite.mode);
                                     sprite.internal.renderUpdate = false;
@@ -1042,12 +1102,16 @@ Bagel = {
 
                                             sprite.scaleX = sprite.canvas.width / sprite.width;
                                             sprite.scaleY = sprite.canvas.height / sprite.height;
+                                            if (sprite.prerender) {
+                                                sprite.prerender(sprite, sprite.game, sprite.ctx, sprite.canvas, sprite.scaleX, sprite.scaleY);
+                                                sprite.updated = true;
+                                            }
                                         }
                                     }
 
                                     let output;
                                     if (sprite.render) {
-                                        output = sprite.render(sprite, sprite.game, sprite.ctx, sprite.canvas);
+                                        output = sprite.render(sprite, sprite.game, sprite.ctx, sprite.canvas, sprite.scaleX, sprite.scaleY);
                                     }
                                     Bagel.internal.loadCurrent();
 
@@ -1205,6 +1269,11 @@ Bagel = {
                                     },
                                     colour: {
                                         set: "rerender"
+                                    }
+                                },
+                                events: {
+                                    delete: sprite => {
+                                        Bagel.internal.render.texture.delete(sprite.internal.canvasID, sprite.game);
                                     }
                                 },
                                 trigger: true
@@ -2051,6 +2120,12 @@ Bagel = {
                                         types: ["string"],
                                         description: "The id of the sound to play."
                                     },
+                                    volume: {
+                                        required: false,
+                                        default: 1,
+                                        types: ["number"],
+                                        description: "The volume to play the sound at."
+                                    },
                                     loop: {
                                         required: false,
                                         default: false,
@@ -2062,32 +2137,41 @@ Bagel = {
                                         default: 0,
                                         types: ["number"],
                                         description: "The starting time for the audio in seconds."
+                                    },
+                                    restart: {
+                                        required: false,
+                                        default: false,
+                                        types: ["boolean"],
+                                        description: "If the sound should restart or not if it's already playing. If false and it's already playing, nothing will happen and the sound will continue."
                                     }
                                 },
                                 fn: (game, args, plugin) => {
-                                    let snd = Bagel.get.asset.snd(args.id, game);
+                                    let snd = game.get.asset.snd(args.id);
 
-                                    snd.currentTime = args.startTime;
-                                    snd.loop = args.loop;
-                                    if (plugin.vars.audio.autoPlay) { // Wait for an unmute instead of treating every input as one
-                                        let promise = snd.play();
-                                        if (promise != null) {
-                                            (plugin => {
-                                                promise.then(_ => { // Autoplay worked
-                                                    plugin.vars.audio.autoPlay = true;
-                                                }).catch(_ => { // Nope. Prompt the user
-                                                    let current = Bagel.internal.current;
-                                                    Bagel.internal.saveCurrent();
-                                                    current.plugin = plugin;
+                                    if (snd.paused || args.restart) {
+                                        snd.currentTime = args.startTime;
+                                        snd.loop = args.loop;
+                                        snd.volume = Math.max(Math.min(args.volume, 1), 0);
+                                        if (plugin.vars.audio.autoPlay) { // Wait for an unmute instead of treating every input as one
+                                            let promise = snd.play();
+                                            if (promise != null) {
+                                                (plugin => {
+                                                    promise.then(_ => { // Autoplay worked
+                                                        plugin.vars.audio.autoPlay = true;
+                                                    }).catch(_ => { // Nope. Prompt the user
+                                                        let current = Bagel.internal.current;
+                                                        Bagel.internal.saveCurrent();
+                                                        current.plugin = plugin;
 
-                                                    plugin.vars.audio.autoPlay = false;
-                                                    plugin.vars.audio.createUnmute(plugin, game);
-                                                    if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
-                                                        plugin.vars.audio.queue.push(args.id);
-                                                    }
-                                                    Bagel.internal.loadCurrent();
-                                                });
-                                            })(plugin);
+                                                        plugin.vars.audio.autoPlay = false;
+                                                        plugin.vars.audio.createUnmute(plugin, game);
+                                                        if (args.loop || snd.duration >= 5) { // It's probably important instead of just a sound effect. Queue it
+                                                            plugin.vars.audio.queue.push(args.id);
+                                                        }
+                                                        Bagel.internal.loadCurrent();
+                                                    });
+                                                })(plugin);
+                                            }
                                         }
                                     }
                                 }
@@ -2715,22 +2799,22 @@ Bagel = {
 
                                             let sprites = [args.sprite];
                                             let parent = Bagel.get.sprite(args.sprite, game);
-                                            if (args.options.includeClones) {
+                                            if (args.options.include.clones) {
                                                 sprites = [...sprites, ...parent.cloneIDs];
                                             }
 
                                             let passed = args.check == null;
                                             for (let i in sprites) {
-                                                let sprite = sprites[i];
+                                                let sprite = game.get.sprite(sprites[i]);
                                                 if (! args.options.include.invisibles) {
                                                     if (! sprite.visible) continue;
                                                 }
-                                                let leftX = me.x - Math.abs(me.width / 2);
-                                                let leftY = me.y - Math.abs(me.height / 2);
-                                                if (box.x < leftX + Math.abs(me.width)) {
+                                                let leftX = sprite.x - Math.abs(sprite.width / 2);
+                                                let topY = sprite.y - Math.abs(sprite.height / 2);
+                                                if (box.x < leftX + Math.abs(sprite.width)) {
                                                     if (box.x + box.width > leftX) {
-                                                        if (box.y < leftY + Math.abs(me.height)) {
-                                                            if (box.y + box.height > leftY) {
+                                                        if (box.y < topY + Math.abs(sprite.height)) {
+                                                            if (box.y + box.height > topY) {
                                                                 if (args.check) {
                                                                     passed = args.check(sprite, me, game);
                                                                 }
@@ -3187,7 +3271,8 @@ Bagel = {
                     onVisibleTriggeredBefore: false,
                     onInvisibleTriggered: false,
                     renderID: null
-                }
+                },
+                dontClone: true
             };
 
             sprite.cloneIDs = [];
@@ -3255,7 +3340,6 @@ Bagel = {
                     remove.event(me, game, current); // Calls the delete event
                     current.plugin = null;
                     remove.bitmapSprite(me, game);
-                    remove.layers(me, game);
                     remove.scripts("init", me, game);
                     remove.scripts("main", me, game);
                     remove.scripts("all", me, game);
@@ -3376,7 +3460,8 @@ Bagel = {
                             queue: {
                                 bitmap: {
                                     new: [],
-                                    delete: {}
+                                    delete: {} ,
+                                    layer: {}
                                 },
                                 texturemapsUpdated: []
                             },
@@ -3397,7 +3482,6 @@ Bagel = {
                             activeGLTextureContexts: [],
                             glTextureContexts: 0,
 
-                            bitmapLayerQueue: [],
                             textures: {},
                             textureSlots: [],
                             textureSlotsUsed: 0,
@@ -3468,7 +3552,8 @@ Bagel = {
                         lastPrepState: (! game.state),
                         plugins: {},
                         pluginsLoading: 0,
-                        pluginsDone: false
+                        pluginsDone: false,
+                        dontClone: true
                     };
 
                     game = Bagel.check({
@@ -3479,32 +3564,50 @@ Bagel = {
 
                     return game;
                 },
-                listeners: (game, addEventListener) => {
-                    game.input = {
-                        touches: [],
-                        mouse: {
-                            down: false,
-                            x: game.width / 2, // The centre of the game
-                            y: game.height / 2
-                        },
-                        keys: {
-                            keys: {}
-                        },
-                        lookup: {
-                            left: 37,
-                            right: 39,
-                            up: 38,
-                            down: 40,
-                            space: 32,
-                            w: 87,
-                            a: 65,
-                            s: 83,
-                            d: 68
-                        }
-                    };
-
+                listeners: (game, canvas, previousGames) => {
                     (game => {
-                        addEventListener("mousemove", e => {
+                        game.input = {
+                            touches: [],
+                            mouse: {
+                                down: false,
+                                x: game.width / 2, // The centre of the game
+                                y: game.height / 2
+                            },
+                            keys: {
+                                keys: {}
+                            },
+                            lookup: {
+                                left: 37,
+                                right: 39,
+                                up: 38,
+                                down: 40,
+                                space: 32,
+                                w: 87,
+                                a: 65,
+                                s: 83,
+                                d: 68
+                            }
+                        };
+                        game.input.keys.isDown = keyCode => {
+                            if (game.input.keys.keys[keyCode]) {
+                                return true;
+                            }
+                            return false;
+                        };
+                        (game => {
+                            if (document.readyState == "complete") {
+                                Bagel.internal.subFunctions.init.documentReady(game);
+                            }
+                            else {
+                                document.addEventListener("readystatechange", _ => {
+                                    if (document.readyState == "complete") { // Wait for the document to load
+                                        Bagel.internal.subFunctions.init.documentReady(game);
+                                    }
+                                });
+                            }
+                        })(game);
+
+                        canvas.addEventListener("mousemove", e => {
                             let renderer = game.internal.renderer;
                             let rect = renderer.canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
@@ -3512,16 +3615,36 @@ Bagel = {
                             mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
                             mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
                         }, false);
-                        addEventListener("mousedown", e => {
+                        canvas.addEventListener("mousedown", e => {
                             Bagel.device.is.touchscreen = false;
-                            game.input.mouse.down = true;
+                            let mouse = game.input.mouse;
+                            switch (e.which) {
+                                case 1:
+                                    mouse.down = true;
+                                    break;
+                                case 2:
+                                    mouse.middleDown = true;
+                                    break;
+                                case 3:
+                                    mouse.rightDown = true;
+                            }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
-                        addEventListener("mouseup", e => {
-                            game.input.mouse.down = false;
+                        canvas.addEventListener("mouseup", e => {
+                            let mouse = game.input.mouse;
+                            switch (e.which) {
+                                case 1:
+                                    mouse.down = false;
+                                    break;
+                                case 2:
+                                    mouse.middleDown = false;
+                                    break;
+                                case 3:
+                                    mouse.rightDown = false;
+                            }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
-                        addEventListener("touchstart", e => {
+                        canvas.addEventListener("touchstart", e => {
                             Bagel.device.is.touchscreen = true;
 
                             let renderer = game.internal.renderer;
@@ -3557,7 +3680,7 @@ Bagel = {
                             }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
-                        addEventListener("touchmove", e => {
+                        canvas.addEventListener("touchmove", e => {
                             Bagel.device.is.touchscreen = true;
 
                             let renderer = game.internal.renderer;
@@ -3587,12 +3710,11 @@ Bagel = {
                                 }
                             }
 
-                            mouse.down = true;
                             if (e.cancelable) {
                                 e.preventDefault();
                             }
                         }, false);
-                        addEventListener("touchend", e => {
+                        canvas.addEventListener("touchend", e => {
                             Bagel.device.is.touchscreen = true;
 
                             game.input.touches = [];
@@ -3603,39 +3725,22 @@ Bagel = {
                             }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
-
-                        game.input.keys.isDown = keyCode => {
-                            if (game.input.keys.keys[keyCode]) {
-                                return true;
-                            }
-                            return false;
-                        };
-
-                        if (document.readyState == "complete") {
-                            Bagel.internal.subFunctions.init.documentReady(game);
-                        }
-                        else {
-                            document.addEventListener("readystatechange", _ => {
-                                if (document.readyState == "complete") { // Wait for the document to load
-                                    Bagel.internal.subFunctions.init.documentReady(game);
+                        canvas.addEventListener("contextmenu", e => e.preventDefault());
+                        if (! previousGames) { // Only need to do this once
+                            document.addEventListener("keydown", e => {
+                                for (let i in Bagel.internal.games) {
+                                    let game = Bagel.internal.games[i];
+                                    game.input.keys.keys[e.keyCode] = true;
                                 }
-                            });
+                            }, false);
+                            document.addEventListener("keyup", e => {
+                                for (let i in Bagel.internal.games) {
+                                    let game = Bagel.internal.games[i];
+                                    game.input.keys.keys[e.keyCode] = false;
+                                }
+                            }, false);
                         }
                     })(game);
-                    if (Object.keys(Bagel.internal.games).length == 0) { // Only need to do this once
-                        document.addEventListener("keydown", e => {
-                            for (let i in Bagel.internal.games) {
-                                let game = Bagel.internal.games[i];
-                                game.input.keys.keys[e.keyCode] = true;
-                            }
-                        }, false);
-                        document.addEventListener("keyup", e => {
-                            for (let i in Bagel.internal.games) {
-                                let game = Bagel.internal.games[i];
-                                game.input.keys.keys[e.keyCode] = false;
-                            }
-                        }, false);
-                    }
                 },
                 basicRendererInit: game => { // Doesn't initialise everything, mostly chooses the renderer to use
                     let config = game.config;
@@ -4098,7 +4203,9 @@ Bagel = {
                 onload: game => {
                     let sprites = game.game.sprites;
                     for (let i in sprites) {
-                        Bagel.internal.subFunctions.createSprite.triggerListeners(sprites[i], game);
+                        if (sprites[i] != null) {
+                            Bagel.internal.subFunctions.createSprite.triggerListeners(sprites[i], game);
+                        }
                     }
                 },
                 rendererInit: game => {
@@ -4698,7 +4805,10 @@ Bagel = {
                     if (handler.init) {
                         handler.init(sprite, game, current.plugin);
                     }
-                    if (game.loaded) subFunctions.triggerListeners(sprite, game);
+                    if (game.loaded) {
+                        subFunctions.triggerListeners(sprite, game);
+                        Bagel.internal.processSprite(sprite);
+                    }
                     Bagel.internal.loadCurrent();
                 },
                 triggerListeners: (sprite, game) => {
@@ -5260,7 +5370,7 @@ Bagel = {
                             bitmapLayers: game => {
                                 let renderer = game.internal.renderer;
                                 let gl = renderer.gl;
-                                let queue = renderer.bitmapLayerQueue;
+                                let queue = renderer.queue.bitmap.layer;
 
 
                                 let vertices = Array.from(game.internal.renderer.vertices);
@@ -5268,118 +5378,123 @@ Bagel = {
                                 let bitmapIndexes = game.internal.renderer.bitmapIndexes;
 
                                 if (vertices.length == 0 || vertices.length == 12) { // Nothing to change
-                                    renderer.bitmapLayerQueue = [];
+                                    renderer.queue.bitmap.layer = {};
                                     return;
                                 }
 
 
                                 if (queue.length != 0) {
-                                    for (let i in queue) {
-                                        let data = queue[i];
-                                        let originalIndex, thisBitmapVertices, thisBitmapTextureCoords,
-                                        newVertices, newTextureCoords, c;
+                                    for (let id in queue) {
+                                        if (queue[id] == null) {
+                                            continue;
+                                        }
+                                        for (let i in queue[id]) {
+                                            let mode = queue[id];
+                                            let originalIndex, thisBitmapVertices, thisBitmapTextureCoords,
+                                            newVertices, newTextureCoords, c;
 
-                                        switch (data[0]) { // The type of layer operation
-                                            case 0: // Bring to front
-                                                originalIndex = bitmapIndexes[data[1]];
-                                                if (originalIndex * 12 == vertices.length - 12) { // Already at the front
-                                                    break;
-                                                }
-
-                                                thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
-                                                thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
-
-
-                                                vertices.splice(originalIndex * 12, 12); // Remove the bitmap
-                                                textCoords.splice(originalIndex * 24, 24);
-
-
-                                                vertices.push(...thisBitmapVertices); // Add the bitmap back
-                                                textCoords.push(...thisBitmapTextureCoords);
-
-
-
-                                                c = 0;
-                                                while (c < bitmapIndexes.length) {
-                                                    if (bitmapIndexes[c] > originalIndex) {
-                                                        bitmapIndexes[c]--;
+                                            switch (mode) { // The type of layer operation
+                                                case 0: // Bring to front
+                                                    originalIndex = bitmapIndexes[id];
+                                                    if (originalIndex * 12 == vertices.length - 12) { // Already at the front
+                                                        break;
                                                     }
-                                                    c++;
-                                                }
-                                                bitmapIndexes[data[1]] = (vertices.length / 12) - 1; // The bitmap that was sent to the front
 
-                                                break;
-                                            case 1: // Bring forwards
-                                                originalIndex = bitmapIndexes[data[1]];
-                                                if (originalIndex * 12 == vertices.length - 12) { // Already at the front
-                                                    break;
-                                                }
-
-                                                thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
-                                                thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                    thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
+                                                    thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
-                                                vertices.splice(originalIndex * 12, 12); // Remove the bitmap
-                                                textCoords.splice(originalIndex * 24, 24);
-
-                                                vertices.splice((originalIndex * 12) + 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
-                                                textCoords.splice((originalIndex * 24) + 24, 0, ...thisBitmapTextureCoords);
-
-                                                bitmapIndexes[renderer.bitmapIndexes.indexOf(originalIndex + 1)]--; // Swap the indexes
-                                                bitmapIndexes[data[1]]++;
-
-                                                break;
-                                            case 2: // Send to back
-                                                originalIndex = bitmapIndexes[data[1]];
-                                                if (originalIndex == 0) { // Already at the back
-                                                    break;
-                                                }
-
-                                                thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
-                                                thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                    vertices.splice(originalIndex * 12, 12); // Remove the bitmap
+                                                    textCoords.splice(originalIndex * 24, 24);
 
 
-                                                vertices.splice(originalIndex * 12, 12); // Remove the bitmap
-                                                textCoords.splice(originalIndex * 24, 24);
-
-                                                newVertices = [...thisBitmapVertices]; // Make this bitmap the first
-                                                newTextureCoords = [...thisBitmapTextureCoords];
-
-                                                newVertices.push(...vertices); // Add the others back in
-                                                newTextureCoords.push(...textCoords);
-
-                                                vertices = newVertices;
-                                                textCoords = newTextureCoords;
+                                                    vertices.push(...thisBitmapVertices); // Add the bitmap back
+                                                    textCoords.push(...thisBitmapTextureCoords);
 
 
-                                                c = 0;
-                                                while (c < bitmapIndexes.length) {
-                                                    if (bitmapIndexes[c] < originalIndex) {
-                                                        bitmapIndexes[c]++;
+
+                                                    c = 0;
+                                                    while (c < bitmapIndexes.length) {
+                                                        if (bitmapIndexes[c] > originalIndex) {
+                                                            bitmapIndexes[c]--;
+                                                        }
+                                                        c++;
                                                     }
-                                                    c++;
-                                                }
-                                                bitmapIndexes[data[1]] = 0; // The bitmap that was sent to the back
+                                                    bitmapIndexes[id] = (vertices.length / 12) - 1; // The bitmap that was sent to the front
 
-                                                break;
-                                            case 3: // Send backwards
-                                                originalIndex = bitmapIndexes[data[1]];
-                                                if (originalIndex == 0) { // Already at the back
                                                     break;
-                                                }
+                                                case 1: // Bring forwards
+                                                    originalIndex = bitmapIndexes[id];
+                                                    if (originalIndex * 12 == vertices.length - 12) { // Already at the front
+                                                        break;
+                                                    }
 
-                                                thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
-                                                thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                    thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
+                                                    thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
-                                                vertices.splice(originalIndex * 12, 12); // Remove the bitmap
-                                                textCoords.splice(originalIndex * 24, 24);
+                                                    vertices.splice(originalIndex * 12, 12); // Remove the bitmap
+                                                    textCoords.splice(originalIndex * 24, 24);
 
-                                                vertices.splice((originalIndex * 12) - 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
-                                                textCoords.splice((originalIndex * 24) - 24, 0, ...thisBitmapTextureCoords);
+                                                    vertices.splice((originalIndex * 12) + 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
+                                                    textCoords.splice((originalIndex * 24) + 24, 0, ...thisBitmapTextureCoords);
 
-                                                bitmapIndexes[renderer.bitmapIndexes.indexOf(originalIndex - 1)]++; // Swap the indexes
-                                                bitmapIndexes[data[1]]--;
+                                                    bitmapIndexes[renderer.bitmapIndexes.indexOf(originalIndex + 1)]--; // Swap the indexes
+                                                    bitmapIndexes[id]++;
+
+                                                    break;
+                                                case 2: // Send to back
+                                                    originalIndex = bitmapIndexes[id];
+                                                    if (originalIndex == 0) { // Already at the back
+                                                        break;
+                                                    }
+
+                                                    thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
+                                                    thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+
+
+                                                    vertices.splice(originalIndex * 12, 12); // Remove the bitmap
+                                                    textCoords.splice(originalIndex * 24, 24);
+
+                                                    newVertices = [...thisBitmapVertices]; // Make this bitmap the first
+                                                    newTextureCoords = [...thisBitmapTextureCoords];
+
+                                                    newVertices.push(...vertices); // Add the others back in
+                                                    newTextureCoords.push(...textCoords);
+
+                                                    vertices = newVertices;
+                                                    textCoords = newTextureCoords;
+
+
+                                                    c = 0;
+                                                    while (c < bitmapIndexes.length) {
+                                                        if (bitmapIndexes[c] < originalIndex) {
+                                                            bitmapIndexes[c]++;
+                                                        }
+                                                        c++;
+                                                    }
+                                                    bitmapIndexes[id] = 0; // The bitmap that was sent to the back
+
+                                                    break;
+                                                case 3: // Send backwards
+                                                    originalIndex = bitmapIndexes[id];
+                                                    if (originalIndex == 0) { // Already at the back
+                                                        break;
+                                                    }
+
+                                                    thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
+                                                    thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+
+
+                                                    vertices.splice(originalIndex * 12, 12); // Remove the bitmap
+                                                    textCoords.splice(originalIndex * 24, 24);
+
+                                                    vertices.splice((originalIndex * 12) - 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
+                                                    textCoords.splice((originalIndex * 24) - 24, 0, ...thisBitmapTextureCoords);
+
+                                                    bitmapIndexes[renderer.bitmapIndexes.indexOf(originalIndex - 1)]++; // Swap the indexes
+                                                    bitmapIndexes[id]--;
+                                            }
                                         }
                                     }
 
@@ -5389,7 +5504,7 @@ Bagel = {
                                     renderer.textureCoords = textCoords;
 
 
-                                    renderer.bitmapLayerQueue = [];
+                                    renderer.queue.bitmap.layer = {};
 
                                     gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.images);
                                     gl.bufferData(gl.ARRAY_BUFFER, textCoords, gl.STATIC_DRAW);
@@ -5687,38 +5802,7 @@ Bagel = {
                     for (let i in game.game.sprites) {
                         let sprite = game.game.sprites[i];
                         if (sprite == null) continue;
-
-                        let rerun = [...sprite.internal.Bagel.rerunListeners]; // The clone is so running the listeners doesn't affect which listeners are triggered
-                        sprite.internal.Bagel.rerunListeners = [];
-                        sprite.internal.Bagel.rerunIndex = {};
-
-                        let noReruns = true;
-                        for (let c in rerun) {
-                            let output = Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game, false);
-                            if (rerun[c][1] != "visible" && output) {
-                                noReruns = false;
-                            }
-                        }
-                        if (sprite.internal.Bagel.rendererNotInitialised) {
-                            if (noReruns) {
-                                sprite.internal.Bagel.rendererNotInitialised = false;
-                                Bagel.internal.subFunctions.createSprite.initRender(sprite, game);
-                            }
-                        }
-
-                        // Run the tick function
-                        let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
-                        if (handler.tick) {
-                            let plugin = handler.internal.plugin;
-                            Bagel.internal.saveCurrent();
-                            let current = Bagel.internal.current;
-                            current.sprite = sprite;
-                            current.plugin = plugin;
-                            current.game = game;
-                            handler.tick(sprite, game, plugin);
-
-                            Bagel.internal.loadCurrent();
-                        }
+                        Bagel.internal.processSprite(sprite);
                     }
                 },
                 loaded: game => { // Loaded logic
@@ -5937,11 +6021,6 @@ Bagel = {
                         Bagel.internal.render.bitmapSprite.delete(me.internal.Bagel.renderID, game);
                     }
                 },
-                layers: (me, game) => {
-                    let renderer = game.internal.renderer;
-                    let layerIndex = renderer.layers.indexOf(me.idIndex);
-                    renderer.layers = renderer.layers.filter((item, index) => index != layerIndex);
-                },
                 scripts: (type, me, game) => {
                     let scripts = me.internal.Bagel.scripts[type];
                     if (Object.keys(scripts).length == 0) return; // No scripts to remove
@@ -5993,6 +6072,7 @@ Bagel = {
                     if (me.isClone) {
                         me.parent.cloneCount--;
                         me.parent.cloneIDs[me.parent.cloneIDs.indexOf(me.id)] = null;
+                        me.parent.cloneIDs = me.parent.cloneIDs.filter(value => value != null);
                     }
                 }
             }
@@ -7593,16 +7673,13 @@ Bagel = {
             return output;
         },
         getTypeOf: entity => {
-            if (Array.isArray(entity)) {
-                return "array";
-            }
-            if (entity == null) {
-                return "undefined";
-            }
+            if (Array.isArray(entity)) return "array";
+            if (typeof entity == "number" && isNaN(entity)) return "NaN";
+            if (entity == null) return "undefined";
             return typeof entity;
         },
         deepClone: entity => {
-            if (typeof entity != "object" || entity == null) { // Includes arrays
+            if (typeof entity != "object" || entity == null || (entity.internal && entity.internal.dontClone)) { // Includes arrays
                 return entity;
             }
             let newEntity;
@@ -7809,14 +7886,7 @@ Bagel = {
                     else {
                         if (typeof renderer.bitmapIndexes[id] == "boolean") { // Hasn't been processed yet
                             let queue = renderer.queue.bitmap.new;
-                            for (let i in queue) {
-                                if (queue[i]) {
-                                    if (queue[i][1] == id) {
-                                        queue[i] = null; // Cancel it from being added
-                                        break;
-                                    }
-                                }
-                            }
+                            queue[queue.findIndex(value => value && value[1] == id)] = null;
                             renderer.queueLengths.add--;
                         }
                         else {
@@ -7825,11 +7895,15 @@ Bagel = {
                         }
 
 
+                        // It's not using its texture anymore
                         let usingTextures = renderer.bitmapsUsingTextures[renderer.bitmapSpriteData[id].image];
                         let index = usingTextures.indexOf(id);
                         if (index != -1) {
                             usingTextures[index] = null;
                         }
+
+                        // Cancel the queued layer operations
+                        renderer.queue.bitmap.layer[id] = null;
 
                         renderer.bitmapIndexes[id] = null;
                         renderer.bitmapSpriteData[id] = null;
@@ -8008,13 +8082,17 @@ Bagel = {
                             Bagel.internal.oops(game);
                         }
                         else {
-                            renderer.bitmapLayerQueue.push([type, id]);
+                            let queue = renderer.queue.bitmap.layer;
+                            if (queue[id] == null) {
+                                queue[id] = [];
+                            }
+                            queue[id].push(type);
                         }
                     }
                 }
             },
             texture: {
-                new: (id, texture, game, overwrite, mode="auto", startSingleTexture, actualID) => {
+                new: (id, texture, game, overwrite, mode, startSingleTexture, actualID) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Hmm, looks like you didn't specify the game properly (it's the 3rd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
@@ -8059,6 +8137,13 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
                     let functions = Bagel.internal.render.texture.internal;
+                    if (textures[id]) {
+                        mode = textures[id][13];
+                    }
+                    else if (mode == null) {
+                        mode = "auto";
+                    }
+
 
                     let singleTexture = startSingleTexture;
                     if (singleTexture == null) {
@@ -8096,7 +8181,6 @@ Bagel = {
                             }
                         }
                     }
-
 
                     if (renderer.type == "webgl") {
                         let gl = renderer.gl;
@@ -8809,6 +8893,40 @@ Bagel = {
                 return true;
             }
             return false;
+        },
+        processSprite: sprite => {
+            let game = sprite.game;
+            let rerun = [...sprite.internal.Bagel.rerunListeners]; // The clone is so running the listeners doesn't affect which listeners are triggered
+            sprite.internal.Bagel.rerunListeners = [];
+            sprite.internal.Bagel.rerunIndex = {};
+
+            let noReruns = true;
+            for (let c in rerun) {
+                let output = Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game, false);
+                if (rerun[c][1] != "visible" && output) {
+                    noReruns = false;
+                }
+            }
+            if (sprite.internal.Bagel.rendererNotInitialised) {
+                if (noReruns) {
+                    sprite.internal.Bagel.rendererNotInitialised = false;
+                    Bagel.internal.subFunctions.createSprite.initRender(sprite, game);
+                }
+            }
+
+            // Run the tick function
+            let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
+            if (handler.tick) {
+                let plugin = handler.internal.plugin;
+                Bagel.internal.saveCurrent();
+                let current = Bagel.internal.current;
+                current.sprite = sprite;
+                current.plugin = plugin;
+                current.game = game;
+                handler.tick(sprite, game, plugin);
+
+                Bagel.internal.loadCurrent();
+            }
         },
 
         processSpriteRenderOutput: (sprite, output) => {

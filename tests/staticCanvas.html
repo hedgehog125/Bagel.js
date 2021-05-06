@@ -27,13 +27,14 @@ let game = Bagel.init({
                 width: 50,
                 height: 50,
                 updateRes: false,
+                prerender: (me, game, ctx, canvas) => {
+                    ctx.fillStyle = "red";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                },
                 scripts: {
                     init: [
                         {
-                            code: me => {
-                                me.ctx.fillStyle = "red";
-                                me.ctx.fillRect(0, 0, me.canvas.width, me.canvas.height);
-                            },
+                            code: null,
                             stateToRun: "game"
                         }
                     ]
