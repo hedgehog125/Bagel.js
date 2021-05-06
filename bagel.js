@@ -10,13 +10,6 @@ Safari and firefox still have poor performance in full resolution loading screen
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
-Fix safari rendering issues by detecting it using the lack of requestIdleCallback (store value in device.browser and also detect chrome and firefox). Then delay updating combined textures if the new texture wasn't created during a frame (e.g an event)
-
-Right clicks register as clicks
-
-Nothing rendered for the first 2-3 frames? Not related to webgl initialising. Put debugger statement in main script to frame advance. Maybe flush needed??? Only applies to canvases?
-Now even longer in breakout?
-
 Pause videos on state change
 
 Cap alpha values during runtime, use an error?
@@ -27,6 +20,8 @@ Resume playing audio from the position it would be in rather than the start. May
 
 = Features =
 Scale coordinates when sending to shader. Correct widths and heights based on position. Recalculate rounding when the resolution is changed
+
+Canvas renderer. Error for using texture debug methods when using it
 
 Copy canvas mode
 
@@ -44,13 +39,12 @@ Asset preload, runs before init. Runs even when assets aren't being initialised.
 
 Reserve dot prefix for textures
 
-Canvas renderer. Error for using texture debug methods when using it
-
 touching.spriteSides and touching.gameSides sets last.collisionSide
 
 Context lost handling
 
 The ability to remove or replace a default argument for a sprite type. Maybe only for some? Prevent setting some attributes like "type"
+Allow adding new methods to existing sprite types, also allow having extra processing in the plugin that modifies it. (init and main methods)
 
 Built in FPS counter
 
@@ -65,8 +59,6 @@ Gamepad support
 
 = Tweaks =
 Tidy up canvas prerendering by using the prerender property of canvas sprites
-
-Update readme, Phaser is smaller than I thought? Even the version used in Frontier is fairly small (smaller than the current version), nowhere near 800KB???
 
 Fix spelling errors
 
@@ -606,6 +598,11 @@ Bagel = {
                                             triggerSprite.internal.renderUpdate = true;
                                         }
                                     },
+                                    alpha: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite) => {
+                                            triggerSprite.internal.renderUpdate = true;
+                                        }
+                                    },
                                     angle: {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
                                             let cache = triggerSprite.internal.cache;
@@ -894,6 +891,11 @@ Bagel = {
                                     },
                                     height: {
                                         set: "dimensions"
+                                    },
+                                    alpha: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite) => {
+                                            triggerSprite.internal.renderUpdate = true;
+                                        }
                                     },
                                     angle: {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
@@ -3355,6 +3357,7 @@ Bagel = {
             return sprite;
         },
         tick: _ => {
+            Bagel.internal.current.mainLoop = true;
             let subFunctions = Bagel.internal.subFunctions.tick;
 
             let totalStart = new Date();
@@ -3463,7 +3466,7 @@ Bagel = {
                                     delete: {} ,
                                     layer: {}
                                 },
-                                texturemapsUpdated: []
+                                texturemapsUpdated: {}
                             },
                             queueLengths: {
                                 add: 0,
@@ -3508,7 +3511,7 @@ Bagel = {
                         ids: [],
                         idIndex: {},
                         FPSFrames: 0,
-                        lastFPSUpdate: new Date(),
+                        lastFPSUpdate: performance.now(),
                         scripts: {
                             index: {
                                 init: {},
@@ -5518,22 +5521,16 @@ Bagel = {
                                 let gl = renderer.gl;
                                 let queue = renderer.queue.texturemapsUpdated;
 
-                                let updated = {};
-                                for (let i in queue) {
-                                    let id = queue[i];
-                                    if (! updated[id]) {
-                                        gl.activeTexture(gl.TEXTURE0 + id);
-                                        let canvas = renderer.textureSlots[id].canvas;
-                                        if (canvas == null) {
-                                            canvas = renderer.blankTexture;
-                                        }
-
-                                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-
-                                        updated[id] = true;
+                                for (let id in queue) {
+                                    gl.activeTexture(gl.TEXTURE0 + parseInt(id));
+                                    let canvas = renderer.textureSlots[id].canvas;
+                                    if (canvas == null) {
+                                        canvas = renderer.blankTexture;
                                     }
+
+                                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
                                 }
-                                renderer.queue.texturemapsUpdated = [];
+                                renderer.queue.texturemapsUpdated = {};
                             }
                         },
                         rotateVertices: (vertices, i, angle, cx, cy) => {
@@ -7739,7 +7736,8 @@ Bagel = {
             assetTypeName: null,
             i: null,
             where: null,
-            plugin: null
+            plugin: null,
+            mainLoop: false
         },
         saveCurrent: _ => {
             let internal = Bagel.internal;
@@ -7769,7 +7767,8 @@ Bagel = {
                 assetTypeName: null,
                 i: null,
                 where: null,
-                plugin: null
+                plugin: null,
+                mainLoop: false
             };
             Bagel.internal.currentStack = [];
         },
@@ -8260,7 +8259,7 @@ Bagel = {
                                     functions.drawImage(slotGL, texture, slot, renderer, textures[id][8], textures[id][9], textures[id][10], textures[id][11]);
                                 }
 
-                                renderer.queue.texturemapsUpdated.push(textures[id][1]);
+                                Bagel.internal.render.texture.internal.queueMapUpdate(game, renderer, textures[id][1]);
                             }
 
                             textures[id][15] = texture;
@@ -8403,7 +8402,8 @@ Bagel = {
 
 
                                     combinedTexture.textureCount++;
-                                    renderer.queue.texturemapsUpdated.push(index);
+                                    Bagel.internal.render.texture.internal.queueMapUpdate(game, renderer, index);
+
                                     textures[id] = [
                                         combinedTexture.webgltexture,
                                         index,
@@ -8556,7 +8556,7 @@ Bagel = {
                             slot.lines = newLines;
                         }
 
-                        renderer.queue.texturemapsUpdated.push(texture[1]);
+                        Bagel.internal.render.texture.internal.queueMapUpdate(game, renderer, texture[1]);
 
                         if (replaceSpriteTextures) {
                             for (let i in renderer.bitmapsUsingTextures[id]) { // Update the texture of sprites using this texture to a missing texture
@@ -8607,6 +8607,9 @@ Bagel = {
                     }
                 },
                 internal: {
+                    queueMapUpdate: (game, renderer, mapID) => {
+                        renderer.queue.texturemapsUpdated[mapID] = true;
+                    },
                     initTexture: (slot, renderer, slotID, game) => {
                         if (slot.gl) {
                             return slot.gl;
@@ -8615,8 +8618,7 @@ Bagel = {
                         let settings = {
                             powerPreference: "high-performance",
                             depth: false,
-                            antialias: false,
-                            premultipliedAlpha: false
+                            antialias: false
                         };
                         let slotGL = slot.canvas.getContext("webgl", settings) || slot.canvas.getContext("experimental-webgl", settings);
                         slot.gl = slotGL;
@@ -9599,7 +9601,18 @@ Bagel = {
             touchscreen: document.ontouchstart === null,
             webGLSupported: null
         },
-        webgl: {}
+        webgl: {},
+        browser: (_ => {
+            if (window.chrome) {
+                return "Chrome";
+            }
+            if (navigator.userAgent.includes("Firefox")) {
+                return "Firefox";
+            }
+            if (navigator.userAgent.includes("Safari")) {
+                return "Safari";
+            }
+        })()
     },
     events: {
         pwaUpdate: null
