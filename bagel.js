@@ -10,6 +10,8 @@ Safari and firefox still have poor performance in full resolution loading screen
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
+Sprites get pushed to left when shrinking window, test by putting a sprite with an x coordinate of the game width. Possibly out of my control? Happens when resising window and devtools
+
 Pause videos on state change
 
 Cap alpha values during runtime, use an error?
@@ -19,9 +21,7 @@ Allow enabling antialiasing and switching renderers on the fly. Requires reiniti
 Resume playing audio from the position it would be in rather than the start. Maybe play muted if no autoplay?
 
 = Features =
-Scale coordinates when sending to shader. Correct widths and heights based on position. Recalculate rounding when the resolution is changed
-
-Canvas renderer. Error for using texture debug methods when using it
+Rotation in canvas renderer.
 
 Copy canvas mode
 
@@ -1308,6 +1308,7 @@ Bagel = {
                                         canvas.width = ctx.measureText(sprite.text).width * scaleX; // It's not affected by scaling
                                         //let size = parseInt(sprite.font.split(" ")[0].split("px")[0]);
                                         canvas.height = Math.ceil(size);
+                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
                                         ctx.font = sprite.font;
                                         ctx.textBaseline = "middle";
                                         ctx.fillStyle = sprite.colour;
@@ -2216,6 +2217,11 @@ Bagel = {
                                                     }
                                                 },
                                                 fn: (game, args, plugin) => {
+                                                    if (game.internal.renderer.type != "webgl") {
+                                                        console.error("Oh no! This function only works on games that are using the \"webgl\" renderer. Textures aren't combined in the other renderers.");
+                                                        Bagel.internal.oops(game);
+                                                    }
+
                                                     let combinedTexture = game.internal.renderer.textureSlots[args.index];
                                                     combinedTexture.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);border:1px solid black;";
                                                     Bagel.internal.tryStyles(combinedTexture.canvas, "image-rendering", [
@@ -2283,6 +2289,11 @@ Bagel = {
                                                     }
                                                 },
                                                 fn: (game, args, plugin) => {
+                                                    if (game.internal.renderer.type != "webgl") {
+                                                        console.error("Huh, this function only works on games that are using the \"webgl\" renderer. Textures aren't combined in the other renderers.");
+                                                        Bagel.internal.oops(game);
+                                                    }
+
                                                     let combinedTexture = game.internal.renderer.textureSlots[args.index];
 
                                                     if ( [...document.getElementsByClassName(".Bagel.js.debug.combinedTextureCanvas")].find(e => e.id == combinedTexture.canvas.id)) {
@@ -2304,6 +2315,11 @@ Bagel = {
                                                 obArg: false,
                                                 args: {},
                                                 fn: (game, args, plugin) => {
+                                                    if (game.internal.renderer.type != "webgl") {
+                                                        console.error("Hmm, this function only works on games that are using the \"webgl\" renderer. Textures don't ever need to be downscaled in the other renderers.");
+                                                        Bagel.internal.oops(game);
+                                                    }
+
                                                     let renderer = game.internal.renderer;
                                                     if (Object.keys(renderer.downscaled).length == 0) {
                                                         console.log("No textures have had to be downscaled yet.");
@@ -2325,6 +2341,11 @@ Bagel = {
                                                 obArg: false,
                                                 args: {},
                                                 fn: (game, args, plugin) => {
+                                                    if (game.internal.renderer.type != "webgl") {
+                                                        console.error("Oh no! This function only works on games that are using the \"webgl\" renderer. Textures don't ever need to be downscaled in the other renderers.");
+                                                        Bagel.internal.oops(game);
+                                                    }
+
                                                     let renderer = game.internal.renderer;
                                                     if (Object.keys(renderer.animatedIntoCombined).length == 0) {
                                                         console.log("No animated textures have had to use a combined texture yet.");
@@ -3497,6 +3518,7 @@ Bagel = {
                             loadingScreenTextures: {},
                             loadingScreenBitmaps: {},
 
+                            scaledBitmaps: [],
 
                             width: game.width,
                             height: game.height,
@@ -3504,7 +3526,6 @@ Bagel = {
                             renderHeight: null,
 
                             lastRender: new Date(),
-                            layers: [],
                             canvas: document.createElement("canvas"),
                             ratio: game.width / game.height
                         },
@@ -3577,22 +3598,18 @@ Bagel = {
                                 y: game.height / 2
                             },
                             keys: {
-                                keys: {}
-                            },
-                            lookup: {
-                                left: 37,
-                                right: 39,
-                                up: 38,
-                                down: 40,
-                                space: 32,
-                                w: 87,
-                                a: 65,
-                                s: 83,
-                                d: 68
+                                keys: {},
+                                keyCodes: {}
                             }
                         };
-                        game.input.keys.isDown = keyCode => {
-                            if (game.input.keys.keys[keyCode]) {
+                        game.input.keys.isDown = keyName => {
+                            if (game.input.keys.keys[keyName]) {
+                                return true;
+                            }
+                            return false;
+                        };
+                        game.input.keys.isCodeDown = keyCode => {
+                            if (game.input.keys.keyCodes[keyCode]) {
                                 return true;
                             }
                             return false;
@@ -3647,6 +3664,7 @@ Bagel = {
                             }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
+
                         canvas.addEventListener("touchstart", e => {
                             Bagel.device.is.touchscreen = true;
 
@@ -3733,13 +3751,15 @@ Bagel = {
                             document.addEventListener("keydown", e => {
                                 for (let i in Bagel.internal.games) {
                                     let game = Bagel.internal.games[i];
-                                    game.input.keys.keys[e.keyCode] = true;
+                                    game.input.keys.keys[e.key] = true;
+                                    game.input.keys.keyCodes[e.keyCode] = true;
                                 }
                             }, false);
                             document.addEventListener("keyup", e => {
                                 for (let i in Bagel.internal.games) {
                                     let game = Bagel.internal.games[i];
-                                    game.input.keys.keys[e.keyCode] = false;
+                                    game.input.keys.keys[e.key] = false;
+                                    game.input.keys.keyCodes[e.keyCode] = false;
                                 }
                             }, false);
                         }
@@ -5161,7 +5181,6 @@ Bagel = {
                             let scaleX = game.internal.renderer.scaleX;
                             let scaleY = game.internal.renderer.scaleY;
 
-                            let layers = renderer.layers;
                             let handlers = game.internal.combinedPlugins.types.sprites;
 
                             // Clear the canvas
@@ -5174,32 +5193,28 @@ Bagel = {
                                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                             }
 
-                            for (let spriteIndex in layers) {
-                                let sprite = game.game.sprites[layers[spriteIndex]];
-                                let handler = handlers[sprite.type];
-
-                                if (sprite.visible) {
-                                    if (handler.render != null) {
-                                        if (! handler.render.clean) {
-                                            ctx.save();
-                                        }
-                                        let start = performance.now();
-                                        handler.render.ctx(
-                                            sprite,
-                                            ctx,
-                                            canvas,
-                                            game,
-                                            handler.internal.plugin,
-                                            scaleX,
-                                            scaleY
-                                        );
-                                        sprite.debug.renderTime = performance.now() - start;
-                                        if (! handler.render.clean) {
-                                            ctx.restore();
-                                        }
-                                    }
-                                }
+                            let textures = renderer.textures;
+                            for (let i in renderer.bitmapSpriteData) {
+                                if (renderer.bitmapSpriteData[i] == null) continue;
+                                let data = renderer.scaledBitmaps[i];
+                                ctx.globalAlpha = data.alpha;
+                                ctx.drawImage(textures[data.image], data.x, data.y, data.width, data.height);
                             }
+                            ctx.globalAlpha = 1;
+                        },
+                        scaleData: (data, renderer) => {
+                            data = {...data};
+                            let scaleX = renderer.scaleX;
+                            let scaleY = renderer.scaleY;
+                            let canvas = renderer.canvas;
+
+                            data.x -= data.width / 2;
+                            data.y -= data.height / 2;
+                            data.width = (Math.ceil((data.width + data.x) * scaleX)) - (data.x * scaleX);
+                            data.height = (Math.ceil((data.height + data.y) * scaleY)) - (data.y * scaleY);
+                            data.x = Math.round(data.x * scaleX);
+                            data.y = Math.round(data.y * scaleY);
+                            return data;
                         }
                     },
                     webgl: {
@@ -5295,7 +5310,10 @@ Bagel = {
                                             newVertices[i + 10] = newVertices[i + 2];
                                             newVertices[i + 11] = newVertices[i + 5];
 
-                                            Bagel.internal.subFunctions.tick.render.webgl.rotateVertices(newVertices, i, box.rotation, box.x, box.y);
+                                            let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
+                                            subFunctions.rotateVertices(newVertices, i, box.rotation, box.x, box.y);
+                                            subFunctions.clipVertices(newVertices, i, renderer);
+
 
 
                                             // [webgltexture, index, x, y, x + width, y + height, width, height]
@@ -5552,6 +5570,33 @@ Bagel = {
                             }
                             return vertices;
                         },
+                        clipVertices: (vertices, i, renderer) => {
+                            let scaleX = renderer.scaleX;
+                            let scaleY = renderer.scaleY;
+                            let canvas = renderer.canvas;
+
+                            let c = 0;
+                            while (c < 6) {
+                                let x = vertices[i];
+                                let y = vertices[i + 1];
+
+                                if (c == 1 || c == 4 || c == 5) {
+                                    vertices[i] = ((Math.ceil(vertices[i] * scaleX) / canvas.width) * 2) - 1;
+                                }
+                                else {
+                                    vertices[i] = ((Math.floor(vertices[i] * scaleX) / canvas.width) * 2) - 1;
+                                }
+                                if (c == 2 || c == 3 || c == 5) {
+                                    vertices[i + 1] = -(((Math.ceil(vertices[i + 1] * scaleY) / canvas.height) * 2) - 1);
+                                }
+                                else {
+                                    vertices[i + 1] = -(((Math.floor(vertices[i + 1] * scaleY) / canvas.height) * 2) - 1);
+                                }
+
+                                c++;
+                                i += 2;
+                            }
+                        },
                         processTextures: (game, renderer) => {
                             let functions = Bagel.internal.render.texture.internal;
                             for (let id in renderer.textures) {
@@ -5608,14 +5653,12 @@ Bagel = {
                                 attribute vec2 a_vertices;
                                 attribute vec4 a_textcoord;
 
-                                uniform vec2 u_resolution;
-
                                 varying vec4 v_texcoord;
 
                                 void main () {
                                     v_texcoord = a_textcoord;
                                     gl_Position = vec4(
-                                        (((a_vertices / u_resolution) * 2.0) - 1.0) * vec2(1, -1),
+                                        a_vertices,
                                         0,
                                         1
                                     );
@@ -5677,7 +5720,6 @@ Bagel = {
                             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                             gl.enable(gl.BLEND);
                             //gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-                            gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), game.width, game.height);
 
                             // https://stackoverflow.com/questions/19592850/how-to-bind-an-array-of-textures-to-a-webgl-shader-uniform
                             renderer.locations.images = gl.getUniformLocation(program, "u_images");
@@ -5734,7 +5776,6 @@ Bagel = {
                             queues.texturemaps(game);
 
 
-                            renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
                             let backgroundColour = game.config.display.backgroundColour;
                             if (backgroundColour != renderer.lastBackgroundColour) {
                                 renderer.colourCtx.fillStyle = backgroundColour;
@@ -5967,11 +6008,21 @@ Bagel = {
                     }
 
                     let canvas = renderer.canvas;
-                    //if (canvas.width != renderWidth || canvas.height != renderHeight) {
                     if (canvas.width != renderWidth || canvas.height != renderHeight) {
                         if (renderer.waitingWidth == renderWidth && renderer.waitingHeight == renderHeight) {
                             canvas.width = renderWidth;
                             canvas.height = renderHeight;
+                            renderer.scaleX = canvas.width / game.width;
+                            renderer.scaleY = canvas.height / game.height;
+                            if (renderer.gl) {
+                                renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+                            }
+                            for (let id in renderer.bitmapIndexes) { // Regenerate the texture coordinates
+                                let location = renderer.bitmapIndexes[id];
+                                if (location != null) {
+                                    Bagel.internal.render.bitmapSprite.update(id, renderer.bitmapSpriteData[id], game, false, true);
+                                }
+                            }
                         }
                     }
                     canvas.style.width = width + "px";
@@ -5992,9 +6043,6 @@ Bagel = {
 
                     renderer.waitingWidth = renderWidth;
                     renderer.waitingHeight = renderHeight;
-
-                    renderer.scaleX = canvas.width / game.width;
-                    renderer.scaleY = canvas.height / game.height;
 
 
                     if (renderer.type == "canvas") {
@@ -7774,26 +7822,6 @@ Bagel = {
         },
         currentStack: [],
 
-        roundX: value => {
-            let game = Bagel.internal.current.game;
-            if (game.config.display.antialiasing) {
-                return value;
-            }
-            let scale = game.internal.renderer.ctx.getTransform().a;
-            value *= scale; // Scale it based on the canvas scale
-            // ^ produces the value that will be used on the canvas
-            return Math.round(value) / scale; // Needs to be scaled back down so it produces the right value when it's scaled later
-        },
-        roundY: value => { // Works the same as the above
-            let game = Bagel.internal.current.game;
-            if (game.config.display.antialiasing) {
-                return value;
-            }
-            let scale = game.internal.renderer.ctx.getTransform().d;
-            value *= scale;
-            return Math.round(value) / scale;
-        },
-
         render: {
             bitmapSprite: {
                 new: (data, game, check=true) => {
@@ -7826,25 +7854,18 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
 
-                    let scaleX = renderer.scaleX;
-                    let scaleY = renderer.scaleY;
-                    data.x = Math.round(data.x * scaleX) / scaleX;
-                    data.y = Math.round(data.y * scaleY) / scaleY;
-                    data.width = Math.round(data.width * scaleX) / scaleX;
-                    data.height = Math.round(data.height * scaleY) / scaleY;
 
-
-                    if (renderer.type == "webgl") {
-                        let id = 0;
-                        while (id < renderer.bitmapIndexes.length) {
-                            if (renderer.bitmapIndexes[id] == null) {
-                                break;
-                            }
-                            id++;
+                    let id = 0;
+                    while (id < renderer.bitmapIndexes.length) {
+                        if (renderer.bitmapIndexes[id] == null) {
+                            break;
                         }
+                        id++;
+                    }
+                    renderer.bitmapSpriteData[id] = data;
+                    renderer.bitmapsUsingTextures[data.image].push(id);
+                    if (renderer.type == "webgl") {
                         renderer.bitmapIndexes[id] = true;
-                        renderer.bitmapSpriteData[id] = data;
-                        renderer.bitmapsUsingTextures[data.image].push(id);
 
                         renderer.queue.bitmap.new.push([data, id]); // Queue it to be added rather than just adding it as adding multiple at a time is more efficient
                         renderer.queueLengths.add++;
@@ -7855,11 +7876,10 @@ Bagel = {
                         return id;
                     }
                     else {
-                        let id = renderer.layers.length;
-                        renderer.layers.push(data);
+                        renderer.bitmapIndexes[id] = id;
+                        renderer.scaledBitmaps[id] = Bagel.internal.subFunctions.tick.render.canvas.scaleData(data, renderer);
                         return id;
                     }
-
                 },
                 delete: (id, game) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
@@ -7883,14 +7903,19 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
                     else {
-                        if (typeof renderer.bitmapIndexes[id] == "boolean") { // Hasn't been processed yet
-                            let queue = renderer.queue.bitmap.new;
-                            queue[queue.findIndex(value => value && value[1] == id)] = null;
-                            renderer.queueLengths.add--;
+                        if (renderer.type == "webgl") {
+                            if (typeof renderer.bitmapIndexes[id] == "boolean") { // Hasn't been processed yet
+                                let queue = renderer.queue.bitmap.new;
+                                queue[queue.findIndex(value => value && value[1] == id)] = null;
+                                renderer.queueLengths.add--;
+                            }
+                            else {
+                                renderer.queue.bitmap.delete[renderer.bitmapIndexes[id]] = true;
+                                renderer.queueLengths.delete++;
+                            }
                         }
                         else {
-                            renderer.queue.bitmap.delete[renderer.bitmapIndexes[id]] = true;
-                            renderer.queueLengths.delete++;
+                            renderer.scaledBitmaps[id] = null;
                         }
 
 
@@ -7941,13 +7966,6 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
 
-                    let scaleX = renderer.scaleX;
-                    let scaleY = renderer.scaleY;
-                    box.x = Math.round(box.x * scaleX) / scaleX;
-                    box.y = Math.round(box.y * scaleY) / scaleY;
-                    box.width = Math.round(box.width * scaleX) / scaleX;
-                    box.height = Math.round(box.height * scaleY) / scaleY;
-
                     if (renderer.bitmapIndexes[id] == null) {
                         console.error("Hmm, Bagel.js couldn't find the bitmap sprite with the id " + JSON.stringify(id) + ".");
                         Bagel.internal.oops(game);
@@ -7960,89 +7978,95 @@ Bagel = {
                         }
                         renderer.bitmapSpriteData[id] = box;
 
+                        if (renderer.type == "webgl") {
+                            if (renderer.bitmapIndexes[id] === true) { // Still pending to be added
+                                let oldBox = renderer.queue.bitmap.new.find(item => item != null && item[1] == id);
+                                oldBox[0] = box;
+                            }
+                            else {
+                                // Not really any faster to queue it, so just update it now
+                                let vertices = renderer.vertices;
+                                let textureCoords = renderer.textureCoordinates;
 
-                        if (renderer.bitmapIndexes[id] === true) { // Still pending to be added
-                            let oldBox = renderer.queue.bitmap.new.find(item => item != null && item[1] == id);
-                            oldBox[0] = box;
+                                let i = renderer.bitmapIndexes[id] * 12;
+                                let a = renderer.bitmapIndexes[id] * 24;
+
+                                vertices[i] = box.x - (box.width / 2);
+                                vertices[i + 1] = box.y - (box.height / 2);
+
+                                vertices[i + 2] = box.x + (box.width / 2);
+                                vertices[i + 3] = vertices[i + 1];
+
+                                vertices[i + 4] = vertices[i];
+                                vertices[i + 5] = box.y + (box.height / 2);
+
+
+                                vertices[i + 6] = vertices[i];
+                                vertices[i + 7] = vertices[i + 5];
+
+                                vertices[i + 8] = vertices[i + 2];
+                                vertices[i + 9] = vertices[i + 1];
+
+                                vertices[i + 10] = vertices[i + 2];
+                                vertices[i + 11] = vertices[i + 5];
+
+                                let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
+                                subFunctions.rotateVertices(vertices, i, box.rotation, box.x, box.y);
+                                subFunctions.clipVertices(vertices, i, renderer);
+
+
+                                let texture = renderer.textures[box.image];
+                                let textureId = texture[1];
+                                let alpha = box.alpha;
+                                let xZero = texture[2];
+                                let xOne = texture[4];
+                                if (box.width < 0) {
+                                    xZero = texture[4];
+                                    xOne = texture[2];
+                                }
+                                let yZero = texture[3];
+                                let yOne = texture[5];
+                                if (box.height < 0) {
+                                    yZero = texture[5];
+                                    yOne = texture[3];
+                                }
+                                textureCoords[a] = xZero;
+                                textureCoords[a + 1] = yZero;
+                                textureCoords[a + 2] = textureId;
+                                textureCoords[a + 3] = alpha;
+
+                                textureCoords[a + 4] = xOne;
+                                textureCoords[a + 5] = yZero;
+                                textureCoords[a + 6] = textureId;
+                                textureCoords[a + 7] = alpha;
+
+                                textureCoords[a + 8] = xZero;
+                                textureCoords[a + 9] = yOne;
+                                textureCoords[a + 10] = textureId;
+                                textureCoords[a + 11] = alpha;
+
+
+                                textureCoords[a + 12] = xZero;
+                                textureCoords[a + 13] = yOne;
+                                textureCoords[a + 14] = textureId;
+                                textureCoords[a + 15] = alpha;
+
+
+                                textureCoords[a + 16] = xOne;
+                                textureCoords[a + 17] = yZero;
+                                textureCoords[a + 18] = textureId;
+                                textureCoords[a + 19] = alpha;
+
+                                textureCoords[a + 20] = xOne;
+                                textureCoords[a + 21] = yOne;
+                                textureCoords[a + 22] = textureId;
+                                textureCoords[a + 23] = alpha;
+
+                                renderer.verticesUpdated = true;
+                            }
                         }
                         else {
-                            // Not really any faster to queue it, so just update it now
-                            let vertices = renderer.vertices;
-                            let textureCoords = renderer.textureCoordinates;
-
-                            let i = renderer.bitmapIndexes[id] * 12;
-                            let a = renderer.bitmapIndexes[id] * 24;
-
-                            vertices[i] = box.x - (box.width / 2);
-                            vertices[i + 1] = box.y - (box.height / 2);
-
-                            vertices[i + 2] = box.x + (box.width / 2);
-                            vertices[i + 3] = vertices[i + 1];
-
-                            vertices[i + 4] = vertices[i];
-                            vertices[i + 5] = box.y + (box.height / 2);
-
-
-                            vertices[i + 6] = vertices[i];
-                            vertices[i + 7] = vertices[i + 5];
-
-                            vertices[i + 8] = vertices[i + 2];
-                            vertices[i + 9] = vertices[i + 1];
-
-                            vertices[i + 10] = vertices[i + 2];
-                            vertices[i + 11] = vertices[i + 5];
-
-                            Bagel.internal.subFunctions.tick.render.webgl.rotateVertices(vertices, i, box.rotation, box.x, box.y);
-
-
-                            let texture = renderer.textures[box.image];
-                            let textureId = texture[1];
-                            let alpha = box.alpha;
-                            let xZero = texture[2];
-                            let xOne = texture[4];
-                            if (box.width < 0) {
-                                xZero = texture[4];
-                                xOne = texture[2];
-                            }
-                            let yZero = texture[3];
-                            let yOne = texture[5];
-                            if (box.height < 0) {
-                                yZero = texture[5];
-                                yOne = texture[3];
-                            }
-                            textureCoords[a] = xZero;
-                            textureCoords[a + 1] = yZero;
-                            textureCoords[a + 2] = textureId;
-                            textureCoords[a + 3] = alpha;
-
-                            textureCoords[a + 4] = xOne;
-                            textureCoords[a + 5] = yZero;
-                            textureCoords[a + 6] = textureId;
-                            textureCoords[a + 7] = alpha;
-
-                            textureCoords[a + 8] = xZero;
-                            textureCoords[a + 9] = yOne;
-                            textureCoords[a + 10] = textureId;
-                            textureCoords[a + 11] = alpha;
-
-
-                            textureCoords[a + 12] = xZero;
-                            textureCoords[a + 13] = yOne;
-                            textureCoords[a + 14] = textureId;
-                            textureCoords[a + 15] = alpha;
-
-
-                            textureCoords[a + 16] = xOne;
-                            textureCoords[a + 17] = yZero;
-                            textureCoords[a + 18] = textureId;
-                            textureCoords[a + 19] = alpha;
-
-                            textureCoords[a + 20] = xOne;
-                            textureCoords[a + 21] = yOne;
-                            textureCoords[a + 22] = textureId;
-                            textureCoords[a + 23] = alpha;
-
-                            renderer.verticesUpdated = true;
+                            renderer.scaledBitmaps[id] = Bagel.internal.subFunctions.tick.render.canvas.scaleData(box, renderer);
                         }
                     }
                 },
@@ -8438,6 +8462,9 @@ Bagel = {
                         }
                     }
                     else {
+                        if (textures[id] == null) {
+                            renderer.bitmapsUsingTextures[id] = [];
+                        }
                         textures[id] = texture;
                     }
                 },
@@ -8471,92 +8498,94 @@ Bagel = {
 
                     let texture = renderer.textures[id];
                     if (texture) {
-                        let slot = renderer.textureSlots[texture[1]];
-                        let canvas = slot.canvas;
-                        let ctx = slot.ctx;
+                        if (renderer.type == "webgl") {
+                            let slot = renderer.textureSlots[texture[1]];
+                            let canvas = slot.canvas;
+                            let ctx = slot.ctx;
 
 
-                        let functions = Bagel.internal.render.texture.internal;
-                        slot.textureCount--;
-                        if (slot.textureCount == 0) {
-                            functions.deactivateCombined(texture[1], renderer, keepGL);
-                        }
-                        else {
-                            functions.drawImage(functions.initTexture(slot, renderer, texture[1], game), null, slot, renderer, texture[8], texture[9], texture[10], texture[11]);
-
-                            // Update the lines to make the space available
-                            let newLines = [];
-                            let b = 0;
-                            let keys = Object.keys(slot.lines);
-                            while (b < keys.length) {
-                                let line = slot.lines[keys[b]];
-
-                                let y = line[0][1];
-                                if (y == texture[9]) { // First row affected by the texture
-                                    break;
-                                }
-                                if (y > texture[9]) { // Gone past it
-                                    break;
-                                }
-                                newLines.push(line);
-                                b++;
+                            let functions = Bagel.internal.render.texture.internal;
+                            slot.textureCount--;
+                            if (slot.textureCount == 0) {
+                                functions.deactivateCombined(texture[1], renderer, keepGL);
                             }
+                            else {
+                                functions.drawImage(functions.initTexture(slot, renderer, texture[1], game), null, slot, renderer, texture[8], texture[9], texture[10], texture[11]);
 
-                            let c = 0;
-                            while (b < keys.length) {
-                                let i = keys[b];
-                                if (c > texture[11]) { // Processed all the rows affected by the image
-                                    break;
-                                }
-                                newLines.push([]);
-                                if (slot.lines[i][0][1] != texture[9] + c) {
-                                    newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // Just add the line from the texture if there's no other lines to combine it with
-                                    c++;
-                                    continue;
-                                }
-                                let addedLine = false;
-                                for (let a in slot.lines[i]) {
-                                    let line = slot.lines[i][a];
+                                // Update the lines to make the space available
+                                let newLines = [];
+                                let b = 0;
+                                let keys = Object.keys(slot.lines);
+                                while (b < keys.length) {
+                                    let line = slot.lines[keys[b]];
 
-                                    let justAddedLine = false;
-                                    if (! addedLine) {
-                                        if (texture[9] > line[1] + 1
-                                            || texture[9] + texture[11] < line[1] - 1
-                                        ) { // The texure is within the y requirements
-                                            if (line[0] > texture[8] + texture[10]) { // Past where the line would've been
-                                                newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // insert the line that would be there if the texture wasn't there
+                                    let y = line[0][1];
+                                    if (y == texture[9]) { // First row affected by the texture
+                                        break;
+                                    }
+                                    if (y > texture[9]) { // Gone past it
+                                        break;
+                                    }
+                                    newLines.push(line);
+                                    b++;
+                                }
+
+                                let c = 0;
+                                while (b < keys.length) {
+                                    let i = keys[b];
+                                    if (c > texture[11]) { // Processed all the rows affected by the image
+                                        break;
+                                    }
+                                    newLines.push([]);
+                                    if (slot.lines[i][0][1] != texture[9] + c) {
+                                        newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // Just add the line from the texture if there's no other lines to combine it with
+                                        c++;
+                                        continue;
+                                    }
+                                    let addedLine = false;
+                                    for (let a in slot.lines[i]) {
+                                        let line = slot.lines[i][a];
+
+                                        let justAddedLine = false;
+                                        if (! addedLine) {
+                                            if (texture[9] > line[1] + 1
+                                                || texture[9] + texture[11] < line[1] - 1
+                                            ) { // The texure is within the y requirements
+                                                if (line[0] > texture[8] + texture[10]) { // Past where the line would've been
+                                                    newLines[newLines.length - 1].push([texture[8], texture[9] + c, texture[10]]); // insert the line that would be there if the texture wasn't there
+                                                    newLines[newLines.length - 1].push(line);
+                                                    addedLine = true;
+                                                    justAddedLine = true;
+                                                }
+                                            }
+                                        }
+
+
+                                        if (addedLine) {
+                                            let prevLine = newLines[newLines.length - 1][newLines[newLines.length - 1].length - 2];
+                                            if (prevLine[0] + prevLine[2] + 1 == line[0]) { // Directly next to each other so join the two lines
+                                                prevLine[2] += line[0] + 1;
+                                                newLines[newLines.length - 1].pop();
+                                            }
+                                        }
+                                        else {
+                                            if (! justAddedLine) {
                                                 newLines[newLines.length - 1].push(line);
-                                                addedLine = true;
-                                                justAddedLine = true;
                                             }
                                         }
                                     }
-
-
-                                    if (addedLine) {
-                                        let prevLine = newLines[newLines.length - 1][newLines[newLines.length - 1].length - 2];
-                                        if (prevLine[0] + prevLine[2] + 1 == line[0]) { // Directly next to each other so join the two lines
-                                            prevLine[2] += line[0] + 1;
-                                            newLines[newLines.length - 1].pop();
-                                        }
-                                    }
-                                    else {
-                                        if (! justAddedLine) {
-                                            newLines[newLines.length - 1].push(line);
-                                        }
-                                    }
+                                    c++;
+                                    b++;
                                 }
-                                c++;
-                                b++;
+                                while (b < keys.length) { // Add any lines back in that were skipped
+                                    newLines.push(slot.lines[keys[b]]);
+                                    b++;
+                                }
+                                slot.lines = newLines;
                             }
-                            while (b < keys.length) { // Add any lines back in that were skipped
-                                newLines.push(slot.lines[keys[b]]);
-                                b++;
-                            }
-                            slot.lines = newLines;
-                        }
 
-                        Bagel.internal.render.texture.internal.queueMapUpdate(game, renderer, texture[1]);
+                            Bagel.internal.render.texture.internal.queueMapUpdate(game, renderer, texture[1]);
+                        }
 
                         if (replaceSpriteTextures) {
                             for (let i in renderer.bitmapsUsingTextures[id]) { // Update the texture of sprites using this texture to a missing texture
