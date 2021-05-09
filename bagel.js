@@ -5,8 +5,6 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO:
 == Testing ==
-Safari and firefox still have poor performance in full resolution loading screens
-
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
@@ -22,6 +20,10 @@ Resume playing audio from the position it would be in rather than the start. May
 
 = Features =
 Rotation in canvas renderer.
+
+sprite.top, sprite.bottom, sprite.left and sprite.right
+
+Allow reusing values in plugins from other plugins. Maybe can set all complicated arguments to ".<pluginID>.<...pathThroughPluginObject>" e.g ".Internal.plugin.types.sprites.sprite.listeners.fns.xy". Maybe should be a way to more easilly access functions in other plugins to use yourself.
 
 Copy canvas mode
 
@@ -62,7 +64,8 @@ Tidy up canvas prerendering by using the prerender property of canvas sprites
 
 Fix spelling errors
 
-= Testing =
+= Questions =
+What should be read only? Should you be able to change game.width and game.height while the game is running?
 */
 
 
@@ -531,9 +534,8 @@ Bagel = {
                                                     let scale = sprite.scale;
                                                     triggerSprite.width = img.width * scale;
                                                     triggerSprite.height = img.height * scale;
-
-                                                    triggerSprite.internal.renderUpdate = true;
                                                 }
+                                                triggerSprite.internal.renderUpdate = true;
                                             }
                                         }
                                     },
@@ -632,21 +634,8 @@ Bagel = {
                             render: {
                                 onVisible: (sprite, newBitmap) => {
                                     sprite.internal.renderUpdate = false;
-                                    return newBitmap({
-                                        x: sprite.x,
-                                        y: sprite.y,
-                                        width: sprite.width,
-                                        height: sprite.height,
-                                        image: sprite.img,
-                                        rotation: sprite.angle,
-                                        alpha: sprite.alpha
-                                    }, sprite.game, false);
-                                },
-                                onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
-                                whileVisible: (sprite, updateBitmap) => {
-                                    if (sprite.internal.renderUpdate) {
-                                        sprite.internal.renderUpdate = false;
-                                        updateBitmap(sprite.internal.Bagel.renderID, {
+                                    if (sprite.img) {
+                                        return newBitmap({
                                             x: sprite.x,
                                             y: sprite.y,
                                             width: sprite.width,
@@ -655,6 +644,27 @@ Bagel = {
                                             rotation: sprite.angle,
                                             alpha: sprite.alpha
                                         }, sprite.game, false);
+                                    }
+                                },
+                                onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
+                                whileVisible: (sprite, updateBitmap, newBitmap, deleteBitmap) => {
+                                    if (sprite.internal.renderUpdate) {
+                                        sprite.internal.renderUpdate = false;
+
+                                        if (sprite.img) {
+                                            return updateBitmap(sprite.internal.Bagel.renderID, {
+                                                x: sprite.x,
+                                                y: sprite.y,
+                                                width: sprite.width,
+                                                height: sprite.height,
+                                                image: sprite.img,
+                                                rotation: sprite.angle,
+                                                alpha: sprite.alpha
+                                            }, sprite.game, false);
+                                        }
+                                        else {
+                                            return deleteBitmap(sprite.internal.Bagel.renderID, sprite.game);
+                                        }
                                     }
                                 }
                             }
@@ -5596,6 +5606,7 @@ Bagel = {
                                 c++;
                                 i += 2;
                             }
+                            renderer.verticesUpdated = true;
                         },
                         processTextures: (game, renderer) => {
                             let functions = Bagel.internal.render.texture.internal;
@@ -7891,6 +7902,9 @@ Bagel = {
                         }
                         Bagel.internal.oops(Bagel.internal.current.game);
                     }
+                    if (id == null) {
+                        return false;
+                    }
                     id = parseInt(id); // In case it's a string
 
                     let renderer = game.internal.renderer;
@@ -7935,6 +7949,10 @@ Bagel = {
                     return true;
                 },
                 update: (id, box, game, check=true, actualTextureID) => {
+                    if (id == null) {
+                        return Bagel.internal.render.bitmapSprite.new(box, game, check);
+                    }
+
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Hmm, looks like you didn't specify the game properly (it's the 2nd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
