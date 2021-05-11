@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <head>
     <title>
-        Bagels 🥯!
+        Bagel absorption
     </title>
 </head>
 <body bgColor="blue">
@@ -11,13 +11,14 @@
 <script src="../bagel.js"></script>
 <script>
 
-Bagels = Bagel.init({
+game = Bagel.init({
     id: "Bagel",
+    state: "game",
     game: {
         assets: {
             imgs: [
                 {
-                    id: "THE_Bagel",
+                    id: "Bagel",
                     src: "../assets/imgs/bagel.png"
                 }
             ],
@@ -25,7 +26,7 @@ Bagels = Bagel.init({
         },
         sprites: [
             {
-                id: "THEWorldsSourceOfBagels",
+                id: "Bagel",
                 vars: {
                     delay: 0,
                     debugDisplay: document.getElementById("debug")
@@ -35,26 +36,26 @@ Bagels = Bagel.init({
                         {
                             code: me => {
                                 me.visible = false;
-                                
+
                                 let i = 0;
                                 while (i < 10) {
                                     me.clone();
                                     i++;
                                 }
                             },
-                            stateToRun: "Hail the bagel overlords"
+                            stateToRun: "game"
                         }
                     ],
                     main: [
                         {
                             code: me => {
-                                me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + me.cloneCount;
+                                me.vars.debugDisplay.innerHTML = "FPS: " + game.currentFPS + ". <br> Bagel count: " + me.cloneCount;
                             },
-                            stateToRun: "Hail the bagel overlords"
+                            stateToRun: "game"
                         }
                     ]
                 },
-                img: "THE_Bagel",
+                img: "Bagel",
                 clones: {
                     vars: {
                         vel: {
@@ -75,16 +76,16 @@ Bagels = Bagel.init({
                                 me.vars.mass = me.vars.density * me.vars.area;
 
                                 me.angle = (Math.random() * 360) - 180;
-                                me.x = Math.random() * Bagels.width;
-                                me.y = Math.random() * Bagels.height;
+                                me.x = Math.random() * game.width;
+                                me.y = Math.random() * game.height;
                                 for (let i in me.parent.cloneIDs) {
                                     if (i == me.cloneID) continue;
                                     let clone = Bagel.get.sprite(me.parent.cloneIDs[i]);
                                     let centreDistance = Math.abs(me.x - clone.x) + Math.abs(me.y - clone.y);
                                     let distance = centreDistance - (me.vars.radius + clone.vars.radius);
                                     if (distance <= 10) {
-                                        me.x = Math.random() * Bagels.width;
-                                        me.y = Math.random() * Bagels.height;
+                                        me.x = Math.random() * game.width;
+                                        me.y = Math.random() * game.height;
                                     }
                                 }
                             }
@@ -108,12 +109,11 @@ Bagels = Bagel.init({
                                     let centreDistance = Math.abs(me.x - clone.x) + Math.abs(me.y - clone.y);
                                     let distance = centreDistance - (me.vars.radius + clone.vars.radius);
 
-                                    let force = clone.vars.mass / Math.pow(centreDistance, 2);
+                                    let force = clone.vars.mass / Math.pow(centreDistance + 1, 2);
                                     let degrees = Bagel.maths.get.direction(me.x, me.y, clone.x, clone.y);
                                     let radians = Bagel.maths.degToRad(degrees + 90);
                                     vel.x += (Math.cos(radians) * force) * 10;
                                     vel.y += (Math.sin(radians) * force) * 10;
-
 
                                     if (distance < 0) { // Collision
                                         vel.x = -((vel.x * clone.vars.mass) / me.vars.mass) * 0.01; // Only some energy is conserved
@@ -161,13 +161,7 @@ Bagels = Bagel.init({
         ]
     },
     width: 800,
-    height: 450,
-    state: "Hail the bagel overlords",
-    config: {
-        display: {
-            mode: "fill"
-        }
-    }
+    height: 450
 });
 
 </script>

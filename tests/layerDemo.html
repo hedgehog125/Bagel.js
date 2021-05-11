@@ -5,7 +5,7 @@
         <meta name="description" content="A simple layer test in Bagel.js">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>
-            A simple Bagel.js demo of the draw order
+            Bagel.js layers
         </title>
     </head>
     <body bgColor="white"></body>
@@ -21,6 +21,10 @@ game = Bagel.init({
                 {
                     id: "Bagel",
                     src: "../assets/imgs/bagel.png"
+                },
+                {
+                    id: "SadBagel",
+                    src: "../assets/imgs/sadbagel.png"
                 }
             ],
             snds: []
@@ -47,11 +51,11 @@ game = Bagel.init({
                         main: [
                             (me, game) => {
                                 if (game.vars.layerTick % 60 == 0) {
-                                    me.scale = 1;
+                                    me.img = "Bagel";
                                 }
                                 if (game.vars.layerTick == 60 * (me.cloneID + 1)) {
                                     me.layer.bringToFront();
-                                    me.scale = 0.5;
+                                    me.img = "SadBagel";
                                 }
                             }
                         ]
@@ -64,13 +68,16 @@ game = Bagel.init({
                                 me.visible = false;
 
                                 me.clone({
-                                    x: me.x - 20,
-                                    y: me.y - 20
+                                    x: me.x - 15,
+                                    y: me.y - 15
                                 });
-                                me.clone();
                                 me.clone({
-                                    x: me.x + 20,
-                                    y: me.y + 20
+                                    x: me.x + 15,
+                                    y: me.y - 15
+                                });
+                                me.clone({
+                                    x: me.x,
+                                    y: me.y + 15
                                 });
                             },
                             stateToRun: "game"
@@ -79,6 +86,7 @@ game = Bagel.init({
                 },
                 x: (me, game) => game.width / 2,
                 y: (me, game) => game.height / 2,
+                scale: 1.5,
                 img: "Bagel"
             }
         ]

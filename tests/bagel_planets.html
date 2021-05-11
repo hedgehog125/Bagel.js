@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <head>
     <title>
-        Bagels
+        Bagel planets
     </title>
 </head>
 <body bgColor="blue">
@@ -11,13 +11,14 @@
 <script src="../bagel.js"></script>
 <script>
 
-Bagels = Bagel.init({
+game = Bagel.init({
     id: "Bagel",
+    state: "game",
     game: {
         assets: {
             imgs: [
                 {
-                    id: "THE_Bagel",
+                    id: "Bagel",
                     src: "../assets/imgs/bagel.png"
                 }
             ],
@@ -25,7 +26,7 @@ Bagels = Bagel.init({
         },
         sprites: [
             {
-                id: "THEWorldsSourceOfBagels",
+                id: "Bagel",
                 vars: {
                     debugDisplay: document.getElementById("debug"),
                     generations: 3
@@ -34,8 +35,8 @@ Bagels = Bagel.init({
                     init: [
                         {
                             code: me => {
-                                me.x = Bagels.width / 2;
-                                me.y = Bagels.height / 2;
+                                me.x = game.width / 2;
+                                me.y = game.height / 2;
 
                                 me.angle = 0;
 
@@ -54,20 +55,20 @@ Bagels = Bagel.init({
                                 }
                                 me.angle = 0;
                             },
-                            stateToRun: "Hail the bagel overlords"
+                            stateToRun: "game"
                         }
                     ],
                     main: [
                         {
                             code: me => {
                                 me.angle++;
-                                me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + (Bagels.game.sprites.length - 1);
+                                me.vars.debugDisplay.innerHTML = "FPS: " + game.currentFPS + ". <br> Bagel count: " + (game.game.sprites.length - 1);
                             },
-                            stateToRun: "Hail the bagel overlords"
+                            stateToRun: "game"
                         }
                     ]
                 },
-                img: "THE_Bagel",
+                img: "Bagel",
                 scale: 2,
                 x: 0,
                 y: 0,
@@ -125,8 +126,7 @@ Bagels = Bagel.init({
         ]
     },
     width: 800,
-    height: 450,
-    state: "Hail the bagel overlords"
+    height: 450
 });
 
 </script>

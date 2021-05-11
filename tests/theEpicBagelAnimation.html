@@ -5,7 +5,7 @@
         <meta name="description" content="A simple animation in Bagel.js">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>
-            Bagels 🥯!
+            The epic bagel animation
         </title>
     </head>
     <body bgColor="white">
@@ -15,13 +15,13 @@
 <script src="../bagel.js"></script>
 <script>
 
-Bagels = Bagel.init({
+game = Bagel.init({
     id: "Bagel",
     game: {
         assets: {
             imgs: [
                 {
-                    id: "THE_Bagel",
+                    id: "Bagel",
                     src: "../assets/imgs/bagel.png"
                 }
             ],
@@ -29,7 +29,7 @@ Bagels = Bagel.init({
         },
         sprites: [
             {
-                id: "THEWorldsSourceOfBagels",
+                id: "Bagel",
                 vars: {
                     debugDisplay: document.getElementById("debug")
                 },
@@ -42,7 +42,7 @@ Bagels = Bagel.init({
                                 me.visible = false;
                                 me.scale = 0.75;
                             },
-                            stateToRun: "Hail the bagel overlords"
+                            stateToRun: "game"
                         }
                     ],
                     main: [
@@ -54,13 +54,13 @@ Bagels = Bagel.init({
                                     i++;
                                 }
 
-                                me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS + ". <br> Bagel count: " + me.cloneCount;
+                                me.vars.debugDisplay.innerHTML = "FPS: " + game.currentFPS + ". <br> Bagel count: " + me.cloneCount;
                             },
-                            stateToRun: "Hail the bagel overlords"
+                            stateToRun: "game"
                         }
                     ]
                 },
-                img: "THE_Bagel",
+                img: "Bagel",
                 clones: {
                     visible: true,
                     scripts: {
@@ -68,8 +68,8 @@ Bagels = Bagel.init({
                             me => {
                                 me.visible = true;
 
-                                me.x = Bagels.width / 2;
-                                me.y = Bagels.height / 2;
+                                me.x = game.width / 2;
+                                me.y = game.height / 2;
 
                                 me.angle = (Math.random() * 360) - 180;
                                 me.move(-1); // The main code gets run on the first frame so this will cancel it out
@@ -80,7 +80,7 @@ Bagels = Bagel.init({
                                 me.move(1);
                                 me.alpha -= 0.002;
 
-                                if (Math.abs(me.x - (Bagels.height)) > Bagels.width + me.width || Math.abs(me.y - (Bagels.height / 2)) > Bagels.height + me.height || me.alpha < 0) {
+                                if (Math.abs(me.x - (game.height)) > game.width + me.width || Math.abs(me.y - (game.height / 2)) > game.height + me.height || me.alpha < 0) {
                                     me.delete();
                                 }
                             }
@@ -92,7 +92,7 @@ Bagels = Bagel.init({
     },
     width: 800,
     height: 450,
-    state: "Hail the bagel overlords",
+    state: "game",
     config: {
         display: {
             mode: "fill",

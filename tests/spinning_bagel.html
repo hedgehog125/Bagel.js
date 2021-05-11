@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <head>
     <title>
-        Bagels
+        Spinning bagel
     </title>
 </head>
 <body bgColor="blue">
@@ -11,13 +11,14 @@
 <script src="../bagel.js"></script>
 <script>
 
-Bagels = Bagel.init({
-    id: "Bagel",
+game = Bagel.init({
+    id: "game",
+    state: "game",
     game: {
         assets: {
             imgs: [
                 {
-                    id: "THE_Bagel",
+                    id: "Bagel",
                     src: "../assets/imgs/bagel.png"
                 }
             ],
@@ -25,7 +26,7 @@ Bagels = Bagel.init({
         },
         sprites: [
             {
-                id: "THEWorldsSourceOfBagels",
+                id: "Bagel",
                 vars: {
                     debugDisplay: document.getElementById("debug")
                 },
@@ -33,23 +34,23 @@ Bagels = Bagel.init({
                     init: [
                         {
                             code: me => {
-                                me.x = Bagels.width / 2;
-                                me.y = Bagels.height / 2;
+                                me.x = game.width / 2;
+                                me.y = game.height / 2;
                             },
-                            stateToRun: "Hail the bagel overlords"
+                            stateToRun: "game"
                         }
                     ],
                     main: [
                         {
                             code: me => {
-                                me.vars.debugDisplay.innerHTML = "FPS: " + Bagels.currentFPS;
+                                me.vars.debugDisplay.innerHTML = "FPS: " + game.currentFPS;
                                 me.angle++;
                             },
-                            stateToRun: "Hail the bagel overlords"
+                            stateToRun: "game"
                         }
                     ]
                 },
-                img: "THE_Bagel",
+                img: "Bagel",
                 scale: 5,
                 x: 0,
                 y: 0
@@ -58,7 +59,6 @@ Bagels = Bagel.init({
     },
     width: 800,
     height: 450,
-    state: "Hail the bagel overlords"
 });
 
 </script>

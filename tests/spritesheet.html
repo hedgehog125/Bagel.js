@@ -16,8 +16,9 @@
 <script src="../bagel.js"></script>
 <script>
 
-let game = Bagel.init({
+game = Bagel.init({
     id: "Bagel",
+    state: "game",
     game: {
         assets: {
             spritesheets: [
@@ -75,7 +76,6 @@ let game = Bagel.init({
     },
     width: 800,
     height: 450,
-    state: "game",
     config: {
         loading: {
             skip: false,

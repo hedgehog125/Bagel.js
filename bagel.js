@@ -8,22 +8,19 @@ TODO:
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
-Sprites get pushed to left when shrinking window, test by putting a sprite with an x coordinate of the game width. Possibly out of my control? Happens when resising window and devtools
-
 Pause videos on state change
-
-Cap alpha values during runtime, use an error?
-
-Allow enabling antialiasing and switching renderers on the fly. Requires reinitialising the webgl context for both
 
 Resume playing audio from the position it would be in rather than the start. Maybe play muted if no autoplay?
 
+Use a setTimeout with a 0 ms delay after the main loop to detect when rendering is finished in Safari. Maybe for other browsers too?
+
+== Low priority bugs ==
+Sprites get pushed to left when shrinking window, test by putting a sprite with an x coordinate of the game width. Possibly out of my control? Happens when resising window and devtools
+
 = Features =
-Rotation in canvas renderer.
-
-sprite.top, sprite.bottom, sprite.left and sprite.right
-
 Allow reusing values in plugins from other plugins. Maybe can set all complicated arguments to ".<pluginID>.<...pathThroughPluginObject>" e.g ".Internal.plugin.types.sprites.sprite.listeners.fns.xy". Maybe should be a way to more easilly access functions in other plugins to use yourself.
+
+Allow enabling antialiasing and switching renderers on the fly. Requires reinitialising the webgl context for both
 
 Copy canvas mode
 
@@ -46,7 +43,7 @@ touching.spriteSides and touching.gameSides sets last.collisionSide
 Context lost handling
 
 The ability to remove or replace a default argument for a sprite type. Maybe only for some? Prevent setting some attributes like "type"
-Allow adding new methods to existing sprite types, also allow having extra processing in the plugin that modifies it. (init and main methods)
+Allow adding new methods to existing sprite types, also allow having extra processing in the plugin that modifies it. (init and main methods). Disable cloning by removing clones argument?
 
 Built in FPS counter
 
@@ -60,6 +57,8 @@ Gamepad support
 
 
 = Tweaks =
+Move currentFPS and maximumPossibleFPS to game.debug. Also add render percentage time, script time and render time
+
 Tidy up canvas prerendering by using the prerender property of canvas sprites
 
 Fix spelling errors
@@ -371,6 +370,7 @@ Bagel = {
                                                 return "Huh, looks like you've done something wrong in a calculation somewhere in your program. Sprite " + JSON.stringify(triggerSprite.id) + "'s " + property + " is NaN. This is usually caused by having a non number somewhere in a calcuation.";
                                             }
                                             else {
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -382,12 +382,14 @@ Bagel = {
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
                                         }
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
@@ -422,6 +424,7 @@ Bagel = {
                                                         return "Huh, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
                                                     }
                                                 }
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -452,6 +455,7 @@ Bagel = {
                                                     let scaleY = sprite.height / img.height;
                                                     sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
                                                 }
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -474,6 +478,7 @@ Bagel = {
                                                 let scaleY = sprite.height / img.height;
                                                 sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
                                             }
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
@@ -494,6 +499,7 @@ Bagel = {
                                                 if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * sprite.scale;
 
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -509,6 +515,37 @@ Bagel = {
                                     y: {
                                         set: "xy"
                                     },
+
+                                    left: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.x = value + (sprite.width / 2);
+                                            }
+                                        }
+                                    },
+                                    right: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.x = value - (sprite.width / 2);
+                                            }
+                                        }
+                                    },
+                                    top: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.y = value + (sprite.height / 2);
+                                            }
+                                        }
+                                    },
+                                    bottom: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.y = value - (sprite.height / 2);
+                                            }
+                                        }
+                                    },
+
+
                                     img: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                             if (! initialTrigger) {
@@ -630,6 +667,7 @@ Bagel = {
                                     collision: null
                                 };
                                 sprite.internal.cache = {};
+                                plugin.vars.sprite.updateAnchors(sprite, true, true);
                             },
                             render: {
                                 onVisible: (sprite, newBitmap) => {
@@ -816,12 +854,14 @@ Bagel = {
                                 fns: {
                                     xy: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (typeof value == "number") {
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -833,6 +873,7 @@ Bagel = {
 
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
@@ -844,6 +885,7 @@ Bagel = {
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         let valid = false;
                                         if (typeof value == "number") {
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
                                             triggerSprite.internal.renderUpdate = true;
                                             valid = true;
                                         }
@@ -853,6 +895,7 @@ Bagel = {
 
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
                                             triggerSprite.internal.renderUpdate = true;
                                             valid = true;
                                         }
@@ -896,6 +939,35 @@ Bagel = {
                                     y: {
                                         set: "xy"
                                     },
+                                    left: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.x = value + (sprite.width / 2);
+                                            }
+                                        }
+                                    },
+                                    right: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.x = value - (sprite.width / 2);
+                                            }
+                                        }
+                                    },
+                                    top: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.y = value + (sprite.height / 2);
+                                            }
+                                        }
+                                    },
+                                    bottom: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.y = value - (sprite.height / 2);
+                                            }
+                                        }
+                                    },
+
                                     width: {
                                         set: "dimensions"
                                     },
@@ -931,7 +1003,7 @@ Bagel = {
                                 trigger: true
                             },
                             description: "A \"2d\" canvas sprite. Anything rendered onto the canvas gets rendered onto the main canvas. (but will usually be scaled down depending on the width and height of the canvas)",
-                            init: (sprite, game) => {
+                            init: (sprite, game, plugin) => {
                                 let canvas = document.createElement("canvas");
                                 let ctx = canvas.getContext("2d");
                                 if (sprite.mode == "auto") { // Create the listener methods
@@ -1034,6 +1106,7 @@ Bagel = {
                                 sprite.scaleX = sprite.canvas.width / sprite.width;
                                 sprite.scaleY = sprite.canvas.height / sprite.height;
                                 sprite.updated = false;
+                                plugin.vars.sprite.updateAnchors(sprite, true, true);
                             },
                             render: {
                                 init: (sprite, newBitmap) => {
@@ -1230,12 +1303,14 @@ Bagel = {
                                 fns: {
                                     xy: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (typeof value == "number") {
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
                                         if (typeof value == "string") {
                                             if (value == "centred") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -1247,6 +1322,7 @@ Bagel = {
 
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
@@ -1291,12 +1367,13 @@ Bagel = {
                                 trigger: true
                             },
                             description: "A text sprite. Allows you to easily display text onscreen.",
-                            init: (sprite, game) => {
+                            init: (sprite, game, plugin) => {
                                 sprite.internal.last = {};
                                 sprite.last = {
                                     collision: null
                                 };
                                 sprite.internal.canvasID = ".Internal.text." + sprite.id;
+                                plugin.vars.sprite.updateAnchors(sprite, true, true);
                             },
                             render: {
                                 init: sprite => {
@@ -1352,7 +1429,7 @@ Bagel = {
                                     }, sprite.game, false);
                                 },
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
-                                whileVisible: (sprite, updateBitmap) => {
+                                whileVisible: (sprite, updateBitmap, newBitmap, deleteBitmap, game, plugin) => {
                                     let mainCanvas = sprite.game.internal.renderer.canvas;
                                     let scaleX = sprite.game.internal.renderer.scaleX;
                                     let scaleY = sprite.game.internal.renderer.scaleY;
@@ -1361,6 +1438,7 @@ Bagel = {
                                     if (internal.needsRerender || internal.last.scaleX != scaleX || internal.last.scaleY != scaleY) {
                                         internal.needsRerender = false;
                                         internal.prerender(sprite, scaleX, scaleY);
+                                        plugin.vars.sprite.updateAnchors(sprite, true, true);
                                     }
                                     if (internal.renderUpdate) {
                                         internal.renderUpdate = false;
@@ -2441,22 +2519,6 @@ Bagel = {
                                             if (sprite.internal.Bagel.renderID != null) {
                                                 Bagel.internal.render.bitmapSprite.bringForwards(sprite.internal.Bagel.renderID, game);
                                             }
-
-                                            /*
-                                            if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
-                                                return;
-                                            }
-                                            let layers = game.internal.renderer.layers;
-                                            let originalIndex = layers.indexOf(sprite.idIndex);
-
-                                            if (layers[layers.length - 1] == sprite.idIndex) { // Already rendered last
-                                                return;
-                                            }
-
-                                            let oldSprite = layers[originalIndex + 1];
-                                            layers[originalIndex + 1] = sprite.idIndex;
-                                            layers[originalIndex] = oldSprite; // Swap them
-                                            */
                                         }
                                     }
                                 },
@@ -2473,34 +2535,6 @@ Bagel = {
                                             if (sprite.internal.Bagel.renderID != null) {
                                                 Bagel.internal.render.bitmapSprite.sendToBack(sprite.internal.Bagel.renderID, game);
                                             }
-
-                                            /*
-                                            if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
-                                                return;
-                                            }
-                                            let layers = game.internal.renderer.layers;
-                                            let originalIndex = layers.indexOf(sprite.idIndex);
-
-                                            if (layers[0] == sprite.idIndex) { // Already rendered first
-                                                return;
-                                            }
-
-                                            let oldSprite = layers[0];
-                                            layers[0] = sprite.idIndex;
-                                            layers[originalIndex] = null; // This can now be used by another sprite
-
-                                            let i = 1;
-                                            while (i < layers.length) {
-                                                if (layers[i] == null) {
-                                                    layers[i] = oldSprite;
-                                                    return;
-                                                }
-                                                let oldSprite2 = layers[i];
-                                                layers[i] = oldSprite;
-                                                oldSprite = oldSprite2;
-                                                i++;
-                                            }
-                                            */
                                         }
                                     }
                                 },
@@ -2517,22 +2551,6 @@ Bagel = {
                                             if (sprite.internal.Bagel.renderID != null) {
                                                 Bagel.internal.render.bitmapSprite.sendBackwards(sprite.internal.Bagel.renderID, game);
                                             }
-
-                                            /*
-                                            if (game.game.sprites.length == 1) { // No other sprites, no need to do anything
-                                                return;
-                                            }
-                                            let layers = game.internal.renderer.layers;
-                                            let originalIndex = layers.indexOf(sprite.idIndex);
-
-                                            if (layers[0] == sprite.idIndex) { // Already rendered first
-                                                return;
-                                            }
-
-                                            let oldSprite = layers[originalIndex - 1];
-                                            layers[originalIndex - 1] = sprite.idIndex;
-                                            layers[originalIndex] = oldSprite; // Swap them
-                                            */
                                         }
                                     }
                                 }
@@ -3128,6 +3146,27 @@ Bagel = {
                             }, "plugin Internal, function \"game.playSound\" (via Game.add.sprite)");
                         }
                     }
+                },
+                sprite: {
+                    updateAnchors: (sprite, x, y) => {
+                        let properties = sprite.internal.Bagel.properties;
+                        if (x) {
+                            x = properties.x;
+                            let half = (properties.width != null? properties.width : sprite.width) / 2;
+                            if (! isNaN(half)) {
+                                properties.left = x - half;
+                                properties.right = x + half;
+                            }
+                        }
+                        if (y) {
+                            y = properties.y;
+                            let half = (properties.height != null? properties.height : sprite.height) / 2;
+                            if (! isNaN(half)) {
+                                properties.top = y - half;
+                                properties.bottom = y + half;
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -3403,8 +3442,13 @@ Bagel = {
                         }
                     });
                 }
-                else { // Some browsers don't support requestIdleCallback so this is a less accurate workaround
-                    start = performance.now();
+                else {
+                    setTimeout(_ => {
+                        let fps = 1000 / (performance.now() - Bagel.internal.frameStartTime);
+                        for (let i in Bagel.internal.games) {
+                            Bagel.internal.games[i].maxPossibleFPS = fps;
+                        }
+                    }, 0);
                 }
                 for (let i in Bagel.internal.games) {
                     let game = Bagel.internal.games[i];
@@ -3451,17 +3495,6 @@ Bagel = {
                         game.currentFPS = game.internal.FPSFrames;
                         game.internal.FPSFrames = 0;
                         game.internal.lastFPSUpdate = now;
-                    }
-                }
-                if (! window.requestIdleCallback) {
-                    let fps = 1000 / (performance.now() - Bagel.internal.frameStartTime);
-                    for (let i in Bagel.internal.games) {
-                        if (Bagel.internal.games[i].config.display.renderer == "webgl") { // WebGL render times are unknown but usually quite short so just guess a bit
-                            fps *= 0.95;
-                        }
-                    }
-                    for (let i in Bagel.internal.games) {
-                        Bagel.internal.games[i].maxPossibleFPS = fps;
                     }
                 }
             }
@@ -3529,6 +3562,7 @@ Bagel = {
                             loadingScreenBitmaps: {},
 
                             scaledBitmaps: [],
+                            layers: [],
 
                             width: game.width,
                             height: game.height,
@@ -4261,25 +4295,6 @@ Bagel = {
                         };
                     })(game);
                     missingImage.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAF0lEQVQYVwXBAQEAAACCIPo/2mAoWWrmOPoF/8JfnIkAAAAASUVORK5CYII=";
-
-                    let loadingScreen = game.internal.loadingScreen;
-                    if (loadingScreen) {
-                        if (game.internal.renderer.type == "webgl") {
-                            //Bagel.internal.render.texture.new(".Internal.loadingScreen", loadingScreen.internal.renderer.canvas, game, false, "animated");
-
-                            /*
-                            game.internal.loadingScreenRenderID = Bagel.internal.render.bitmapSprite.new({
-                                x: game.width / 2,
-                                y: game.height / 2,
-                                width: game.width,
-                                height: game.height,
-                                image: ".Internal.loadingScreen",
-                                rotation: 90,
-                                alpha: 1
-                            }, game, false);
-                            */
-                        }
-                    }
                 },
                 findRendererLimits: (game, renderer, gl) => {
                     let deviceWebGL = Bagel.device.webgl;
@@ -4502,7 +4517,7 @@ Bagel = {
                                                                     if (! triggerSprite.internal.Bagel.onVisibleTriggered) {
                                                                         Bagel.internal.processSpriteRenderOutput(
                                                                             triggerSprite,
-                                                                            typeJSON.render.onVisible(triggerSprite, bitmapFunctions.new, game)
+                                                                            typeJSON.render.onVisible(triggerSprite, bitmapFunctions.new, game, plugin)
                                                                         );
 
                                                                         triggerSprite.internal.Bagel.onVisibleTriggered = true;
@@ -4518,7 +4533,7 @@ Bagel = {
                                                                     if (! triggerSprite.internal.Bagel.onInvisibleTriggered) {
                                                                         Bagel.internal.processSpriteRenderOutput(
                                                                             triggerSprite,
-                                                                            typeJSON.render.onInvisible(triggerSprite, bitmapFunctions.delete, game)
+                                                                            typeJSON.render.onInvisible(triggerSprite, bitmapFunctions.delete, game, plugin)
                                                                         );
                                                                         triggerSprite.internal.Bagel.onVisibleTriggered = false; // Can be triggered again
                                                                         triggerSprite.internal.Bagel.onInvisibleTriggered = true;
@@ -5064,7 +5079,7 @@ Bagel = {
                     if (handler.render.init) {
                         Bagel.internal.processSpriteRenderOutput(
                             sprite,
-                            handler.render.init(sprite, Bagel.internal.render.bitmapSprite.new, game)
+                            handler.render.init(sprite, Bagel.internal.render.bitmapSprite.new, game, plugin)
                         );
                     }
                     Bagel.internal.loadCurrent();
@@ -5193,6 +5208,8 @@ Bagel = {
 
                             let handlers = game.internal.combinedPlugins.types.sprites;
 
+                            Bagel.internal.subFunctions.tick.render.canvas.queues.bitmapLayers(game);
+
                             // Clear the canvas
                             let clearStyle = game.config.display.backgroundColour;
                             if (clearStyle == "transparent") {
@@ -5204,13 +5221,129 @@ Bagel = {
                             }
 
                             let textures = renderer.textures;
-                            for (let i in renderer.bitmapSpriteData) {
-                                if (renderer.bitmapSpriteData[i] == null) continue;
-                                let data = renderer.scaledBitmaps[i];
+                            for (let i in renderer.layers) {
+                                let data = renderer.scaledBitmaps[renderer.layers[i]];
                                 ctx.globalAlpha = data.alpha;
-                                ctx.drawImage(textures[data.image], data.x, data.y, data.width, data.height);
+
+                                let flipX = Math.sign(data.width);
+                                let flipY = Math.sign(data.height);
+
+
+                                ctx.scale(flipX, flipY);
+                                if (data.angle == 90) { // Don't rotate if we don't need to
+                                    ctx.drawImage(textures[data.image], data.x * flipX, data.y * flipY, data.width, data.height);
+                                }
+                                else {
+                                    let angle = Bagel.maths.degToRad(data.rotation - 90);
+                                    let halfWidth = data.width / 2;
+                                    let halfHeight = data.height / 2;
+
+                                    ctx.translate((data.x + halfWidth) * flipX, (data.y + halfHeight) * flipY);
+                                    ctx.rotate(angle);
+                                    ctx.drawImage(textures[data.image], -halfWidth, -halfHeight, data.width, data.height);
+                                }
+                                ctx.setTransform(1, 0, 0, 1, 0, 0);
                             }
                             ctx.globalAlpha = 1;
+                        },
+                        queues: {
+                            bitmapLayers: game => {
+                                let renderer = game.internal.renderer;
+
+                                if (renderer.bitmapSpriteData.length == 0 || renderer.bitmapSpriteData.length == 1) { // Nothing to change
+                                    renderer.queue.bitmap.layer = {};
+                                    return;
+                                }
+                                let queue = renderer.queue.bitmap.layer;
+                                let bitmapIndexes = renderer.bitmapIndexes;
+                                let layers = renderer.layers;
+                                if (queue.length != 0) {
+                                    for (let id in queue) {
+                                        if (queue[id] == null) {
+                                            continue;
+                                        }
+                                        for (let i in queue[id]) {
+                                            let mode = queue[id][i];
+                                            let originalIndex, c, layerSpriteID, newLayers;
+
+                                            switch (mode) { // The type of layer operation
+                                                case 0: // Bring to front
+                                                    originalIndex = bitmapIndexes[id];
+                                                    if (originalIndex == bitmapIndexes.length - 1) { // Already at the front
+                                                        break;
+                                                    }
+
+                                                    layerSpriteID = layers[originalIndex];
+                                                    layers.splice(originalIndex, 1);
+                                                    layers.push(layerSpriteID);
+
+
+                                                    c = 0;
+                                                    while (c < bitmapIndexes.length) {
+                                                        if (bitmapIndexes[c] > originalIndex) {
+                                                            bitmapIndexes[c]--;
+                                                        }
+                                                        c++;
+                                                    }
+                                                    bitmapIndexes[id] = bitmapIndexes.length - 1; // The bitmap that was sent to the front
+
+
+                                                    break;
+                                                case 1: // Bring forwards
+                                                    originalIndex = bitmapIndexes[id];
+                                                    if (originalIndex == bitmapIndexes.length - 1) { // Already at the front
+                                                        break;
+                                                    }
+
+                                                    layerSpriteID = layers[originalIndex];
+                                                    layers.splice(originalIndex, 1);
+                                                    layers.splice(originalIndex + 1, 0, layerSpriteID);
+
+                                                    bitmapIndexes[bitmapIndexes.indexOf(originalIndex + 1)]--; // Swap the indexes
+                                                    bitmapIndexes[id]++;
+
+                                                    break;
+                                                case 2: // Send to back
+                                                    originalIndex = bitmapIndexes[id];
+                                                    if (originalIndex == 0) { // Already at the back
+                                                        break;
+                                                    }
+
+                                                    layerSpriteID = layers[originalIndex];
+                                                    layers.splice(originalIndex, 1);
+                                                    newLayers = [layerSpriteID];
+                                                    newLayers.push(...layers);
+                                                    layers = newLayers;
+
+                                                    c = 0;
+                                                    while (c < bitmapIndexes.length) {
+                                                        if (bitmapIndexes[c] < originalIndex) {
+                                                            bitmapIndexes[c]++;
+                                                        }
+                                                        c++;
+                                                    }
+                                                    bitmapIndexes[id] = 0; // The bitmap that was sent to the back
+
+                                                    break;
+                                                case 3: // Send backwards
+                                                    originalIndex = bitmapIndexes[id];
+                                                    if (originalIndex == 0) { // Already at the back
+                                                        break;
+                                                    }
+
+                                                    layerSpriteID = layers[originalIndex];
+                                                    layers.splice(originalIndex, 1);
+                                                    layers.splice(originalIndex - 1, 0, layerSpriteID); // Insert the bitmap back in
+
+                                                    bitmapIndexes[bitmapIndexes.indexOf(originalIndex - 1)]++; // Swap the indexes
+                                                    bitmapIndexes[id]--;
+                                            }
+                                        }
+                                    }
+                                }
+                                renderer.queue.bitmap.layer = {};
+                                renderer.layers = layers;
+                            }
                         },
                         scaleData: (data, renderer) => {
                             data = {...data};
@@ -5332,13 +5465,13 @@ Bagel = {
                                             let alpha = box.alpha;
                                             let xZero = texture[2];
                                             let xOne = texture[4];
-                                            if (box.width < 0) {
+                                            if (Math.sign(box.width) == -1) {
                                                 xZero = texture[4];
                                                 xOne = texture[2];
                                             }
                                             let yZero = texture[3];
                                             let yOne = texture[5];
-                                            if (box.height < 0) {
+                                            if (Math.sign(box.height) == -1) {
                                                 yZero = texture[5];
                                                 yOne = texture[3];
                                             }
@@ -5404,9 +5537,9 @@ Bagel = {
                                 let queue = renderer.queue.bitmap.layer;
 
 
-                                let vertices = Array.from(game.internal.renderer.vertices);
-                                let textCoords = Array.from(game.internal.renderer.textureCoordinates);
-                                let bitmapIndexes = game.internal.renderer.bitmapIndexes;
+                                let vertices = Array.from(renderer.vertices);
+                                let textCoords = Array.from(renderer.textureCoordinates);
+                                let bitmapIndexes = renderer.bitmapIndexes;
 
                                 if (vertices.length == 0 || vertices.length == 12) { // Nothing to change
                                     renderer.queue.bitmap.layer = {};
@@ -5420,7 +5553,7 @@ Bagel = {
                                             continue;
                                         }
                                         for (let i in queue[id]) {
-                                            let mode = queue[id];
+                                            let mode = queue[id][i];
                                             let originalIndex, thisBitmapVertices, thisBitmapTextureCoords,
                                             newVertices, newTextureCoords, c;
 
@@ -5470,7 +5603,7 @@ Bagel = {
                                                     vertices.splice((originalIndex * 12) + 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
                                                     textCoords.splice((originalIndex * 24) + 24, 0, ...thisBitmapTextureCoords);
 
-                                                    bitmapIndexes[renderer.bitmapIndexes.indexOf(originalIndex + 1)]--; // Swap the indexes
+                                                    bitmapIndexes[bitmapIndexes.indexOf(originalIndex + 1)]--; // Swap the indexes
                                                     bitmapIndexes[id]++;
 
                                                     break;
@@ -5523,7 +5656,7 @@ Bagel = {
                                                     vertices.splice((originalIndex * 12) - 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
                                                     textCoords.splice((originalIndex * 24) - 24, 0, ...thisBitmapTextureCoords);
 
-                                                    bitmapIndexes[renderer.bitmapIndexes.indexOf(originalIndex - 1)]++; // Swap the indexes
+                                                    bitmapIndexes[bitmapIndexes.indexOf(originalIndex - 1)]++; // Swap the indexes
                                                     bitmapIndexes[id]--;
                                             }
                                         }
@@ -5827,7 +5960,7 @@ Bagel = {
                             if (handler.render.tick) {
                                 Bagel.internal.processSpriteRenderOutput(
                                     sprite,
-                                    handler.render.tick(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game)
+                                    handler.render.tick(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game, handler.internal.plugin)
                                 );
                             }
 
@@ -5835,7 +5968,7 @@ Bagel = {
                                 if (handler.render.whileVisible) {
                                     Bagel.internal.processSpriteRenderOutput(
                                         sprite,
-                                        handler.render.whileVisible(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game)
+                                        handler.render.whileVisible(sprite, bitmapFunctions.update, bitmapFunctions.new, bitmapFunctions.delete, game, handler.internal.plugin)
                                     );
                                 }
                             }
@@ -7855,6 +7988,8 @@ Bagel = {
                         });
                     }
 
+                    data.alpha = Math.max(Math.min(data.alpha, 1), 0);
+
                     let renderer = game.internal.renderer;
                     if (game.config.isLoadingScreen) {
                         data.image = ".Internal.loadingScreen." + data.image;
@@ -7888,6 +8023,7 @@ Bagel = {
                     }
                     else {
                         renderer.bitmapIndexes[id] = id;
+                        renderer.layers.push(id);
                         renderer.scaledBitmaps[id] = Bagel.internal.subFunctions.tick.render.canvas.scaleData(data, renderer);
                         return id;
                     }
@@ -7930,6 +8066,7 @@ Bagel = {
                         }
                         else {
                             renderer.scaledBitmaps[id] = null;
+                            renderer.layers = renderer.layers.filter(value => value != id);
                         }
 
 
@@ -7970,6 +8107,7 @@ Bagel = {
                             syntax: Bagel.internal.checks.bitmapSprite
                         });
                     }
+                    box.alpha = Math.max(Math.min(box.alpha, 1), 0);
 
                     let renderer = game.internal.renderer;
                     if (game.config.isLoadingScreen) {
@@ -8038,13 +8176,13 @@ Bagel = {
                                 let alpha = box.alpha;
                                 let xZero = texture[2];
                                 let xOne = texture[4];
-                                if (box.width < 0) {
+                                if (Math.sign(box.width) == -1) {
                                     xZero = texture[4];
                                     xOne = texture[2];
                                 }
                                 let yZero = texture[3];
                                 let yOne = texture[5];
-                                if (box.height < 0) {
+                                if (Math.sign(box.height) == -1) {
                                     yZero = texture[5];
                                     yOne = texture[3];
                                 }
