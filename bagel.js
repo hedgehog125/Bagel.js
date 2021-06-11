@@ -657,6 +657,12 @@ Bagel = {
                                     },
                                     alpha: {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
+                                            if (value > 1) {
+                                                sprite.alpha = 1;
+                                            }
+                                            else if (value < 0) {
+                                                sprite.alpha = 0;
+                                            }
                                             triggerSprite.internal.renderUpdate = true;
                                         }
                                     },
@@ -994,6 +1000,12 @@ Bagel = {
                                     },
                                     alpha: {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
+                                            if (value > 1) {
+                                                sprite.alpha = 1;
+                                            }
+                                            else if (value < 0) {
+                                                sprite.alpha = 0;
+                                            }
                                             triggerSprite.internal.renderUpdate = true;
                                         }
                                     },
@@ -1364,6 +1376,12 @@ Bagel = {
                                     },
                                     alpha: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step) => {
+                                            if (value > 1) {
+                                                sprite.alpha = 1;
+                                            }
+                                            else if (value < 0) {
+                                                sprite.alpha = 0;
+                                            }
                                             triggerSprite.internal.renderUpdate = true;
                                         }
                                     },
@@ -3544,7 +3562,8 @@ Bagel = {
                         }
 
                         let renderer = internal.renderer;
-                        if (renderer.type != game.config.display.renderer) {
+                        let configRenderer = game.config.display.renderer;
+                        if (configRenderer != "auto" && renderer.type != configRenderer) {
                             if (renderer.type == "webgl") {
                                 renderer.gl.getExtension("WEBGL_lose_context").loseContext();
                                 let slots = renderer.textureSlots;
@@ -3554,7 +3573,7 @@ Bagel = {
                                     }
                                 }
                             }
-                            renderer.type = game.config.display.renderer;
+                            renderer.type = configRenderer;
                             // TODO: reinitialise
                         }
                     }
@@ -6321,11 +6340,13 @@ Bagel = {
                                 removed++;
                             }
                             else {
-                                if (type == "all") {
-                                    script.sprite.internal.Bagel.scripts[script.script].id -= removed; // The id will have changed for anything after a deleted script
-                                }
-                                else {
-                                    script.sprite.internal.Bagel.scripts[type][script.script].id -= removed; // The id will have changed for anything after a deleted script
+                                if (removed != 0) {
+                                    if (type == "all") {
+                                        script.sprite.internal.Bagel.scripts[script.script].id -= removed; // The id will have changed for anything after a deleted script
+                                    }
+                                    else {
+                                        script.sprite.internal.Bagel.scripts[type][script.script].id -= removed; // The id will have changed for anything after a deleted script
+                                    }
                                 }
                                 newScripts.push(script); // If it's not null, it can stay
                             }
@@ -7929,6 +7950,14 @@ Bagel = {
                 alpha: {
                     required: false,
                     default: 1,
+                    check: (value, box) => {
+                        if (value > 1) {
+                            box.alpha = 1;
+                        }
+                        else if (value < 0) {
+                            box.alpha = 0;
+                        }
+                    },
                     types: ["number"],
                     description: "The alpha for the bitmap sprite. 1 is fully visible, 0 is completely transparent."
                 }
@@ -8198,7 +8227,7 @@ Bagel = {
                             syntax: Bagel.internal.checks.bitmapSprite
                         });
                     }
-                    box.alpha = Math.max(Math.min(box.alpha, 1), 0);
+
 
                     let renderer = game.internal.renderer;
                     if (game.config.isLoadingScreen) {
@@ -8237,26 +8266,32 @@ Bagel = {
                                 let textureCoords = renderer.textureCoordinates;
 
                                 let i = renderer.bitmapIndexes[id] * 12;
-                                let a = i * 2;
 
-                                vertices[i] = box.x - (box.width / 2);
-                                vertices[i + 1] = box.y - (box.height / 2);
+                                let halfWidth = (box.width / 2);
+                                let halfHeight = (box.height / 2);
+                                let left = box.x - halfWidth;
+                                let top = box.y - halfHeight;
+                                let right = box.x + halfWidth;
+                                let bottom = box.y + halfHeight;
+                                vertices.set([
+                                    left,
+                                    top,
 
-                                vertices[i + 2] = box.x + (box.width / 2);
-                                vertices[i + 3] = vertices[i + 1];
+                                    right,
+                                    top,
 
-                                vertices[i + 4] = vertices[i];
-                                vertices[i + 5] = box.y + (box.height / 2);
+                                    left,
+                                    bottom,
 
+                                    left,
+                                    bottom,
 
-                                vertices[i + 6] = vertices[i];
-                                vertices[i + 7] = vertices[i + 5];
+                                    right,
+                                    top,
 
-                                vertices[i + 8] = vertices[i + 2];
-                                vertices[i + 9] = vertices[i + 1];
-
-                                vertices[i + 10] = vertices[i + 2];
-                                vertices[i + 11] = vertices[i + 5];
+                                    right,
+                                    bottom
+                                ], i);
 
 
                                 let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
@@ -8265,7 +8300,7 @@ Bagel = {
 
 
                                 let texture = renderer.textures[box.image];
-                                let textureId = texture[1];
+                                let textureID = texture[1];
                                 let alpha = box.alpha;
                                 let xZero = texture[2];
                                 let xOne = texture[4];
@@ -8279,37 +8314,37 @@ Bagel = {
                                     yZero = texture[5];
                                     yOne = texture[3];
                                 }
-                                textureCoords[a] = xZero;
-                                textureCoords[a + 1] = yZero;
-                                textureCoords[a + 2] = textureId;
-                                textureCoords[a + 3] = alpha;
+                                textureCoords.set([
+                                    xZero,
+                                    yZero,
+                                    textureID,
+                                    alpha,
 
-                                textureCoords[a + 4] = xOne;
-                                textureCoords[a + 5] = yZero;
-                                textureCoords[a + 6] = textureId;
-                                textureCoords[a + 7] = alpha;
+                                    xOne,
+                                    yZero,
+                                    textureID,
+                                    alpha,
 
-                                textureCoords[a + 8] = xZero;
-                                textureCoords[a + 9] = yOne;
-                                textureCoords[a + 10] = textureId;
-                                textureCoords[a + 11] = alpha;
+                                    xZero,
+                                    yOne,
+                                    textureID,
+                                    alpha,
 
+                                    xZero,
+                                    yOne,
+                                    textureID,
+                                    alpha,
 
-                                textureCoords[a + 12] = xZero;
-                                textureCoords[a + 13] = yOne;
-                                textureCoords[a + 14] = textureId;
-                                textureCoords[a + 15] = alpha;
+                                    xOne,
+                                    yZero,
+                                    textureID,
+                                    alpha,
 
-
-                                textureCoords[a + 16] = xOne;
-                                textureCoords[a + 17] = yZero;
-                                textureCoords[a + 18] = textureId;
-                                textureCoords[a + 19] = alpha;
-
-                                textureCoords[a + 20] = xOne;
-                                textureCoords[a + 21] = yOne;
-                                textureCoords[a + 22] = textureId;
-                                textureCoords[a + 23] = alpha;
+                                    xOne,
+                                    yOne,
+                                    textureID,
+                                    alpha
+                                ], i * 2);
 
                                 renderer.verticesUpdated = true;
                             }
