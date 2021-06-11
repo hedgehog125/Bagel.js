@@ -9,7 +9,12 @@ Should the loading screen use the full resolution? Need to commit to a set resol
 
 Canvas renderer, doesn't support deleting sprites? Snaps to sprite widths and heights weirdly?
 
+maxPossibleFPS seems to be too high compared to the current fps. Test by lagging Bagel.js
+
 == Bugs ==
+Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
+
+
 Pause videos on state change
 
 Resume playing audio from the position it would be in rather than the start. Maybe play muted if no autoplay?
@@ -21,9 +26,12 @@ How is audio stored in PWAs? Is it only saved after it's played once?
 
 Is storing the combined textures as images more efficient when they are deactivated?
 
-= Features =
+= Optimisations =
 Keep textures in single textures unless memory pressure, maybe animated textures should stay longer? Remove explainations on technical details about how the textures work as it's too complicated already.
 
+Use texsubimage2d for updating the parts of textures that were updated. It's also faster even when the whole image needs to be updated. Might make single textures less necessary?
+
+= Features =
 Allow reusing values in plugins from other plugins. Maybe can set all complicated arguments to ".<pluginID>.<...pathThroughPluginObject>" e.g ".Internal.plugin.types.sprites.sprite.listeners.fns.xy". Maybe should be a way to more easilly access functions in other plugins to use yourself.
 
 Allow enabling antialiasing and switching renderers on the fly. Requires reinitialising the webgl context for both
@@ -3455,6 +3463,17 @@ Bagel = {
 
                     Bagel.internal.loadCurrent();
                 };
+                sprite.deleteClones = _ => {
+                    let cloneIDs = [...sprite.cloneIDs];
+                    for (let i in cloneIDs) {
+                        if (cloneIDs[i]) {
+                            let clone = game.get.sprite(cloneIDs[i], true);
+                            if (clone) {
+                                clone.delete();
+                            }
+                        }
+                    }
+                };
             })(sprite);
 
             subFunctions.init(sprite, game, subFunctions);
@@ -3617,6 +3636,8 @@ Bagel = {
 
                             width: game.width,
                             height: game.height,
+                            scaleX: 1,
+                            scaleY: 1,
                             renderWidth: null,
                             renderHeight: null,
 
@@ -5453,44 +5474,36 @@ Bagel = {
                                     let newTextureCoords = new Float32Array(renderer.textureCoordinates.length + (toAdd * 24));
                                     let bitmapIndexes = renderer.bitmapIndexes;
 
+                                    let startI = 0;
+                                    let startC = 0;
                                     let i = 0;
                                     let c = 0;
                                     let removed = 0;
-                                    let deletePositions = {};
                                     while (i < renderer.vertices.length) {
-                                        let id = bitmapIndexes.indexOf(i / 12);
+                                        let id = i / 12;
                                         if (bitmapQueue.delete[id]) {
-                                            deletePositions[i / 12] = true;
-                                            renderer.bitmapIndexes[id] = null;
+                                            newVertices.set(renderer.vertices.slice(startI, i), startC);
+                                            newTextureCoords.set(renderer.textureCoordinates.slice(startI * 2, i * 2), startC * 2);
+
                                             removed++;
                                             i += 12;
+                                            startC = c;
+                                            startI = i;
                                             continue;
                                         }
                                         if (removed != 0) {
-                                            bitmapIndexes[id] -= removed;
+                                            bitmapIndexes[bitmapIndexes.indexOf(id)] -= removed;
                                         }
 
-                                        newVertices.set(renderer.vertices.slice(i, i + 12), c);
                                         c += 12;
                                         i += 12;
                                     }
+                                    newVertices.set(renderer.vertices.slice(startI, i), startC);
+                                    newTextureCoords.set(renderer.textureCoordinates.slice(startI * 2, i * 2), startC * 2);
+
                                     let oldVerticesEnd = c;
-
-                                    i = 0;
-                                    c = 0;
-                                    while (i < renderer.textureCoordinates.length) {
-                                        if (deletePositions[i / 24]) {
-                                            i += 24;
-                                            continue;
-                                        }
-
-                                        newTextureCoords.set(renderer.textureCoordinates.slice(i, i + 24), c);
-                                        c += 24;
-                                        i += 24;
-                                    }
-
-                                    previousCount = c / 24;
-                                    let a = c;
+                                    previousCount = c / 12;
+                                    let a = c * 2;
                                     i = oldVerticesEnd;
                                     c = 0;
                                     let b = 0;
@@ -5603,17 +5616,17 @@ Bagel = {
                                 let queue = renderer.queue.bitmap.layer;
 
 
-                                let vertices = Array.from(renderer.vertices);
-                                let textCoords = Array.from(renderer.textureCoordinates);
-                                let bitmapIndexes = renderer.bitmapIndexes;
-
-                                if (vertices.length == 0 || vertices.length == 12) { // Nothing to change
+                                if (renderer.vertices.length == 0 || renderer.vertices.length == 12) { // Nothing to change
                                     renderer.queue.bitmap.layer = [];
                                     return;
                                 }
 
 
                                 if (queue.length != 0) {
+                                    let vertices = Array.from(renderer.vertices);
+                                    let textCoords = Array.from(renderer.textureCoordinates);
+                                    let bitmapIndexes = renderer.bitmapIndexes;
+
                                     for (let i in queue) {
                                         let queued = queue[i];
                                         if (queued == null) {
@@ -6329,13 +6342,7 @@ Bagel = {
                         me.parent.cloneIDs[me.parent.cloneIDs.indexOf(me.id)] = null;
                         me.parent.cloneIDs = me.parent.cloneIDs.filter(value => value != null);
                     }
-                    else {
-                        for (let i in me.cloneIDs) {
-                            if (me.cloneIDs[i]) {
-                                game.get.sprite(me.cloneIDs[i]).delete();
-                            }
-                        }
-                    }
+                    me.deleteClones();
                 }
             }
         },
@@ -8140,13 +8147,13 @@ Bagel = {
                             if (typeof renderer.bitmapIndexes[id] == "boolean") { // Hasn't been processed yet
                                 let queue = renderer.queue.bitmap.new;
                                 queue[queue.findIndex(value => value && value[1] == id)] = null;
-                                renderer.bitmapIndexes[id] = null;
                                 renderer.queueLengths.add--;
                             }
                             else {
-                                renderer.queue.bitmap.delete[id] = true;
+                                renderer.queue.bitmap.delete[renderer.bitmapIndexes[id]] = true;
                                 renderer.queueLengths.delete++;
                             }
+                            renderer.bitmapIndexes[id] = null;
                         }
                         else {
                             renderer.scaledBitmaps[id] = null;
