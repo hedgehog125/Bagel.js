@@ -12,8 +12,13 @@ Canvas renderer, doesn't support deleting sprites? Snaps to sprite widths and he
 maxPossibleFPS seems to be too high compared to the current fps. Test by lagging Bagel.js
 
 == Bugs ==
+Angles work weirdly, currently not capped properly. Fix cap function. Sprites can render at the wrong angle. Move seems to work
+
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
 
+Send to back can cause a crash in the update bitmap function. Maybe requires combination of it and bringToFront in another sprite?
+
+request doesn't work in sprites without init scripts.
 
 Pause videos on state change
 
@@ -31,7 +36,11 @@ Keep textures in single textures unless memory pressure, maybe animated textures
 
 Use texsubimage2d for updating the parts of textures that were updated. It's also faster even when the whole image needs to be updated. Might make single textures less necessary?
 
+put in front of and behind layer operations. Should also work for groups like clones. Would make layer operations unnecessary a lot of the time. e.g spaceships in front of individual stars in joined together entry
+
 = Features =
+Steps for clones
+
 Allow reusing values in plugins from other plugins. Maybe can set all complicated arguments to ".<pluginID>.<...pathThroughPluginObject>" e.g ".Internal.plugin.types.sprites.sprite.listeners.fns.xy". Maybe should be a way to more easilly access functions in other plugins to use yourself.
 
 Allow enabling antialiasing and switching renderers on the fly. Requires reinitialising the webgl context for both
@@ -247,7 +256,7 @@ Bagel = {
                                                     Bagel.internal.oops(game);
                                                 }
                                                 else {
-                                                    textureFns.new(id, canvas, game);
+                                                    textureFns.new(id, canvas, game, false, "static");
                                                 }
                                                 x++;
                                             }
@@ -434,8 +443,8 @@ Bagel = {
                                                         if (typeof img == "boolean") return ".rerun";
 
                                                         // Update the scale
-                                                        let scaleX = sprite.width / img.width;
-                                                        let scaleY = sprite.height / img.height;
+                                                        let scaleX = Math.abs(sprite.width) / img.width;
+                                                        let scaleY = Math.abs(sprite.height) / img.height;
                                                         sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
                                                     }
                                                     else {
@@ -670,11 +679,12 @@ Bagel = {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
                                             let cache = triggerSprite.internal.cache;
                                             // Update the cached stuff
-                                            let rad = Bagel.maths.degToRad(sprite.angle + 90);
-                                            cache.cos = Math.cos(rad);
+                                            let rad = Bagel.maths.degToRad(sprite.angle);
                                             cache.sin = Math.sin(rad);
+                                            cache.cos = Math.cos(rad);
 
-                                            sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
+                                            // TODO
+                                            //sprite.angle = Bagel.maths.capAngle(sprite.angle); // Make sure it's in range
 
                                             triggerSprite.internal.renderUpdate = true;
                                         }
@@ -1013,11 +1023,12 @@ Bagel = {
                                         set: (sprite, value, property, game, plugin, triggerSprite) => {
                                             let cache = triggerSprite.internal.cache;
                                             // Update the cached stuff
-                                            let rad = Bagel.maths.degToRad(sprite.angle + 90);
-                                            cache.cos = Math.cos(rad);
+                                            let rad = Bagel.maths.degToRad(sprite.angle);
                                             cache.sin = Math.sin(rad);
+                                            cache.cos = Math.cos(rad);
 
-                                            sprite.angle = ((sprite.angle + 180) % 360) - 180; // Make sure it's in range
+                                            // TODO
+                                            //sprite.angle = Bagel.maths.capAngle(sprite.angle); // Make sure it's in range
 
                                             triggerSprite.internal.renderUpdate = true;
                                         }
@@ -1498,6 +1509,12 @@ Bagel = {
                     bagel: {
                         maths: {
                             category: {
+                                capAngle: {
+                                    fn: {
+                                        normal: true,
+                                        fn: deg => Bagel.maths.radToDeg(Bagel.maths.degToRad(deg))
+                                    }
+                                },
                                 radToDeg: {
                                     fn: {
                                         normal: true,
@@ -1515,7 +1532,7 @@ Bagel = {
                                         direction: {
                                             fn: {
                                                 normal: true,
-                                                fn: (x1, y1, x2, y2) => Bagel.maths.radToDeg(Math.atan2(y2 - y1, x2 - x1)) - 90 // gist.github.com/conorbuck/2606166
+                                                fn: (x1, y1, x2, y2) => Bagel.maths.radToDeg(Math.atan2(y2 - y1, x2 - x1)) + 90 // gist.github.com/conorbuck/2606166
                                             }
                                         },
                                         distance: {
@@ -2540,13 +2557,13 @@ Bagel = {
                                 fn: (me, args, game) => {
                                     let cached = me.internal.cache;
                                     if (args.angle == null) {
-                                        me.x -= cached.cos * args.amount;
-                                        me.y -= cached.sin * args.amount;
+                                        me.x += cached.sin * args.amount;
+                                        me.y -= cached.cos * args.amount;
                                     }
                                     else {
-                                        let rad = Bagel.maths.degToRad(args.angle + 90);
-                                        me.x -= Math.cos(rad) * args.amount;
-                                        me.y -= Math.sin(rad) * args.amount;
+                                        let rad = Bagel.maths.degToRad(args.angle);
+                                        me.x += Math.sin(rad) * args.amount;
+                                        me.y -= Math.cos(rad) * args.amount;
                                     }
                                 }
                             }
@@ -2913,7 +2930,11 @@ Bagel = {
                                             let sprites = [args.sprite];
                                             let parent = Bagel.get.sprite(args.sprite, game);
                                             if (args.options.include.clones) {
-                                                sprites = [...sprites, ...parent.cloneIDs];
+                                                sprites.push(...parent.cloneIDs);
+                                                let index = sprites.indexOf(me.id);
+                                                if (index != -1) {
+                                                    sprites.splice(index, 1);
+                                                }
                                             }
 
                                             let passed = args.check == null;
@@ -3214,7 +3235,7 @@ Bagel = {
                         let properties = sprite.internal.Bagel.properties;
                         if (x) {
                             x = properties.x;
-                            let half = (properties.width != null? properties.width : sprite.width) / 2;
+                            let half = Math.abs((properties.width != null? properties.width : sprite.width) / 2);
                             if (! isNaN(half)) {
                                 properties.left = x - half;
                                 properties.right = x + half;
@@ -3222,7 +3243,7 @@ Bagel = {
                         }
                         if (y) {
                             y = properties.y;
-                            let half = (properties.height != null? properties.height : sprite.height) / 2;
+                            let half = Math.abs((properties.height != null? properties.height : sprite.height) / 2);
                             if (! isNaN(half)) {
                                 properties.top = y - half;
                                 properties.bottom = y + half;
@@ -3435,22 +3456,22 @@ Bagel = {
                     let game = parent.game;
                     clone = clone? clone : {};
 
-                    let cloneID = Bagel.internal.findCloneID(parent, game);
                     let spriteID;
                     if (clone.id == null) {
-                        spriteID = parent.id + "#" + cloneID;
+                        spriteID = Bagel.internal.findCloneID(parent, game);
                         clone.id = spriteID;
                     }
                     else {
                         spriteID = clone.id;
                     }
-                    parent.cloneIDs[cloneID] = spriteID;
+
+                    parent.cloneIDs.push(spriteID);
                     parent.cloneCount++;
 
-                    let spriteIndex = Bagel.internal.findSpriteID(game);
+                    let spriteIndex = Bagel.internal.findSpriteIndex(game);
                     clone = Bagel.internal.createSprite(clone, game, parent, "the function \"sprite.clone\"", false, spriteIndex);
 
-                    clone.cloneID = cloneID; // Declare it after creating it so it's not "useless"
+                    clone.cloneID = parent.cloneIDs.length - 1; // Declare it after creating it so it's not "useless"
                     clone.parent = parent; // Same here
                     game.game.sprites[spriteIndex] = clone;
 
@@ -4011,7 +4032,7 @@ Bagel = {
                         game.add = {
                             sprite: (sprite, where="the function Game.add.sprite") => {
                                 where += " -> the first argument";
-                                let spriteIndex = Bagel.internal.findSpriteID(game);
+                                let spriteIndex = Bagel.internal.findSpriteIndex(game);
                                 sprite = Bagel.internal.createSprite(sprite, game, false, where, false, spriteIndex);
                                 game.game.sprites[spriteIndex] = sprite;
 
@@ -5794,8 +5815,8 @@ Bagel = {
                             }
                         },
                         rotateVertices: (vertices, i, angle, cx, cy) => {
-                            let rad = -Bagel.maths.degToRad(angle - 90); // Not really sure why this needs to be a minus, but hey, it works!
-                            let sin = Math.sin(rad);
+                            let rad = Bagel.maths.degToRad(angle - 90);
+                            let sin = -Math.sin(rad);
                             let cos = Math.cos(rad);
 
                             let c = 0;
@@ -6360,8 +6381,8 @@ Bagel = {
                     game.internal.idIndex[me.id] = null;
                     if (me.isClone) {
                         me.parent.cloneCount--;
-                        me.parent.cloneIDs[me.parent.cloneIDs.indexOf(me.id)] = null;
-                        me.parent.cloneIDs = me.parent.cloneIDs.filter(value => value != null);
+                        let index = me.parent.cloneIDs.indexOf(me.id);
+                        me.parent.cloneIDs.splice(index, 1);
                     }
                     me.deleteClones();
                 }
@@ -8014,14 +8035,16 @@ Bagel = {
         },
 
         findCloneID: (sprite, game) => {
-            for (let i in sprite.cloneIDs) {
-                if (sprite.cloneIDs[i] == null) {
-                    return i;
+            let i = 0;
+            while (true) {
+                let id = sprite.id + "#" + i;
+                if (game.internal.idIndex[id] == null) {
+                    return id;
                 }
+                i++;
             }
-            return sprite.cloneIDs.length;
         },
-        findSpriteID: game => {
+        findSpriteIndex: game => {
             for (let i in game.game.sprites) {
                 if (game.game.sprites[i] == null) {
                     return parseInt(i);
@@ -8267,8 +8290,8 @@ Bagel = {
 
                                 let i = renderer.bitmapIndexes[id] * 12;
 
-                                let halfWidth = (box.width / 2);
-                                let halfHeight = (box.height / 2);
+                                let halfWidth = Math.abs(box.width / 2);
+                                let halfHeight = Math.abs(box.height / 2);
                                 let left = box.x - halfWidth;
                                 let top = box.y - halfHeight;
                                 let right = box.x + halfWidth;
@@ -8990,7 +9013,7 @@ Bagel = {
                         }
 
                         let slotGL = slot.canvas.getContext("webgl", settings) || slot.canvas.getContext("experimental-webgl", settings);
-                        if (slotGL.isContextLost()) {
+                        if (slotGL == null || slotGL.isContextLost()) {
                             console.error("Hmm, not sure why this happened but Bagel.js couldn't get a webgl context for a combined texture.");
                             Bagel.internal.oops(game);
                             return false;
@@ -9325,7 +9348,7 @@ Bagel = {
         },
 
         processSpriteRenderOutput: (sprite, output) => {
-            if (output != null) {
+            if (output != null && output !== false) {
                 if (output === true) output = null;
                 sprite.internal.Bagel.renderID = output;
             }
