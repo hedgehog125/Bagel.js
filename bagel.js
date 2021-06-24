@@ -39,6 +39,12 @@ Use texsubimage2d for updating the parts of textures that were updated. It's als
 put in front of and behind layer operations. Should also work for groups like clones. Would make layer operations unnecessary a lot of the time. e.g spaceships in front of individual stars in joined together entry
 
 = Features =
+Change the way setting assets works to make it more restrictive. Maybe assets can only be set if they fetch text and you can skip the fetching by giving it the text.
+
+Bundle and load the default font by default. (It's currently referred to as .Internal.defaultFont)
+
+Change font to the default when bitmap is set to true on a text sprite.
+
 Steps for clones
 
 Allow reusing values in plugins from other plugins. Maybe can set all complicated arguments to ".<pluginID>.<...pathThroughPluginObject>" e.g ".Internal.plugin.types.sprites.sprite.listeners.fns.xy". Maybe should be a way to more easilly access functions in other plugins to use yourself.
