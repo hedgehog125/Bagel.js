@@ -159,12 +159,12 @@ Bagel = {
                             description: "Images give a sprite (only the sprite type though) its appearance. Just set its \"img\" argument to the id of the image you want to use.",
                             init: (asset, ready, game, plugin, index) => {
                                 let img = new Image();
-                                ((img, asset, game) => {
+                                ((img, asset, game, ready) => {
                                     img.onload = _ => {
                                         ready(img);
                                         Bagel.internal.render.texture.new(asset.id, img, game, false, "static");
                                     };
-                                })(img, asset, game);
+                                })(img, asset, game, ready);
                                 img.src = asset.src;
                             },
                             get: "img"
@@ -174,11 +174,11 @@ Bagel = {
                             description: "Sounds can be played by anything. They're played using game.playSound(<id>)",
                             init: (asset, ready, game, plugin, index) => {
                                 let snd = new Audio();
-                                (snd => {
+                                ((snd, ready) => {
                                     snd.onloadedmetadata = _ => {
                                         ready(snd);
                                     };
-                                })(snd);
+                                })(snd, ready);
                                 snd.preload = "metadata";
                                 snd.src = asset.src;
                             },
@@ -269,6 +269,34 @@ Bagel = {
                             },
                             description: "Contains many separate images. Useful for animations.",
                             get: "spritesheet"
+                        },
+                        fonts: {
+                            args: {},
+                            init: (asset, ready, game) => {
+                                let request = fetch(asset.src);
+                                ((asset, game, ready) => {
+                                    request.then(e => e.json().then(asset => {
+                                        let widthTotal = 0;
+                                        let heightTotal = 0;
+                                        let starts = [];
+                                        let position = 0;
+                                        for (let i in asset.widths) {
+                                            starts.push(position);
+                                            widthTotal += asset.widths[i];
+                                            heightTotal += asset.heights[i];
+                                            position += asset.widths[i] * asset.heights[i];
+                                        }
+                                        asset.starts = starts;
+                                        asset.avgWidth = Math.ceil(widthTotal / asset.widths.length);
+                                        asset.avgHeight = Math.ceil(heightTotal / asset.widths.length);
+                                        asset.maxHeight = Math.max(...asset.heights);
+
+                                        ready(asset);
+                                    }));
+                                })(asset, game, ready);
+                            },
+                            description: "For use with \"text\" sprites, generate fonts using Bagel.font.generate.",
+                            get: "font"
                         }
                     },
                     sprites: {
@@ -1297,9 +1325,30 @@ Bagel = {
                                 },
                                 font: {
                                     required: false,
-                                    default: "30px Helvetica",
+                                    check: (value, ob) => {
+                                        if (value === undefined) {
+                                            if (ob.bitmap) {
+                                                ob.font = ".Internal.defaultFont";
+                                            }
+                                            else {
+                                                ob.font = "Arial";
+                                            }
+                                        }
+                                    },
                                     types: ["string"],
-                                    description: "The font to use. Same as ctx.font. e.g \"<textSize>px <font name>\"."
+                                    description: "The name of the font to use. An HTML font if \"bitmap\" is false or a font asset if it's true."
+                                },
+                                size: {
+                                    required: false,
+                                    default: 20,
+                                    types: ["number"],
+                                    description: "The font size in game pixels."
+                                },
+                                bitmap: {
+                                    required: false,
+                                    default: false,
+                                    types: ["boolean"],
+                                    description: "If HTML (false) or bitmap (true) fonts should be used."
                                 },
                                 colour: {
                                     required: false,
@@ -1334,6 +1383,12 @@ Bagel = {
                                     mode: "replace"
                                 },
                                 font: {
+                                    mode: "replace"
+                                },
+                                size: {
+                                    mode: "replace"
+                                },
+                                bitmap: {
                                     mode: "replace"
                                 },
                                 colour: {
@@ -1402,6 +1457,12 @@ Bagel = {
                                     font: {
                                         set: "rerender"
                                     },
+                                    size: {
+                                        set: "rerender"
+                                    },
+                                    bitmap: {
+                                        set: "rerender"
+                                    },
                                     colour: {
                                         set: "rerender"
                                     }
@@ -1423,7 +1484,7 @@ Bagel = {
                                 plugin.vars.sprite.updateAnchors(sprite, true, true);
                             },
                             render: {
-                                init: sprite => {
+                                init: (sprite, newBitmap, game, plugin) => {
                                     let internal = sprite.internal;
                                     internal.canvas = document.createElement("canvas");
                                     internal.canvas.width = 1;
@@ -1436,32 +1497,110 @@ Bagel = {
                                         let last = sprite.internal.last;
                                         let canvas = sprite.internal.canvas;
                                         let ctx = sprite.internal.ctx;
-
-                                        ctx.font = sprite.font;
-                                        let size = (ctx.measureText("M").width * 1.5) * scaleY;
-                                        canvas.width = ctx.measureText(sprite.text).width * scaleX; // It's not affected by scaling
-                                        //let size = parseInt(sprite.font.split(" ")[0].split("px")[0]);
-                                        canvas.height = Math.ceil(size);
-                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                                        ctx.font = sprite.font;
-                                        ctx.textBaseline = "middle";
                                         ctx.fillStyle = sprite.colour;
+                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                        if (sprite.bitmap) {
+                                            let asset = sprite.game.get.asset.font(sprite.font);
+                                            let characterSet = plugin.vars.font.characterSets[asset.widths.length];
 
-                                        ctx.scale(scaleX, scaleY);
-                                        ctx.fillText(sprite.text, 0, (canvas.height / 2) / scaleY);
-                                        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
+                                            let indexes = [];
+                                            let totalWidth = 0;
+                                            let text = sprite.text.toLowerCase();
+                                            for (let i in text) {
+                                                let character = text[i];
+                                                if (character == " ") {
+                                                    totalWidth += asset.avgWidth;
+                                                    indexes.push(-1);
+                                                }
+                                                else {
+                                                    let index = characterSet.indexOf(character);
+                                                    if (index == -1) {
+                                                        console.error(
+                                                            "Oh no! The text sprite "
+                                                            + JSON.stringify(sprite.id)
+                                                            + " tried to use the character "
+                                                            + JSON.stringify(character)
+                                                            + ". The "
+                                                            + (sprite.font == ".Internal.defaultFont"? "default font" : JSON.stringify(sprite.font))
+                                                            + " only supports these characters:\n" + characterSet
+                                                        );
+                                                        Bagel.internal.oops(sprite.game);
+                                                    }
+                                                    indexes.push(index);
+                                                    totalWidth += asset.widths[index] + Math.ceil(asset.avgWidth / 4);
+                                                }
+                                            }
 
-                                        last.scaleX = scaleX;
-                                        last.scaleY = scaleY;
-                                        sprite.width = Math.round(canvas.width / scaleX);
-                                        sprite.height = Math.round(canvas.height / scaleY);
+                                            canvas.width = totalWidth * 2;
+                                            canvas.height = asset.maxHeight * 2;
+                                            let x = 0;
+                                            for (let i in text) {
+                                                let character = text[i];
+                                                if (character == " ") {
+                                                    x += asset.avgWidth * 2;
+                                                }
+                                                else {
+                                                    let index = indexes[i];
+                                                    let c = asset.starts[index];
+                                                    let width = asset.widths[index];
+                                                    let height = asset.heights[index];
+                                                    let a = 0;
+                                                    let len = width * height;
+
+                                                    let startY = (asset.maxHeight / 2) - (height / 2);
+                                                    if (plugin.vars.font.top[character]) {
+                                                        startY = 0;
+                                                    }
+                                                    if (plugin.vars.font.bottom[character]) {
+                                                        startY = asset.maxHeight - height;
+                                                    }
+
+                                                    while (a < len) {
+                                                        if (asset.pixels[c] == "1") {
+                                                            ctx.fillRect(
+                                                                ((a % width) * 2) + x,
+                                                                Math.floor((Math.floor(a / width) + startY) * 2),
+                                                                2, 2
+                                                            );
+                                                        }
+                                                        a++;
+                                                        c++;
+                                                    }
+
+                                                    x += (asset.widths[index] + Math.ceil(asset.avgWidth / 4)) * 2;
+                                                }
+                                            }
+
+                                            //ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+                                            let scale = (sprite.size / ((asset.avgWidth + asset.avgHeight) / 2)) / 2;
+                                            sprite.width = canvas.width * scale;
+                                            sprite.height = canvas.height * scale;
+                                        }
+                                        else {
+                                            ctx.font = sprite.size + "px " + sprite.font;
+                                            let size = (ctx.measureText("M").width * 1.5) * scaleY;
+                                            canvas.width = ctx.measureText(sprite.text).width * scaleX; // It's not affected by scaling
+                                            canvas.height = Math.ceil(size);
+                                            ctx.font = sprite.size + "px " + sprite.font;
+
+                                            ctx.textBaseline = "middle";
+                                            ctx.scale(scaleX, scaleY);
+                                            ctx.fillText(sprite.text, 0, (canvas.height / 2) / scaleY);
+                                            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
+
+                                            last.scaleX = scaleX;
+                                            last.scaleY = scaleY;
+                                            sprite.width = Math.round(canvas.width / scaleX);
+                                            sprite.height = Math.round(canvas.height / scaleY);
+                                        }
 
                                         if (canvas.width != 0) { // No text, having a texture this small would cause an error
                                             Bagel.internal.render.texture.update(sprite.internal.canvasID, canvas, sprite.game);
                                         }
                                         sprite.internal.renderUpdate = true;
                                     };
-                                    internal.prerender(sprite, sprite.game.internal.renderer.scaleX, sprite.game.internal.renderer.scaleY);
+                                    internal.prerender(sprite, sprite.game.internal.renderer.scaleX, sprite.game.internal.renderer.scaleY, plugin);
                                 },
                                 onVisible: (sprite, newBitmap) => {
                                     sprite.internal.renderUpdate = false;
@@ -1482,9 +1621,9 @@ Bagel = {
                                     let scaleY = sprite.game.internal.renderer.scaleY;
 
                                     let internal = sprite.internal;
-                                    if (internal.needsRerender || internal.last.scaleX != scaleX || internal.last.scaleY != scaleY) {
+                                    if (internal.needsRerender || ((! sprite.bitmap) && (internal.last.scaleX != scaleX || internal.last.scaleY != scaleY))) {
                                         internal.needsRerender = false;
-                                        internal.prerender(sprite, scaleX, scaleY);
+                                        internal.prerender(sprite, scaleX, scaleY, plugin);
                                         plugin.vars.sprite.updateAnchors(sprite, true, true);
                                     }
                                     if (internal.renderUpdate) {
@@ -2252,6 +2391,126 @@ Bagel = {
                                     }
                                 }
                             }
+                        },
+                        font: {
+                            category: {
+                                create: {
+                                    fn: {
+                                        fn: args => {
+                                            const loaded = img => {
+                                                let canvas = document.createElement("canvas");
+                                                canvas.width = img.width;
+                                                canvas.height = img.height;
+                                                let ctx = canvas.getContext("2d");
+                                                ctx.drawImage(img, 0, 0);
+
+                                                let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                                                let characterHeights = [];
+                                                let lastY = 0;
+                                                let characterCount = 0;
+                                                let i = 0;
+                                                while (i < data.data.length) {
+                                                    let red = data.data[i] == 255 && data.data[i + 3] == 255;
+                                                    let lastRow = i + (data.width * 4) >= data.data.length;
+                                                    if (red || lastRow) {
+                                                        let y = Math.floor((i / 4) / data.width);
+                                                        characterHeights.push((y - lastY) + lastRow);
+                                                        lastY = y + 1;
+                                                        characterCount++;
+                                                    }
+                                                    i += data.width * 4;
+                                                }
+
+                                                let characterWidths = [];
+                                                let pixels = "";
+                                                let newCharacter;
+                                                let width = 0;
+                                                let height = 0;
+                                                let characterID = 0;
+                                                i = 0;
+                                                lastY = 0;
+                                                while (i < data.data.length) {
+                                                    let x = (i / 4) % data.width;
+                                                    y = Math.floor((i / 4) / data.width);
+
+                                                    if (y == lastY) {
+                                                        width++;
+                                                    }
+                                                    else {
+                                                        if (x == width) {
+                                                            i = (y + 1) * (data.width * 4);
+                                                            continue;
+                                                        }
+                                                    }
+
+
+                                                    if (data.data[i + 3] == 0) { // Transparent
+                                                        pixels += "0";
+                                                    }
+                                                    else {
+                                                        if (data.data[i] == 255) { // Red
+                                                            if (x == 0) {
+                                                                characterWidths.push(width);
+                                                                width = 0;
+                                                                lastY = y + 1;
+                                                                i += data.width * 4; // Skip over the separator row
+                                                            }
+                                                            else {
+                                                                i = (Math.floor((i / 4) / data.width) + 1) * (data.width * 4);
+                                                                width--;
+                                                            }
+                                                            continue;
+                                                        }
+                                                        else {
+                                                            pixels += "1";
+                                                        }
+                                                    }
+
+                                                    i += 4;
+                                                }
+                                                characterWidths.push(width);
+
+                                                let result = JSON.stringify({
+                                                    widths: characterWidths,
+                                                    heights: characterHeights,
+                                                    pixels: pixels
+                                                });
+                                                if (args.download) {
+                                                    Bagel.download(result, "font.bagelFont");
+                                                }
+                                                return result;
+                                            }
+                                            if (args.img === undefined) {
+                                                Bagel.upload(src => {
+                                                    let img = new Image();
+                                                    img.onload = event => {
+                                                        loaded(event.target);
+                                                    }
+                                                    img.src = src;
+                                                });
+                                                console.log("Click on the game to open the file picker.");
+                                            }
+                                            else {
+                                                return loaded(args.img);
+                                            }
+                                        },
+                                        args: {
+                                            img: {
+                                                required: false,
+                                                types: ["object"],
+                                                description: "The image of the new font. Either a HTML image object or blank to upload one."
+                                            },
+                                            download: {
+                                                required: false,
+                                                default: true,
+                                                types: ["boolean"],
+                                                description: "If the resulting font file should be downloaded or only returned as a string."
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     },
                     game: {
@@ -2983,6 +3242,11 @@ Bagel = {
                                     Bagel.get.asset.img(sprite.img, game, true); // Requesting it will trigger loading. The check argument is used because it could be a texture rather than an image asset
                                 }
                             }
+                            if (sprite.type == "text") {
+                                if (sprite.bitmap) {
+                                    game.get.asset.font(sprite.font);
+                                }
+                            }
                             if (sprite.request) {
                                 if (sprite.request[state]) {
                                     for (let type in sprite.request[state]) {
@@ -3249,6 +3513,21 @@ Bagel = {
                                 properties.bottom = y + half;
                             }
                         }
+                    }
+                },
+                font: {
+                    characterSets: {
+                        "65": "abcdefghijklmnopqrstuvwxyz0123456789?!£$%^&*()+-=:;'\".,/\\><~|[]{}"
+                    },
+                    top: {
+                        "'": 1,
+                        "\"": 1,
+                        "^": 1,
+                        "*": 1
+                    },
+                    bottom: {
+                        ".": 1,
+                        ",": 1
                     }
                 }
             }
@@ -4986,6 +5265,7 @@ Bagel = {
                 triggerListeners: (sprite, game) => {
                     let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
                     let plugin = handler.internal.plugin;
+                    if (game.error) return;
 
                     let noReruns = true;
                     if (handler.listeners.trigger) { // Trigger all the listeners to initialise them
@@ -6707,7 +6987,7 @@ Bagel = {
                                     default: "dynamic",
                                     check: value => {
                                         if (! ["preload", "dynamic"].includes(value)) {
-                                            return "Oh no! This only accepts \"preload\" and \"function\" but you used " + JSON.stringify(value) + ".";
+                                            return "Oh no! This only accepts \"preload\" and \"dynamic\" but you used " + JSON.stringify(value) + ".";
                                         }
                                     },
                                     types: ["string"],
@@ -8032,6 +8312,162 @@ Bagel = {
                 i++;
             }
             return newEntity;
+        },
+
+        compressNumbers: (numbers, mins, maxes) => {
+            let dimensions = numbers[0].length;
+
+            if (! mins) {
+                mins = new Array(dimensions).fill(Infinity);
+                maxes = new Array(dimensions).fill(-Infinity);
+                for (let i in numbers) {
+                    for (let c in numbers[i]) {
+                        if (numbers[i][c] > maxes[c]) {
+                            maxes[c] = numbers[i][c];
+                        }
+                        if (numbers[i][c] < mins[c]) {
+                            mins[c] = numbers[i][c];
+                        }
+                    }
+                }
+            }
+
+            let totalRange = 1;
+            let i = 0;
+            while (i < dimensions) {
+                if (mins[i] == maxes[i]) {
+                    if (mins[i] == 0) {
+                        maxes[i]++;
+                    }
+                    else {
+                        mins[i]--;
+                    }
+                }
+                totalRange *= (maxes[i] - mins[i]) + 1;
+                i++;
+            }
+
+            let tmp = totalRange;
+            let bytes = 1;
+            let counter = 0;
+            while (true) {
+                counter++;
+                if (counter == numbers.length) {
+                    break;
+                }
+                if (tmp == Math.pow(128, bytes)) {
+                    break;
+                }
+                tmp *= totalRange;
+                if (tmp > Math.pow(128, bytes)) {
+                    if (bytes == 4) {
+                        break;
+                    }
+                    bytes++;
+                }
+            }
+
+
+            characters = "";
+            i = 0;
+            let c, a, b, value, total;
+            while (i < numbers.length) {
+                c = 0;
+                while (c < counter) {
+                    if (c % (counter / bytes) == 0) {
+                        value = 0;
+                        total = 1;
+                    }
+                    a = 0;
+                    while (a < dimensions) {
+                        value += (numbers[i][a] - mins[a]) * total;
+                        total *= (maxes[a] - mins[a]) + 1;
+                        a++;
+                    }
+                    i++;
+                    c++;
+                    if (c != 0 && c % (counter / bytes) == 0 || i == numbers.length) {
+                        b = 0;
+                        while (b < bytes) {
+                            tmp = Math.pow(128, (bytes - b) - 1);
+                            characters += String.fromCharCode(Math.floor(value / tmp));
+                            value %= tmp;
+                            b++;
+                        }
+                        if (i == numbers.length) {
+                            break;
+                        }
+                    }
+                }
+            }
+            return [characters, mins, maxes, numbers.length];
+        },
+        decompressNumbers: (characters, mins, maxes, length) => {
+            let dimensions = mins.length;
+
+            let totalRange = 1;
+            let i = 0;
+            while (i < dimensions) {
+                totalRange *= (maxes[i] - mins[i]) + 1;
+                i++;
+            }
+
+            let tmp = totalRange;
+            let bytes = 1;
+            let counter = 0;
+            while (true) {
+                counter++;
+                if (counter == length) {
+                    break;
+                }
+                if (tmp == Math.pow(128, bytes)) {
+                    break;
+                }
+                tmp *= totalRange;
+                if (tmp > Math.pow(128, bytes)) {
+                    if (bytes == 4) {
+                        break;
+                    }
+                    bytes++;
+                }
+            }
+
+            let divisions = [1];
+            let total = 1;
+            i = 0;
+            while (i < dimensions * counter) {
+                total *= (maxes[i % maxes.length] - mins[i % mins.length]) + 1;
+                divisions.push(total);
+                i++;
+            }
+            divisions.pop();
+            divisions.reverse();
+
+            let numbers = [];
+            let c, a, dimension;
+            i = 0;
+            while (i < characters.length) {
+                total = 0;
+                c = 0;
+                while (c < bytes) {
+                    total += characters.charCodeAt(i) * Math.pow(128, (bytes - c) - 1);
+                    c++;
+                    i++;
+                }
+                a = 0;
+                while (a < divisions.length) {
+                    dimension = (dimensions - (a % dimensions)) - 1;
+                    if (dimension == dimensions - 1) {
+                        numbers.push([]);
+                    }
+                    numbers[numbers.length - 1].push(Math.floor(total / divisions[a]) + mins[dimension]);
+                    total %= divisions[a];
+                    a++;
+                }
+            }
+            numbers.reverse();
+            numbers.splice(length, numbers.length - length);
+            return numbers;
         },
 
         findCloneID: (sprite, game) => {

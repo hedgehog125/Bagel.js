@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        Bitmap text example
+    </title>
+</head>
+<body bgColor="blue">
+    <p id="debug"></p>
+</body>
+
+<script src="../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "game",
+    state: "game",
+    game: {
+        assets: {
+            fonts: [
+                {
+                    id: "Basic",
+                    src: "../assets/fonts/default.bagelFont"
+                }
+            ],
+            snds: []
+        },
+        sprites: [
+            {
+                id: "Text",
+                type: "text",
+                text: "",
+                vars: {
+                    texts: [
+                        "abcdefghijklmnopqrstuvwxyz0123456789?!£$%^&*()+-=:;'\".,/\\><~|[]{}",
+                        "Hello world",
+                        "Example of colons: here",
+                        "^-^"
+                    ]
+                },
+                bitmap: true,
+                font: "Basic",
+                size: 12,
+                scripts: {
+                    init: [
+                        {
+                            code: me => {
+                                me.vars.textID = -1;
+                                me.vars.tick = 0;
+                            },
+                            stateToRun: "game"
+                        }
+                    ],
+                    main: [
+                        {
+                            code: me => {
+                                if (me.vars.tick == 0) {
+                                    me.vars.textID++;
+                                    if (me.vars.textID == me.vars.texts.length) {
+                                        me.vars.textID = 0;
+                                    }
+                                    me.text = me.vars.texts[me.vars.textID];
+                                    me.vars.tick = 120;
+                                }
+                                me.vars.tick--;
+                            },
+                            stateToRun: "game"
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    width: 800,
+    height: 450
+});
+
+</script>
