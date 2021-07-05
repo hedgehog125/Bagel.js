@@ -33,10 +33,7 @@ game = Bagel.init({
                 scripts: {
                     init: [
                         {
-                            code: me => {
-                                me.x = game.width / 2;
-                                me.y = game.height / 2;
-                            },
+                            code: null,
                             stateToRun: "game"
                         }
                     ],
@@ -51,9 +48,7 @@ game = Bagel.init({
                     ]
                 },
                 img: "Bagel",
-                scale: 5,
-                x: 0,
-                y: 0
+                scale: 5
             }
         ]
     },
