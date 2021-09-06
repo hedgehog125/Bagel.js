@@ -21,8 +21,7 @@ game = Bagel.init({
                     id: "Bagel",
                     src: "../assets/imgs/bagel.png"
                 }
-            ],
-            snds: []
+            ]
         },
         sprites: [
             {
@@ -55,5 +54,43 @@ game = Bagel.init({
     width: 800,
     height: 450,
 });
+
+/*
+let game = Bagel.init({
+    id: "game",
+    state: "game",
+    width: 800,
+    height: 450
+});
+game.add.asset.img({
+    id: "Bagel",
+    src: "asset/imgs/bagel.png"
+});
+game.add.sprite({
+    id: "Bagel",
+    vars: {
+        debugDisplay: document.getElementById("debug")
+    },
+    scripts: {
+        init: [
+            {
+                code: null,
+                stateToRun: "game"
+            }
+        ],
+        main: [
+            {
+                code: me => {
+                    me.vars.debugDisplay.innerHTML = "FPS: " + game.currentFPS;
+                    me.angle++;
+                },
+                stateToRun: "game"
+            }
+        ]
+    },
+    img: "Bagel",
+    scale: 5
+});
+*/
 
 </script>

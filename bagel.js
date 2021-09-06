@@ -10,6 +10,10 @@ Should the loading screen use the full resolution? Need to commit to a set resol
 Canvas renderer, doesn't support deleting sprites? Snaps to sprite widths and heights weirdly?
 
 == Bugs ==
+Creating a sprite once the game has loaded with an image that's already loaded can cause it to wait for it to load. The listener logic isn't quite finished?
+
+Change WebGL rounding to match canvas <==========
+
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
 
 Send to back can cause a crash in the update bitmap function. Maybe requires combination of it and bringToFront in another sprite?
@@ -58,6 +62,8 @@ Auto skip mode
 Include assets loaded in HTML on the current page when generating workers. Especially script tags
 
 Drop texture contexts when they aren't being used for more than a few seconds
+
+Alternative things to reduce boilerplate but possibly increase it for large projects. e.g src for sprite img argument (creates it as an asset), init and main functions which ignore state. (only 1, not an array). game.state should have a default.
 
 Whole number scaling mode for games?
 
@@ -153,7 +159,7 @@ Bagel = {
         plugin: { // The built-in plugin
             info: {
                 id: "Internal",
-                description: "The built-in plugin, adds an image based sprite type, a canvas and a renderer. Also contains some useful methods.",
+                description: "The built-in plugin, adds an image based sprite type, a canvas and a text type. Also contains some useful methods.",
             },
             plugin: {
                 types: {
@@ -169,8 +175,14 @@ Bagel = {
                                         Bagel.internal.render.texture.new(asset.id, img, game, false, "static");
                                     };
                                 })(img, asset, game, ready);
-                                img.src = asset.src;
+                                if (asset.webP && Bagel.device.is.webPSupported) {
+                                    img.src = asset.webP;
+                                }
+                                else {
+                                    img.src = asset.src;
+                                }
                             },
+                            hrefArgs: ["webP"],
                             get: "img"
                         },
                         snds: {
@@ -184,8 +196,14 @@ Bagel = {
                                     };
                                 })(snd, ready);
                                 snd.preload = "metadata";
-                                snd.src = asset.src;
+                                if (asset.ogg && Bagel.device.is.oggSupported) {
+                                    snd.src = asset.ogg;
+                                }
+                                else {
+                                    snd.src = asset.src;
+                                }
                             },
+                            hrefArgs: ["ogg"],
                             get: "snd",
                             forcePreload: true // Only the metadata is loaded anyway
                         },
@@ -361,6 +379,7 @@ Bagel = {
                                 },
                                 scale: {
                                     required: false,
+                                    default: 1,
                                     types: ["number"],
                                     description: "The scale of the sprite. If both the width and height are unspecified, the sprite width and height are set to the image width and height multiplied by the scale."
                                 },
@@ -465,7 +484,7 @@ Bagel = {
                                         return "Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                        if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first
+                                        if (! game.loaded) { // The game needs to have loaded first
                                             return ".rerun";
                                         }
 
@@ -616,6 +635,7 @@ Bagel = {
                                     img: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                             if (! initialTrigger) {
+                                                triggerSprite.internal.imgWaiting = true;
                                                 if (value) {
                                                     let img = Bagel.get.asset.img(value, triggerSprite.game, true);
                                                     if (typeof img == "boolean") {
@@ -638,6 +658,7 @@ Bagel = {
                                                     let scale = sprite.scale;
                                                     triggerSprite.width = img.width * scale;
                                                     triggerSprite.height = img.height * scale;
+                                                    triggerSprite.internal.imgWaiting = false;
                                                 }
                                                 triggerSprite.internal.renderUpdate = true;
                                             }
@@ -651,57 +672,40 @@ Bagel = {
                                     },
                                     scale: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (value == null) {
-                                                if (sprite.width || sprite.height) {
+                                            if (initialTrigger) {
+                                                if (sprite.width != null || sprite.height != null) {
+                                                    return; // Ignore scale
+                                                }
+                                            }
+                                            if (! game.loaded) return ".rerun";
+
+
+                                            if (typeof value == "number") {
+                                                if (sprite.img) {
                                                     let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
                                                     if (! img) {
                                                         img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
                                                     }
-                                                    if (img) {
-                                                        if (typeof img == "boolean") return ".rerun";
+                                                    if (! img) {
+                                                        return "Hmm, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + " (Sprite.img must be set in order to change the sprite scale). Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                                    }
+                                                    if (typeof img == "boolean") return ".rerun";
 
-                                                        let scaleX = sprite.width / img.width;
-                                                        let scaleY = sprite.height / img.height;
-                                                        sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
-                                                    }
-                                                    else {
-                                                        return "Huh, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + " (Sprite.img must be set in order to change the sprite scale). Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
-                                                    }
+                                                    // Update the scale
+                                                    sprite.width = img.width * value;
+                                                    sprite.height = img.height * value;
                                                 }
                                                 else {
-                                                    sprite.scale = 1;
+                                                    sprite.width = 1;
+                                                    sprite.height = 1;
                                                 }
                                             }
                                             else {
-                                                if ((! game.loaded) || initialTrigger) {
-                                                    return ".rerun";
-                                                }
-
-                                                if (typeof value == "number") {
-                                                    if (sprite.img) {
-                                                        let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
-                                                        if (! img) {
-                                                            img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
-                                                        }
-                                                        if (! img) {
-                                                            return "Hmm, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + " (Sprite.img must be set in order to change the sprite scale). Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
-                                                        }
-                                                        if (typeof img == "boolean") return ".rerun";
-
-                                                        // Update the scale
-                                                        sprite.width = img.width * value;
-                                                        sprite.height = img.height * value;
-                                                    }
-                                                    else {
-                                                        sprite.width = 1;
-                                                        sprite.height = 1;
-                                                    }
-                                                }
-                                                else {
-                                                    return "Erm, this can only be a number. In the sprite " + JSON.stringify(triggerSprite.id) + ".scale. You tried to set it to " + JSON.stringify(value) + ".";
-                                                }
+                                                return "Erm, this can only be a number. In the sprite " + JSON.stringify(triggerSprite.id) + ".scale. You tried to set it to " + JSON.stringify(value) + ".";
                                             }
-                                            triggerSprite.internal.renderUpdate = true;
+                                            if (! initialTrigger) {
+                                                triggerSprite.internal.renderUpdate = true;
+                                            }
                                         }
                                     },
                                     alpha: {
@@ -740,12 +744,25 @@ Bagel = {
                                     collision: null
                                 };
                                 sprite.internal.cache = {};
+                                sprite.internal.imgWaiting = true;
                                 plugin.vars.sprite.updateAnchors(sprite, true, true);
+
+                                let properties = sprite.internal.Bagel.properties;
+                                let specified = (properties.width != null) + (properties.height != null);
+                                if (specified == 1) {
+                                    console.error("Oh no! You only specified one of the dimensions for this sprite. You need to specifiy both unless you set the \"scale\" attribute instead.");
+                                    Bagel.internal.oops(game);
+                                }
+                                else if (specified == 2) {
+                                    properties.scale = ((properties.width / img.width) + (properties.height / img.width)) / 2;
+                                }
+
+                                // TODO: initially setting scale. Finish tidying up the width, height, scale and maybe XY setting logic <===============
                             },
                             render: {
                                 onVisible: (sprite, newBitmap) => {
                                     sprite.internal.renderUpdate = false;
-                                    if (sprite.img) {
+                                    if (! sprite.internal.imgWaiting) {
                                         return newBitmap({
                                             x: sprite.x,
                                             y: sprite.y,
@@ -762,7 +779,10 @@ Bagel = {
                                     if (sprite.internal.renderUpdate) {
                                         sprite.internal.renderUpdate = false;
 
-                                        if (sprite.img) {
+                                        if (sprite.internal.imgWaiting) {
+                                            return deleteBitmap(sprite.internal.Bagel.renderID, sprite.game);
+                                        }
+                                        else {
                                             return updateBitmap(sprite.internal.Bagel.renderID, {
                                                 x: sprite.x,
                                                 y: sprite.y,
@@ -772,9 +792,6 @@ Bagel = {
                                                 rotation: sprite.angle,
                                                 alpha: sprite.alpha
                                             }, sprite.game, false);
-                                        }
-                                        else {
-                                            return deleteBitmap(sprite.internal.Bagel.renderID, sprite.game);
                                         }
                                     }
                                 }
@@ -1465,13 +1482,24 @@ Bagel = {
                                         set: "rerender"
                                     },
                                     font: {
-                                        set: "rerender"
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! game.get.asset.font(value, true)) {
+                                                return "Huh, the font " + JSON.stringify(value) + " doesn't seem to exist.";
+                                            }
+                                            if (! initialTrigger) {
+                                                triggerSprite.internal.needsRerender = true;
+                                            }
+                                        }
                                     },
                                     size: {
                                         set: "rerender"
                                     },
                                     bitmap: {
-                                        set: "rerender"
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (! initialTrigger) {
+                                                triggerSprite.internal.needsRerender = true;
+                                            }
+                                        }
                                     },
                                     colour: {
                                         set: "rerender"
@@ -1507,15 +1535,19 @@ Bagel = {
                                 },
                                 onVisible: (sprite, newBitmap) => {
                                     sprite.internal.renderUpdate = false;
-                                    return newBitmap({
-                                        x: sprite.x,
-                                        y: sprite.y,
-                                        width: sprite.width,
-                                        height: sprite.height,
-                                        image: sprite.internal.canvasID,
-                                        rotation: 90,
-                                        alpha: sprite.alpha
-                                    }, sprite.game, false);
+                                    if (sprite.bitmap) {
+                                        if (! sprite.game.get.asset.font(sprite.font)) {
+                                            return newBitmap({
+                                                x: sprite.x,
+                                                y: sprite.y,
+                                                width: sprite.width,
+                                                height: sprite.height,
+                                                image: sprite.internal.canvasID,
+                                                rotation: 90,
+                                                alpha: sprite.alpha
+                                            }, sprite.game, false);
+                                        }
+                                    }
                                 },
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
                                 whileVisible: (sprite, updateBitmap, newBitmap, deleteBitmap, game, plugin) => {
@@ -1715,22 +1747,22 @@ Bagel = {
                                             manifest: {
                                                 required: false,
                                                 types: ["string"],
-                                                description: "The src of the manifest. Generate one using Bagel.pwa.generate.manifest."
+                                                description: "The href of the manifest. Generate one using Bagel.pwa.generate.manifest."
                                             },
                                             debugManifest: {
                                                 required: false,
                                                 types: ["string"],
-                                                description: "The src of your debug manifest. It allows you to test your PWA without putting it on a production server. (don't test things on production! :P)"
+                                                description: "The href of your debug manifest. It allows you to test your PWA without putting it on a production server. (don't test things on production! :P)"
                                             },
                                             versions: {
                                                 required: false,
                                                 types: ["string"],
-                                                description: "The src of the version JSON file. Generate versions using Bagel.pwa.generate.version."
+                                                description: "The href of the version JSON file. Generate versions using Bagel.pwa.generate.version."
                                             },
                                             version: {
                                                 required: false,
                                                 types: ["string"],
-                                                description: "The src of the version file (the one that contains the latest version name). Generate versions using Bagel.pwa.generate.version."
+                                                description: "The href of the version file (the one that contains the latest version name). Generate versions using Bagel.pwa.generate.version."
                                             },
                                             versionStorageName: {
                                                 required: false,
@@ -1789,7 +1821,7 @@ Bagel = {
                                             if (args.manifest) {
                                                 let manifest = args.debug? args.debugManifest : args.manifest;
                                                 if (args.debugManifest == null) {
-                                                    console.warn("No debug manifest specified. One should have been generated by Bagel.pwa.generate.manifest. Once you've got it, link it to your game by setting the \"debugManifest\" argument in this function to its src.");
+                                                    console.warn("No debug manifest specified. One should have been generated by Bagel.pwa.generate.manifest. Once you've got it, link it to your game by setting the \"debugManifest\" argument in this function to its href.");
                                                 }
 
                                                 if (args.debugManifest || (! args.debug)) {
@@ -1909,7 +1941,7 @@ Bagel = {
                                                     icons: {
                                                         required: true,
                                                         types: ["string"],
-                                                        description: "The src of the folder containing the icons. Generate them with Bagel.pwa.generate.icons."
+                                                        description: "The href of the folder containing the icons. Generate them with Bagel.pwa.generate.icons."
                                                     },
                                                     extraFiles: {
                                                         required: true,
@@ -1925,23 +1957,29 @@ Bagel = {
                                                         required: false,
                                                         default: "manifest.json",
                                                         types: ["string"],
-                                                        description: "The src of your manifest or what will be the src when the website is properly online."
+                                                        description: "The href of your manifest or what will be the href when the website is properly online."
                                                     },
                                                     worker: {
                                                         required: false,
                                                         default: "worker.js",
                                                         types: ["string"],
-                                                        description: "The file name for the worker JavaScript file. Determines the name when it's downloaded but also the src of the file so it can be cached."
+                                                        description: "The file name for the worker JavaScript file. Determines the name when it's downloaded but also the href of the file so it can be cached."
                                                     }
                                                 },
-                                                fn: args => {
+                                                fn: (args, game) => {
                                                     let toCache = args.extraFiles;
+                                                    let assetJSONs = game.internal.combinedPlugins.types.assets;
                                                     for (let assetType in game.game.assets) {
-                                                        for (let i in game.game.assets[assetType]) {
-                                                            let src = game.game.assets[assetType][i].src;
-                                                            let protocol = src.split(":")[0];
-                                                            if (protocol != "data" && protocol != "blob") { // Data url, don't cache
-                                                                toCache.push(src);
+                                                        let assets = game.game.assets[assetType];
+                                                        for (let i in assets) {
+                                                            for (let c in assetJSONs[assetType].hrefArgs) {
+                                                                let src = assets[i][assetJSONs[assetType].hrefArgs[c]];
+                                                                if (src != null) {
+                                                                    let protocol = src.split(":")[0];
+                                                                    if (protocol != "data" && protocol != "blob") { // Data url, don't cache
+                                                                        toCache.push(src);
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -3439,7 +3477,6 @@ Bagel = {
                         "_": 1
                     },
                     prerender: (sprite, scaleX, scaleY, plugin) => {
-                        let last = sprite.internal.last;
                         let canvas = sprite.internal.canvas;
                         let ctx = sprite.internal.ctx;
                         ctx.fillStyle = sprite.colour;
@@ -3533,6 +3570,7 @@ Bagel = {
                         sprite.height = canvas.height * scale;
                     },
                     prerenderNonBitmap: (sprite, scaleX, scaleY, canvas, ctx) => {
+                        let last = sprite.internal.last;
                         ctx.font = sprite.size + "px " + sprite.font;
                         let size = (ctx.measureText("M").width * 1.5) * scaleY;
                         canvas.width = ctx.measureText(sprite.text).width * scaleX; // It's not affected by scaling
@@ -3709,7 +3747,9 @@ Bagel = {
             current.plugin = handler.internal.plugin;
 
             if (! noCheck) {
+                current.pluginProxy = true;
                 sprite = subFunctions.check(sprite, game, parent, where, currentPluginID);
+                Bagel.internal.current.pluginProxy = false; // It might have been set to a new object
             }
             sprite.internal = {
                 Bagel: {
@@ -3735,11 +3775,14 @@ Bagel = {
             sprite.idIndex = idIndex;
             let register = subFunctions.register;
 
+            current = Bagel.internal.current; // It might have been set to a new object
             subFunctions.extraChecks(sprite, game, where, idIndex);
+            current.pluginProxy = true;
             register.scripts("init", sprite, game, parent);
             register.scripts("main", sprite, game, parent);
             register.scripts("all", sprite, game, parent);
             register.methods(sprite, game);
+            current.pluginProxy = false;
             register.listeners(sprite, game, parent);
 
             game.internal.idIndex[sprite.id] = idIndex;
@@ -3770,8 +3813,6 @@ Bagel = {
                     let spriteIndex = Bagel.internal.findSpriteIndex(game);
                     clone = Bagel.internal.createSprite(clone, game, parent, "the function \"sprite.clone\"", false, spriteIndex);
 
-                    clone.cloneID = parent.cloneIDs.length - 1; // Declare it after creating it so it's not "useless"
-                    clone.parent = parent; // Same here
                     game.game.sprites[spriteIndex] = clone;
 
                     Bagel.internal.current.sprite = clone;
@@ -5224,6 +5265,12 @@ Bagel = {
                                 }
                             }
                         }
+
+                        if (parent) {
+                            sprite.cloneID = parent.cloneIDs.length - 1;
+                            sprite.parent = parent;
+                        }
+
                         if (handler.check) {
                             let error = handler.check(sprite, game, Bagel.check, where);
                             if (error) {
@@ -5538,6 +5585,10 @@ Bagel = {
                         if (sprites) {
                             let sprite = scriptInfo.sprite;
                             Bagel.internal.current.sprite = sprite;
+                            if (game.internal.idIndex[sprite.id] == null) { // Deleted
+                                continue;
+                            }
+
                             if (type == "init") { // The sprite's active
                                 // Don't trigger it twice
                                 if (sprite.internal.Bagel.rerunIndex.visible) {
@@ -6720,11 +6771,9 @@ Bagel = {
                             // This id is being used already
                             return "Oh no! You used an id for your game that is already being used. Try and think of something else.\nYou used " + JSON.stringify(value) + " in \"Game.id\".";
                         }
-                        let current = Bagel.internal.current;
+
+                        let lastPluginID = Bagel.internal.getActingPluginId();
                         let prefix = value.split(".")[1];
-                        let currentStack = Bagel.internal.currentStack;
-                        let lastPluginID = currentStack.length == 0? null : currentStack[currentStack.length - 1].plugin;
-                        if (lastPluginID) lastPluginID = lastPluginID.info.id;
 
                         if (value[0] == ".") { // Reserved
                             if (lastPluginID == null) {
@@ -7261,9 +7310,7 @@ Bagel = {
                     id: {
                         required: true,
                         check: (id, sprite, name, game) => {
-                            let currentStack = Bagel.internal.currentStack;
-                            let lastPluginID = currentStack.length == 0? null : currentStack[currentStack.length - 1].plugin;
-                            if (lastPluginID) lastPluginID = lastPluginID.info.id;
+                            let lastPluginID = Bagel.internal.getActingPluginId();
 
                             let prefix = id.split(".")[1];
                             if (id[0] == ".") { // Reserved
@@ -7297,7 +7344,7 @@ Bagel = {
                     },
                     visible: {
                         required: false,
-                        default: false,
+                        default: true,
                         types: ["boolean"],
                         description: "Mostly pointless setting here as the sprite will be made invisible unless it has an init script or it's a clone, and made visible if it has an init script and isn't a clone.\nIf the sprite is visible or not."
                     },
@@ -7438,6 +7485,12 @@ Bagel = {
                                     default: [],
                                     types: ["array"],
                                     description: "An array of functions to run on every frame for this clone."
+                                },
+                                steps: {
+                                    required: false,
+                                    default: {},
+                                    types: ["object"],
+                                    description: "Contains steps: mini scripts that can be called from scripts. The key is the id and the value is the function."
                                 }
                             },
                             types: ["object"],
@@ -7626,6 +7679,18 @@ Bagel = {
                                             required: false,
                                             types: ["function"],
                                             description: "Runs instead of the init function when the asset is set. Called with asset, ready, game, plugin."
+                                        },
+                                        hrefArgs: {
+                                            required: false,
+                                            default: ["src"],
+                                            check: value => {
+                                                if (! value.includes("src")) {
+                                                    value.push("src");
+                                                }
+                                            },
+                                            checkEach: false,
+                                            types: ["array"],
+                                            description: "The arguments for this asset type that are hrefs. These will be cached by Bagel.js service workers."
                                         }
                                     },
                                     types: ["object"],
@@ -8335,8 +8400,8 @@ Bagel = {
             if (entity == null) return "undefined";
             return typeof entity;
         },
-        deepClone: entity => {
-            if (typeof entity != "object" || entity == null || (entity.internal && entity.internal.dontClone)) { // Includes arrays
+        deepClone: (entity, isSub) => {
+            if (typeof entity != "object" || entity == null || (isSub && entity.internal && entity.internal.dontClone)) { // Includes arrays
                 return entity;
             }
             let newEntity;
@@ -8352,7 +8417,7 @@ Bagel = {
             let i = 0;
             while (i < keys.length) {
                 if (typeof entity[keys[i]] == "object") {
-                    newEntity[keys[i]] = Bagel.internal.deepClone(entity[keys[i]]);
+                    newEntity[keys[i]] = Bagel.internal.deepClone(entity[keys[i]], true);
                 }
                 else {
                     newEntity[keys[i]] = entity[keys[i]];
@@ -8555,22 +8620,13 @@ Bagel = {
             i: null,
             where: null,
             plugin: null,
+            pluginProxy: false,
             mainLoop: false
         },
         saveCurrent: _ => {
             let internal = Bagel.internal;
             let current = internal.current;
-            //internal.currentStack.push({...internal.current}); // Add current values to the stack
-            internal.currentStack.push({
-                asset: current.asset,
-                assetType: current.assetType,
-                assetTypeName: current.assetTypeName,
-                game: current.game,
-                i: current.i,
-                plugin: current.plugin,
-                sprite: current.sprite,
-                where: current.where
-            });
+            internal.currentStack.push({...current});
         },
         loadCurrent: _ => {
             let internal = Bagel.internal;
@@ -8586,11 +8642,39 @@ Bagel = {
                 i: null,
                 where: null,
                 plugin: null,
+                pluginProxy: false,
                 mainLoop: false
             };
             Bagel.internal.currentStack = [];
         },
         currentStack: [],
+        getActingPluginId: setProxy => {
+            let current, was;
+            if (setProxy) {
+                current = Bagel.internal.current;
+                was = current.pluginProxy;
+                current.pluginProxy = true;
+            }
+
+            let output = Bagel.internal.getActingPluginIdHelper();
+            if (setProxy) {
+                current.pluginProxy = was;
+            }
+            return output;
+        },
+        getActingPluginIdHelper: _ => {
+            let currentStack = Bagel.internal.currentStack;
+
+            let current = Bagel.internal.current;
+            if (current.plugin == null) return null;
+            let i = 1;
+            while (current.pluginProxy) {
+                current = currentStack[currentStack.length - i];
+                if (current == null || current.plugin == null) return null;
+                i++;
+            }
+            return current.plugin.info.id;
+        },
 
         render: {
             bitmapSprite: {
@@ -10503,18 +10587,6 @@ Bagel = {
         }
     },
     device: {
-        is: {
-            touchscreen: document.ontouchstart === null,
-            webGLSupported: null,
-            webPSupported: (_ => {
-                let canvas = document.createElement("canvas");
-                canvas.width = 1;
-                canvas.height = 1;
-                let ctx = canvas.getContext("2d");
-                return canvas.toDataURL("image/webp").includes("webp");
-            })()
-        },
-        webgl: {},
         browser: (_ => {
             if (window.chrome) {
                 return "Chrome";
@@ -10525,7 +10597,28 @@ Bagel = {
             if (navigator.userAgent.includes("Safari")) {
                 return "Safari";
             }
-        })()
+        })(),
+        is: {
+            touchscreen: document.ontouchstart === null,
+            webGLSupported: null,
+            webPSupported: (_ => {
+                let canvas = document.createElement("canvas");
+                canvas.width = 1;
+                canvas.height = 1;
+                let ctx = canvas.getContext("2d");
+                if (canvas.toDataURL("image/webp").includes("webp")) {
+                    return true;
+                }
+                let agent = navigator.userAgent;
+                if (agent.includes("Firefox")) { // Firefox supports decoding but not encoding after version 64
+                    let version = parseFloat(agent.slice(agent.indexOf("Firefox") + 8));
+                    return version >= 65;
+                }
+                return false;
+            })(),
+            oggSupported: new Audio().canPlayType("audio/ogg;codecs=opus") != ""
+        },
+        webgl: {}
     },
     events: {
         pwaUpdate: null
