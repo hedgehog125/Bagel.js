@@ -7,8 +7,6 @@ TODO:
 == Testing ==
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
-Canvas renderer, doesn't support deleting sprites? Snaps to sprite widths and heights weirdly?
-
 == Bugs ==
 Creating a sprite once the game has loaded with an image that's already loaded can cause it to wait for it to load. The listener logic isn't quite finished?
 
@@ -3969,6 +3967,7 @@ Bagel = {
                             // WebGL
                             waitTick: 0,
                             bitmapIndexes: [],
+                            bitmapCount: 0,
                             queue: {
                                 bitmap: {
                                     new: [],
@@ -5693,6 +5692,7 @@ Bagel = {
                             }
 
                             let textures = renderer.textures;
+                            let newLayers = [];
                             for (let i in renderer.layers) {
                                 let data = renderer.scaledBitmaps[renderer.layers[i]];
                                 if (data) {
@@ -5716,8 +5716,10 @@ Bagel = {
                                         ctx.drawImage(textures[data.image], -halfWidth, -halfHeight, data.width, data.height);
                                     }
                                     ctx.setTransform(1, 0, 0, 1, 0, 0);
+                                    newLayers.push(renderer.layers[i]);
                                 }
                             }
+                            renderer.layers = newLayers;
                             ctx.globalAlpha = 1;
                         },
                         queues: {
@@ -5725,93 +5727,87 @@ Bagel = {
                                 let renderer = game.internal.renderer;
 
                                 if (renderer.bitmapSpriteData.length == 0 || renderer.bitmapSpriteData.length == 1) { // Nothing to change
-                                    renderer.queue.bitmap.layer = {};
+                                    renderer.queue.bitmap.layer = [];
                                     return;
                                 }
                                 let queue = renderer.queue.bitmap.layer;
                                 let bitmapIndexes = renderer.bitmapIndexes;
                                 let layers = renderer.layers;
                                 if (queue.length != 0) {
-                                    for (let id in queue) {
-                                        if (queue[id] == null) {
+                                    for (let i in queue) {
+                                        if (queue[i] == null) {
                                             continue;
                                         }
-                                        for (let i in queue[id]) {
-                                            let mode = queue[id][i];
-                                            let originalIndex, c, layerSpriteID, newLayers;
+                                        let id = queue[i][0];
+                                        let mode = queue[i][1];
+                                        let originalIndex, c, newLayers;
 
-                                            switch (mode) { // The type of layer operation
-                                                case 0: // Bring to front
-                                                    originalIndex = bitmapIndexes[id];
-                                                    if (originalIndex == bitmapIndexes.length - 1) { // Already at the front
-                                                        break;
-                                                    }
-
-                                                    layerSpriteID = layers[originalIndex];
-                                                    layers.splice(originalIndex, 1);
-                                                    layers.push(layerSpriteID);
-
-
-                                                    c = 0;
-                                                    while (c < bitmapIndexes.length) {
-                                                        if (bitmapIndexes[c] > originalIndex) {
-                                                            bitmapIndexes[c]--;
-                                                        }
-                                                        c++;
-                                                    }
-                                                    bitmapIndexes[id] = bitmapIndexes.length - 1; // The bitmap that was sent to the front
-
-
+                                        switch (mode) { // The type of layer operation
+                                            case 0: // Bring to front
+                                                originalIndex = bitmapIndexes[id];
+                                                if (originalIndex == renderer.bitmapCount - 1) { // Already at the front
                                                     break;
-                                                case 1: // Bring forwards
-                                                    originalIndex = bitmapIndexes[id];
-                                                    if (originalIndex == bitmapIndexes.length - 1) { // Already at the front
-                                                        break;
+                                                }
+
+                                                layers.splice(originalIndex, 1);
+                                                layers.push(id);
+
+
+                                                c = 0;
+                                                while (c < bitmapIndexes.length) {
+                                                    if (bitmapIndexes[c] > originalIndex) {
+                                                        bitmapIndexes[c]--;
                                                     }
+                                                    c++;
+                                                }
+                                                bitmapIndexes[id] = renderer.bitmapCount - 1; // The bitmap that was sent to the front
 
-                                                    layerSpriteID = layers[originalIndex];
-                                                    layers.splice(originalIndex, 1);
-                                                    layers.splice(originalIndex + 1, 0, layerSpriteID);
-
-                                                    bitmapIndexes[bitmapIndexes.indexOf(originalIndex + 1)]--; // Swap the indexes
-                                                    bitmapIndexes[id]++;
-
+                                                break;
+                                            case 1: // Bring forwards
+                                                originalIndex = bitmapIndexes[id];
+                                                if (originalIndex == renderer.bitmapCount - 1) { // Already at the front
                                                     break;
-                                                case 2: // Send to back
-                                                    originalIndex = bitmapIndexes[id];
-                                                    if (originalIndex == 0) { // Already at the back
-                                                        break;
-                                                    }
+                                                }
 
-                                                    layerSpriteID = layers[originalIndex];
-                                                    layers.splice(originalIndex, 1);
-                                                    newLayers = [layerSpriteID];
-                                                    newLayers.push(...layers);
-                                                    layers = newLayers;
+                                                layers.splice(originalIndex, 1);
+                                                layers.splice(originalIndex + 1, 0, id);
 
-                                                    c = 0;
-                                                    while (c < bitmapIndexes.length) {
+                                                bitmapIndexes[layers[originalIndex + 1]]--; // Swap the indexes
+                                                bitmapIndexes[id]++;
+
+                                                break;
+                                            case 2: // Send to back
+                                                originalIndex = bitmapIndexes[id];
+                                                if (originalIndex == 0) { // Already at the back
+                                                    break;
+                                                }
+
+                                                layers.splice(originalIndex, 1);
+                                                layers.splice(0, 0, id);
+
+                                                c = 0;
+                                                while (c < bitmapIndexes.length) {
+                                                    if (bitmapIndexes[c] != null) {
                                                         if (bitmapIndexes[c] < originalIndex) {
                                                             bitmapIndexes[c]++;
                                                         }
-                                                        c++;
                                                     }
-                                                    bitmapIndexes[id] = 0; // The bitmap that was sent to the back
+                                                    c++;
+                                                }
+                                                bitmapIndexes[id] = 0; // The bitmap that was sent to the back
 
+                                                break;
+                                            case 3: // Send backwards
+                                                originalIndex = bitmapIndexes[id];
+                                                if (originalIndex == 0) { // Already at the back
                                                     break;
-                                                case 3: // Send backwards
-                                                    originalIndex = bitmapIndexes[id];
-                                                    if (originalIndex == 0) { // Already at the back
-                                                        break;
-                                                    }
+                                                }
 
-                                                    layerSpriteID = layers[originalIndex];
-                                                    layers.splice(originalIndex, 1);
-                                                    layers.splice(originalIndex - 1, 0, layerSpriteID); // Insert the bitmap back in
+                                                layers.splice(originalIndex, 1);
+                                                layers.splice(originalIndex - 1, 0, id); // Insert the bitmap back in
 
-                                                    bitmapIndexes[bitmapIndexes.indexOf(originalIndex - 1)]++; // Swap the indexes
-                                                    bitmapIndexes[id]--;
-                                            }
+                                                bitmapIndexes[layers[originalIndex - 1]]++; // Swap the indexes
+                                                bitmapIndexes[id]--;
                                         }
                                     }
                                 }
@@ -6022,8 +6018,7 @@ Bagel = {
                                         }
                                         let id = queued[0];
                                         let mode = queued[1];
-                                        let originalIndex, thisBitmapVertices, thisBitmapTextureCoords,
-                                        newVertices, newTextureCoords, c;
+                                        let originalIndex, thisBitmapVertices, thisBitmapTextureCoords, c;
 
                                         switch (mode) { // The type of layer operation
                                             case 0: // Bring to front
@@ -6087,14 +6082,8 @@ Bagel = {
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
                                                 textCoords.splice(originalIndex * 24, 24);
 
-                                                newVertices = [...thisBitmapVertices]; // Make this bitmap the first
-                                                newTextureCoords = [...thisBitmapTextureCoords];
-
-                                                newVertices.push(...vertices); // Add the others back in
-                                                newTextureCoords.push(...textCoords);
-
-                                                vertices = newVertices;
-                                                textCoords = newTextureCoords;
+                                                vertices.splice(0, 0, ...thisBitmapVertices); // Add it back in at the start
+                                                textCoords.splice(0, 0, ...thisBitmapTextureCoords);
 
 
                                                 c = 0;
@@ -6617,8 +6606,8 @@ Bagel = {
 
                     renderWidth = Math.ceil(renderWidth); // The canvas width has to be a whole number
                     renderHeight = Math.ceil(renderHeight);
-                    width = Math.ceil(width);
-                    height = Math.ceil(height);
+                    width = Math.round(width) + 1;
+                    height = Math.round(height) + 1;
 
                     let max = renderer.maxViewportSize;
                     if (renderWidth > max || renderHeight > max) { // Cap it
@@ -8711,15 +8700,13 @@ Bagel = {
                     }
 
 
-                    let id = 0;
-                    while (id < renderer.bitmapIndexes.length) {
-                        if (renderer.bitmapIndexes[id] == null) {
-                            break;
-                        }
-                        id++;
+                    let id = renderer.bitmapIndexes.indexOf(null);
+                    if (id == -1) {
+                        id = renderer.bitmapIndexes.length;
                     }
                     renderer.bitmapSpriteData[id] = data;
                     renderer.bitmapsUsingTextures[data.image].push(id);
+                    renderer.bitmapCount++;
                     if (renderer.type == "webgl") {
                         renderer.bitmapIndexes[id] = true;
 
@@ -8732,7 +8719,7 @@ Bagel = {
                         return id;
                     }
                     else {
-                        renderer.bitmapIndexes[id] = id;
+                        renderer.bitmapIndexes[id] = renderer.layers.length;
                         renderer.layers.push(id);
                         renderer.scaledBitmaps[id] = Bagel.internal.subFunctions.tick.render.canvas.scaleData(data, renderer);
                         return id;
@@ -8773,13 +8760,19 @@ Bagel = {
                                 renderer.queue.bitmap.delete[renderer.bitmapIndexes[id]] = true;
                                 renderer.queueLengths.delete++;
                             }
-                            renderer.bitmapIndexes[id] = null;
                         }
                         else {
                             renderer.scaledBitmaps[id] = null;
-                            renderer.layers = renderer.layers.filter(value => value != id);
+                            renderer.layers.splice(renderer.bitmapIndexes[id], 1);
+                            let index = renderer.bitmapIndexes[id];
+                            for (let i in renderer.bitmapIndexes) {
+                                if (renderer.bitmapIndexes[i] > index) {
+                                    renderer.bitmapIndexes[i]--;
+                                }
+                            }
                         }
-
+                        renderer.bitmapIndexes[id] = null;
+                        renderer.bitmapCount--;
 
                         // It's not using its texture anymore
                         let img = renderer.bitmapSpriteData[id].image;
