@@ -8,8 +8,6 @@ TODO:
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
-Creating a sprite once the game has loaded with an image that's already loaded can cause it to wait for it to load. The listener logic isn't quite finished?
-
 Change WebGL rounding to match canvas <==========
 
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
@@ -632,34 +630,34 @@ Bagel = {
 
                                     img: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.internal.imgWaiting = true;
-                                                if (value) {
-                                                    let img = Bagel.get.asset.img(value, triggerSprite.game, true);
-                                                    if (typeof img == "boolean") {
-                                                        if (img) { // Loading
-                                                            return ".rerun";
-                                                        }
-                                                        else { // No asset
-                                                            img = Bagel.internal.render.texture.get(value, triggerSprite.game);
-                                                            if (! img) {
-                                                                if (triggerSprite.game.loaded) {
-                                                                    return "Oh no! Bagel.js couldn't find an image asset or a texture with the id " + JSON.stringify(value) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
-                                                                }
-                                                                else {
-                                                                    return ".rerun"; // It might exist when the game has loaded
-                                                                }
+                                            triggerSprite.internal.imgWaiting = true;
+                                            if (value) {
+                                                let img = Bagel.get.asset.img(value, triggerSprite.game, true);
+                                                if (typeof img == "boolean") {
+                                                    if (img) { // Loading
+                                                        return ".rerun";
+                                                    }
+                                                    else { // No asset
+                                                        img = Bagel.internal.render.texture.get(value, triggerSprite.game);
+                                                        if (! img) {
+                                                            if (triggerSprite.game.loaded) {
+                                                                return "Oh no! Bagel.js couldn't find an image asset or a texture with the id " + JSON.stringify(value) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
+                                                            }
+                                                            else {
+                                                                return ".rerun"; // It might exist when the game has loaded
                                                             }
                                                         }
                                                     }
+                                                }
 
+                                                if (! initialTrigger) {
                                                     let scale = sprite.scale;
                                                     triggerSprite.width = img.width * scale;
                                                     triggerSprite.height = img.height * scale;
                                                     triggerSprite.internal.imgWaiting = false;
                                                 }
-                                                triggerSprite.internal.renderUpdate = true;
                                             }
+                                            triggerSprite.internal.renderUpdate = true;
                                         }
                                     },
                                     width: {
@@ -752,10 +750,11 @@ Bagel = {
                                     Bagel.internal.oops(game);
                                 }
                                 else if (specified == 2) {
-                                    properties.scale = ((properties.width / img.width) + (properties.height / img.width)) / 2;
+                                    let img = game.get.asset.img(properties.img, true) || Bagel.internal.render.texture.get(properties.img, game);
+                                    if (typeof img == "object") {
+                                        properties.scale = ((properties.width / img.width) + (properties.height / img.width)) / 2;
+                                    }
                                 }
-
-                                // TODO: initially setting scale. Finish tidying up the width, height, scale and maybe XY setting logic <===============
                             },
                             render: {
                                 onVisible: (sprite, newBitmap) => {
