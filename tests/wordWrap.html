@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        Word wrap text example
+    </title>
+</head>
+<body bgColor="blue"></body>
+
+<script src="../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "game",
+    state: "game",
+    game: {
+        sprites: [
+            {
+                id: "Text",
+                type: "text",
+                text: "This is a very long bit of text. In fact it's so long that it normally can't fit on screen without word wrapping enabled.",
+                y: 150,
+                size: 20,
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ]
+                }
+            },
+            {
+                id: "Text2",
+                type: "text",
+                text: "This is a very long bit of text. In fact it's so long that it normally can't fit on screen without word wrapping enabled.",
+                size: 20,
+                wordWrapWidth: 800,
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ]
+                }
+            },
+            {
+                id: "Text3",
+                type: "text",
+                text: "This is a very long bit of text. In fact it's so long that it normally can't fit on screen without word wrapping enabled.",
+                bitmap: true,
+                size: 12,
+                wordWrapWidth: 800,
+                y: 275,
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ]
+                }
+            },
+            {
+                id: "Text4",
+                type: "text",
+                text: "This has lots of short words so it fits on screen better. Some other short words include: short, tall, thin and long.",
+                bitmap: true,
+                size: 12,
+                wordWrapWidth: 800,
+                y: 325,
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ]
+                }
+            },
+            {
+                id: "Text5",
+                type: "text",
+                text: "This_is_all_one_very_long_word_that_will_need_splitting_up_between_at_least_two_lines.",
+                bitmap: true,
+                size: 12,
+                wordWrapWidth: 800,
+                y: 375,
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    width: 800,
+    height: 450
+});
+
+</script>

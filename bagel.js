@@ -20,6 +20,8 @@ Pause videos on state change
 
 Resume playing audio from the position it would be in rather than the start. Maybe play muted if no autoplay?
 
+Audio is still apparently broken in Safari. Sounds can only play once? Safari tells Bagel.js the audio is playing even when it isn't. e.g onplay fires, the promise resolves and paused is false but currentTime is still 0 even after a delay
+
 == Low priority bugs ==
 Sprites get pushed to left when shrinking window, test by putting a sprite with an x coordinate of the game width. Possibly out of my control? Happens when resising window and devtools
 
@@ -35,15 +37,13 @@ Use texsubimage2d for updating the parts of textures that were updated. It's als
 put in front of and behind layer operations. Should also work for groups like clones. Would make layer operations unnecessary a lot of the time. e.g spaceships in front of individual stars in joined together entry
 
 = Features =
-Change the way setting assets works to make it more restrictive. Maybe assets can only be set if they fetch text and you can skip the fetching by giving it the text.
-
-Bundle and load the default font by default. (It's currently referred to as .Internal.defaultFont). Replace the text in the loading screen with it
-
 Text rotation? Negative widths and heights? Changing them should set font size?
 
 Change font to the default when bitmap is set to true on a text sprite.
 
 Steps for clones
+
+Bagel.add.asset and Bagel.add.sprite
 
 Allow reusing values in plugins from other plugins. Maybe can set all complicated arguments to ".<pluginID>.<...pathThroughPluginObject>" e.g ".Internal.plugin.types.sprites.sprite.listeners.fns.xy". Maybe should be a way to more easilly access functions in other plugins to use yourself.
 
@@ -119,6 +119,7 @@ Bagel = {
         Bagel.internal.loadPlugin(Bagel.internal.plugin, game, {}); // Load the built in plugin
 
         subFunctions.listeners(game, game.internal.renderer.canvas, previousGames);
+        subFunctions.bundledAssets(game);
         if (game.internal.assets.loading == 0) {
             game.loaded = true;
         }
@@ -290,36 +291,40 @@ Bagel = {
                         },
                         fonts: {
                             args: {},
-                            init: (assetJSON, ready, game, plugin) => {
+                            init: (assetJSON, set) => {
                                 let request = fetch(assetJSON.src);
-                                ((asset, game, ready, plugin) => {
-                                    request.then(e => e.json().then(asset => {
-                                        let characterCount = asset.widths.length;
-                                        if (! plugin.vars.font.characterSets[characterCount]) {
-                                            console.error("Huh, the font " + JSON.stringify(assetJSON.id) + " doesn't have a matching character set. It's got " + characterCount + ".");
-                                            console.log("These are the character sets:");
-                                            console.log(plugin.vars.font.characterSets);
-                                            Bagel.internal.oops(game);
-                                        }
+                                request.then(e => e.json().then(asset => {
+                                    set(asset);
+                                }));
+                            },
+                            set: (asset, assetJSON, ready, game, plugin) => {
+                                if (Bagel.internal.getTypeOf(asset) != "object") {
+                                    return "Oh no! This can only be an object but you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ". Make sure that it's actually a Bagel.js font.";
+                                }
+                                let characterCount = asset.widths.length;
+                                if (! plugin.vars.font.characterSets[characterCount]) {
+                                    console.error("Huh, the font " + JSON.stringify(assetJSON.id) + " doesn't have a matching character set. It's got " + characterCount + ".");
+                                    console.log("These are the character sets:");
+                                    console.log(plugin.vars.font.characterSets);
+                                    Bagel.internal.oops(game);
+                                }
 
-                                        let widthTotal = 0;
-                                        let heightTotal = 0;
-                                        let starts = [];
-                                        let position = 0;
-                                        for (let i in asset.widths) {
-                                            starts.push(position);
-                                            widthTotal += asset.widths[i];
-                                            heightTotal += asset.heights[i];
-                                            position += asset.widths[i] * asset.heights[i];
-                                        }
-                                        asset.starts = starts;
-                                        asset.avgWidth = Math.ceil(widthTotal / asset.widths.length);
-                                        asset.avgHeight = Math.ceil(heightTotal / asset.widths.length);
-                                        asset.maxHeight = Math.max(...asset.heights);
+                                let widthTotal = 0;
+                                let heightTotal = 0;
+                                let starts = [];
+                                let position = 0;
+                                for (let i in asset.widths) {
+                                    starts.push(position);
+                                    widthTotal += asset.widths[i];
+                                    heightTotal += asset.heights[i];
+                                    position += asset.widths[i] * asset.heights[i];
+                                }
+                                asset.starts = starts;
+                                asset.avgWidth = Math.ceil(widthTotal / asset.widths.length);
+                                asset.avgHeight = Math.ceil(heightTotal / asset.widths.length);
+                                asset.maxHeight = Math.max(...asset.heights);
 
-                                        ready(asset);
-                                    }));
-                                })(assetJSON, game, ready, plugin);
+                                ready(asset);
                             },
                             description: "For use with \"text\" sprites, generate fonts using Bagel.font.generate.",
                             get: "font"
@@ -654,8 +659,8 @@ Bagel = {
                                                     let scale = sprite.scale;
                                                     triggerSprite.width = img.width * scale;
                                                     triggerSprite.height = img.height * scale;
-                                                    triggerSprite.internal.imgWaiting = false;
                                                 }
+                                                triggerSprite.internal.imgWaiting = false;
                                             }
                                             triggerSprite.internal.renderUpdate = true;
                                         }
@@ -1162,12 +1167,13 @@ Bagel = {
                                     canvas.height *= game.internal.renderer.scaleY;
                                 }
                                 sprite.ctx = ctx;
-                                sprite.internal.canvasID = ".Internal.canvas." + sprite.id;
-                                sprite.internal.canvasUpdated = false;
-                                sprite.internal.last = {
-                                    collision: null
-                                };
-                                sprite.internal.cache = {};
+
+                                let internal = sprite.internal;
+                                internal.canvasID = ".Internal.canvas." + sprite.id;
+                                internal.canvasUpdated = false;
+                                internal.last = {};
+                                internal.prerendered = false;
+                                internal.cache = {};
                                 sprite.last = {
                                     collision: null
                                 };
@@ -1187,6 +1193,7 @@ Bagel = {
 
                                                     sprite.internal.prerenderBase(sprite, sprite.game, sprite.ctx, sprite.canvas, sprite.scaleX, sprite.scaleY);
                                                     sprite.updated = true;
+                                                    sprite.internal.prerendered = true;
                                                     Bagel.internal.loadCurrent();
                                                 }
                                             }
@@ -1225,16 +1232,6 @@ Bagel = {
                                     sprite.scaleX = canvas.width / sprite.width;
                                     sprite.scaleY = canvas.height / sprite.height;
 
-                                    Bagel.internal.saveCurrent();
-                                    let current = Bagel.internal.current;
-                                    current.plugin = null;
-                                    current.sprite = sprite;
-
-                                    if (sprite.prerender) {
-                                        sprite.prerender(sprite, sprite.game, sprite.ctx, canvas, sprite.scaleX, sprite.scaleY);
-                                    }
-                                    Bagel.internal.loadCurrent();
-
                                     Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game, false, sprite.mode);
                                     sprite.internal.renderUpdate = false;
                                 },
@@ -1252,11 +1249,7 @@ Bagel = {
                                 },
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
                                 whileVisible: (sprite, updateBitmap) => {
-                                    let current = Bagel.internal.current;
-                                    Bagel.internal.saveCurrent();
-                                    current.plugin = null;
-                                    current.sprite = sprite;
-
+                                    let internal = sprite.internal;
                                     if (sprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
                                         let width;
                                         let height;
@@ -1271,7 +1264,7 @@ Bagel = {
                                         width = Math.max(width, 1); // Must be at least a pixel wide
                                         height = Math.max(height, 1); // Must be at least a pixel wide
 
-                                        let last = sprite.internal.last;
+                                        let last = internal.last;
                                         if (last.width != width || last.height != height) {
                                             sprite.canvas.width = width;
                                             sprite.canvas.height = height;
@@ -1280,18 +1273,29 @@ Bagel = {
 
                                             sprite.scaleX = sprite.canvas.width / sprite.width;
                                             sprite.scaleY = sprite.canvas.height / sprite.height;
-                                            if (sprite.prerender) {
-                                                sprite.prerender(sprite, sprite.game, sprite.ctx, sprite.canvas, sprite.scaleX, sprite.scaleY);
-                                                sprite.updated = true;
+                                            if (internal.prerenderBase) {
+                                                sprite.prerender();
                                             }
+                                        }
+                                    }
+
+                                    if (! internal.prerendered) {
+                                        if (internal.prerenderBase) {
+                                            sprite.prerender();
                                         }
                                     }
 
                                     let output;
                                     if (sprite.render) {
+                                        let current = Bagel.internal.current;
+                                        Bagel.internal.saveCurrent();
+                                        current.plugin = null;
+                                        current.sprite = sprite;
+
                                         output = sprite.render(sprite, sprite.game, sprite.ctx, sprite.canvas, sprite.scaleX, sprite.scaleY);
+
+                                        Bagel.internal.loadCurrent();
                                     }
-                                    Bagel.internal.loadCurrent();
 
 
                                     if (sprite.updated || sprite.internal.canvasUpdated || (sprite.mode == "animated" && output !== true) || (sprite.mode != "animated" && output === true)) {
@@ -1362,6 +1366,11 @@ Bagel = {
                                     types: ["string"],
                                     description: "The name of the font to use. An HTML font if \"bitmap\" is false or a font asset if it's true."
                                 },
+                                wordWrapWidth: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "The maximum width of a line before it wraps. Defaults to no wrapping."
+                                },
                                 size: {
                                     required: false,
                                     default: 20,
@@ -1407,6 +1416,9 @@ Bagel = {
                                     mode: "replace"
                                 },
                                 font: {
+                                    mode: "replace"
+                                },
+                                wordWrapWidth: {
                                     mode: "replace"
                                 },
                                 size: {
@@ -1480,13 +1492,18 @@ Bagel = {
                                     },
                                     font: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! game.get.asset.font(value, true)) {
-                                                return "Huh, the font " + JSON.stringify(value) + " doesn't seem to exist.";
+                                            if (sprite.bitmap) {
+                                                if (! game.get.asset.font(value, true)) {
+                                                    return "Huh, the font " + JSON.stringify(value) + " doesn't seem to exist.";
+                                                }
                                             }
                                             if (! initialTrigger) {
                                                 triggerSprite.internal.needsRerender = true;
                                             }
                                         }
+                                    },
+                                    wordWrapWidth: {
+                                        set: "rerender"
                                     },
                                     size: {
                                         set: "rerender"
@@ -1494,6 +1511,12 @@ Bagel = {
                                     bitmap: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                             if (! initialTrigger) {
+                                                if (value) {
+                                                    sprite.font = ".Internal.defaultFont";
+                                                }
+                                                else {
+                                                    sprite.font = "Arial";
+                                                }
                                                 triggerSprite.internal.needsRerender = true;
                                             }
                                         }
@@ -1512,6 +1535,7 @@ Bagel = {
                             description: "A text sprite. Allows you to easily display text onscreen.",
                             init: (sprite, game, plugin) => {
                                 sprite.internal.last = {};
+                                sprite.internal.needsRerender = true;
                                 sprite.last = {
                                     collision: null
                                 };
@@ -1528,7 +1552,6 @@ Bagel = {
                                     Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, sprite.game, false, "static");
 
                                     internal.ctx = internal.canvas.getContext("2d");
-                                    plugin.vars.font.prerender(sprite, sprite.game.internal.renderer.scaleX, sprite.game.internal.renderer.scaleY, plugin);
                                 },
                                 onVisible: (sprite, newBitmap) => {
                                     sprite.internal.renderUpdate = false;
@@ -1560,7 +1583,7 @@ Bagel = {
                                     }
                                     if (internal.renderUpdate) {
                                         internal.renderUpdate = false;
-                                        updateBitmap(internal.Bagel.renderID, {
+                                        return updateBitmap(internal.Bagel.renderID, {
                                             x: sprite.x,
                                             y: sprite.y,
                                             width: sprite.width,
@@ -3285,6 +3308,7 @@ Bagel = {
                                 id: ".Internal.unmuteButton",
                                 src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUEAYAAADdGcFOAAAABmJLR0QA/wAAAAAzJ3zzAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH5AUECgoeC/S7LAAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAElSURBVEhLrZbREYQgDETNFaEdac3akTaR+2D2lODOBs/3w4gbWEJAbXiEu1LcY6YUkWRAa2je533e9YTbtE3bxBak44XgHJgZWsd1XMfY27Icy7EczDA3Sl5wY1lDCjMzM230Uz/mjWGC0g7duLu7x8i2FILBvLEYp2ALikbL/M346HAvAgSebdTVLdffx2fHv2Qweyp7yZZAMdpmstlibGm9JXpLs7peGoP/ks1YltcNvg01WNeEzkmsobf4GWSfpPqUaXr1gNXwB6/RgU9SpDdDvXqAa45w3kPIBGtrPdfdx/H7L17UoQbPFatro0zQnyEYi+OzzKX/Zp4aiihj5SxcEjWkYIdHG2Y7oYwBOQFAbZSBlLqFbSEzBtIGI+SvQ6IMRb66bmr2BeoT1QAAAABJRU5ErkJggg=="
                             }, where); // Load its image
+                            game.get.asset.img(".Internal.unmuteButton"); // Trigger loading early
 
                             game.add.asset.snd({
                                 id: ".Internal.unmuteButtonClick",
@@ -3474,109 +3498,236 @@ Bagel = {
                         "_": 1
                     },
                     prerender: (sprite, scaleX, scaleY, plugin) => {
-                        let canvas = sprite.internal.canvas;
-                        let ctx = sprite.internal.ctx;
-                        ctx.fillStyle = sprite.colour;
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        let internal = sprite.internal;
+                        let game = sprite.game;
+                        let canvas = internal.canvas;
+                        let ctx = internal.ctx;
+
+                        let texts = sprite.text.split("\n");
                         if (sprite.bitmap) {
-                            plugin.vars.font.prerenderBitmap(sprite, scaleX, scaleY, plugin, canvas, ctx);
+                            plugin.vars.font.prerenderBitmap(texts, sprite, scaleX, scaleY, plugin, canvas, ctx);
                         }
                         else {
-                            plugin.vars.font.prerenderNonBitmap(sprite, scaleX, scaleY, canvas, ctx);
+                            plugin.vars.font.prerenderNonBitmap(texts, sprite, scaleX, scaleY, canvas, ctx);
                         }
 
-                        if (canvas.width != 0) { // No text, having a texture this small would cause an error
-                            Bagel.internal.render.texture.update(sprite.internal.canvasID, canvas, sprite.game);
+                        if (canvas.width == 0) { // No text, having a texture this small would cause an error
+                            canvas = game.internal.renderer.blankTexture;
                         }
-                        sprite.internal.renderUpdate = true;
+                        Bagel.internal.render.texture.update(internal.canvasID, canvas, game);
+                        internal.renderUpdate = true;
                     },
-                    prerenderBitmap: (sprite, scaleX, scaleY, plugin, canvas, ctx) => {
+                    prerenderBitmap: (lines, sprite, scaleX, scaleY, plugin, canvas, ctx) => {
                         let asset = sprite.game.get.asset.font(sprite.font);
                         let characterSet = plugin.vars.font.characterSets[asset.widths.length];
 
                         let indexes = [];
-                        let totalWidth = 0;
-                        let text = sprite.text.toLowerCase();
-                        for (let i in text) {
-                            let character = text[i];
-                            if (character == " ") {
-                                totalWidth += asset.avgWidth;
-                                indexes.push(-1);
-                            }
-                            else {
-                                let index = characterSet.indexOf(character);
-                                if (index == -1) {
-                                    console.error(
-                                        "Oh no! The text sprite "
-                                        + JSON.stringify(sprite.id)
-                                        + " tried to use the character "
-                                        + JSON.stringify(character)
-                                        + ". The "
-                                        + (sprite.font == ".Internal.defaultFont"? "default font" : JSON.stringify(sprite.font))
-                                        + " only supports these characters:\n" + characterSet
-                                    );
-                                    Bagel.internal.oops(sprite.game);
-                                }
-                                indexes.push(index);
-                                totalWidth += asset.widths[index] + Math.ceil(asset.avgWidth / 4);
-                            }
+                        let maxWidth = 0;
+                        let wordWrapWidth = sprite.wordWrapWidth;
+                        let min = Math.max(asset.widths) * 2.5;
+                        if (wordWrapWidth != null && wordWrapWidth < min) {
+                            wordWrapWidth = min;
                         }
-
-                        canvas.width = totalWidth * 2;
-                        canvas.height = asset.maxHeight * 2;
-                        let x = 0;
-                        for (let i in text) {
-                            let character = text[i];
-                            if (character == " ") {
-                                x += asset.avgWidth * 2;
-                            }
-                            else {
-                                let index = indexes[i];
-                                let c = asset.starts[index];
-                                let width = asset.widths[index];
-                                let height = asset.heights[index];
-                                let a = 0;
-                                let len = width * height;
-
-                                let startY = (asset.maxHeight / 2) - (height / 2);
-                                if (plugin.vars.font.top[character]) {
-                                    startY = 0;
-                                }
-                                if (plugin.vars.font.bottom[character]) {
-                                    startY = asset.maxHeight - height;
-                                }
-
-                                while (a < len) {
-                                    if (asset.pixels[c] == "1") {
-                                        ctx.fillRect(
-                                            ((a % width) * 2) + x,
-                                            Math.floor((Math.floor(a / width) + startY) * 2),
-                                            2, 2
-                                        );
-                                    }
-                                    a++;
-                                    c++;
-                                }
-
-                                x += (asset.widths[index] + Math.ceil(asset.avgWidth / 4)) * 2;
-                            }
-                        }
-
                         let scale = (sprite.size / ((asset.avgWidth + asset.avgHeight) / 2)) / 2;
+                        wordWrapWidth /= scale * 2;
+
+                        let i = 0;
+                        let totalWidth;
+                        while (i < lines.length) {
+                            indexes.push([]);
+                            totalWidth = 0;
+                            text = lines[i].toLowerCase();
+                            let wordFitted = false;
+                            let wordWidth = 0;
+                            let wordLength = 0;
+                            for (let c in text) {
+                                let character = text[c];
+
+                                let index = characterSet.indexOf(character);
+                                let charWidth = character == " "? asset.avgWidth : (asset.widths[index] + Math.ceil(asset.avgWidth / 4));
+                                if (wordWrapWidth != null && totalWidth + charWidth > wordWrapWidth) {
+                                    if (wordFitted) {
+                                        totalWidth -= wordWidth;
+                                        let newLine = text.slice(c - wordLength);
+                                        if (newLine[0] == " ") {
+                                            newLine.split("").splice(0, 1).join("");
+                                        }
+                                        lines.splice(i + 1, 0, newLine);
+                                        lines[i] = lines[i].split("").splice(0, c - wordLength).join("");
+                                    }
+                                    else {
+                                        let thisLine = "";
+                                        totalWidth -= wordWidth;
+                                        let dashIndex = characterSet.indexOf("-");
+                                        totalWidth += asset.widths[dashIndex] + Math.ceil(asset.avgWidth / 4);
+                                        c -= wordLength;
+                                        let a = c;
+                                        while (c < text.length) {
+                                            let charWidth = asset.widths[indexes[i][c]] + Math.ceil(asset.avgWidth / 4);
+                                            if (totalWidth + charWidth > wordWrapWidth) {
+                                                break;
+                                            }
+                                            thisLine += text[c];
+                                            totalWidth += charWidth;
+                                            c++;
+                                        }
+                                        thisLine += "-";
+                                        indexes[i].splice(c);
+                                        indexes[i].push(dashIndex);
+                                        lines[i] = thisLine;
+                                        lines.push(text.slice(c));
+                                    }
+                                    break;
+                                }
+
+                                if (character == " ") {
+                                    totalWidth += charWidth;
+                                    indexes[i].push(-1);
+                                    wordFitted = true;
+                                    wordWidth = asset.avgWidth;
+                                    wordLength = 0;
+                                    if (totalWidth > maxWidth) maxWidth = totalWidth;
+                                }
+                                else {
+                                    totalWidth += charWidth;
+                                    wordWidth += charWidth;
+                                    if (index == -1) {
+                                        console.error(
+                                            "Oh no! The text sprite "
+                                            + JSON.stringify(sprite.id)
+                                            + " tried to use the character "
+                                            + JSON.stringify(character)
+                                            + ". The "
+                                            + (sprite.font == ".Internal.defaultFont"? "default font" : JSON.stringify(sprite.font))
+                                            + " only supports these characters:\n" + characterSet
+                                        );
+                                        Bagel.internal.oops(sprite.game);
+                                    }
+                                    indexes[i].push(index);
+                                    wordLength++;
+                                }
+                            }
+
+                            if (totalWidth > maxWidth) maxWidth = totalWidth;
+                            i++;
+                        }
+
+                        canvas.width = maxWidth * 2;
+                        canvas.height = asset.maxHeight * lines.length * 2;
+                        ctx.fillStyle = sprite.colour;
+
+                        let y = 0;
+                        for (let i in lines) {
+                            let text = lines[i];
+                            let x = 0;
+                            for (let b in text) {
+                                let character = text[b];
+                                if (character == " ") {
+                                    x += asset.avgWidth * 2;
+                                }
+                                else {
+                                    let index = indexes[i][b];
+                                    let c = asset.starts[index];
+                                    let width = asset.widths[index];
+                                    let height = asset.heights[index];
+                                    let a = 0;
+                                    let len = width * height;
+
+                                    let startY = (asset.maxHeight / 2) - (height / 2);
+                                    if (plugin.vars.font.top[character]) {
+                                        startY = 0;
+                                    }
+                                    if (plugin.vars.font.bottom[character]) {
+                                        startY = asset.maxHeight - height;
+                                    }
+                                    startY += y;
+
+                                    while (a < len) {
+                                        if (asset.pixels[c] == "1") {
+                                            ctx.fillRect(
+                                                ((a % width) * 2) + x,
+                                                Math.floor((Math.floor(a / width) + startY) * 2),
+                                                2, 2
+                                            );
+                                        }
+                                        a++;
+                                        c++;
+                                    }
+
+                                    x += (asset.widths[index] + Math.ceil(asset.avgWidth / 4)) * 2;
+                                }
+                            }
+                            y += asset.maxHeight;
+                        }
+
                         sprite.width = canvas.width * scale;
                         sprite.height = canvas.height * scale;
                     },
-                    prerenderNonBitmap: (sprite, scaleX, scaleY, canvas, ctx) => {
+                    prerenderNonBitmap: (lines, sprite, scaleX, scaleY, canvas, ctx) => {
                         let last = sprite.internal.last;
                         ctx.font = sprite.size + "px " + sprite.font;
                         let size = (ctx.measureText("M").width * 1.5) * scaleY;
-                        canvas.width = ctx.measureText(sprite.text).width * scaleX; // It's not affected by scaling
-                        canvas.height = Math.ceil(size);
+                        let wordWrapWidth = sprite.wordWrapWidth;
+                        let min = ctx.measureText("M").width * 2;
+                        if (wordWrapWidth != null && wordWrapWidth < min) {
+                            wordWrapWidth = min;
+                        }
+
+                        let width = 0;
+                        let i = 0;
+                        while (i < lines.length) {
+                            let words = lines[i].split(" ");
+                            let space = ctx.measureText(" ").width;
+                            let currentWidth = 0;
+                            let wordFitted = false;
+                            for (let c in words) {
+                                let wordWidth = ctx.measureText(words[c]).width;
+                                currentWidth += wordWidth;
+                                if (wordWrapWidth != null && currentWidth > wordWrapWidth) { // Wrap it
+                                    currentWidth -= wordWidth;
+                                    if (wordFitted) {
+                                        lines.splice(i + 1, 0, words.slice(c).join(" "));
+                                        words.splice(c, words.length - c);
+                                        lines[i] = words.join(" ");
+                                    }
+                                    else { // Need to break up the word, otherwise the line would be blank
+                                        let thisLine = "";
+                                        currentWidth += ctx.measureText("-").width;
+                                        let a;
+                                        for (a in words[c]) {
+                                            let charWidth = ctx.measureText(words[c][a]).width;
+                                            if (currentWidth + charWidth > wordWrapWidth) {
+                                                break;
+                                            }
+                                            thisLine += words[c][a];
+                                            currentWidth += charWidth;
+                                        }
+                                        thisLine += "-";
+                                        lines.splice(i + 1, 0, words.slice(c).join(" ").slice(a));
+                                        words.splice(c, words.length - c);
+                                        lines[i] = words.join(" ") + thisLine;
+                                    }
+                                    break;
+                                }
+                                wordFitted = true;
+                                if (c != words.length - 1) {
+                                    currentWidth += space;
+                                }
+                            }
+                            if (currentWidth > width) width = currentWidth;
+                            i++;
+                        }
+                        canvas.width = width * scaleX; // It's not affected by scaling
+                        canvas.height = Math.ceil(size) * lines.length;
                         ctx.font = sprite.size + "px " + sprite.font;
+                        ctx.fillStyle = sprite.colour;
 
                         ctx.textBaseline = "middle";
                         ctx.scale(scaleX, scaleY);
-                        ctx.fillText(sprite.text, 0, (canvas.height / 2) / scaleY);
+                        let offset = Math.ceil(size) / 2;
+                        for (let i in lines) {
+                            ctx.fillText(lines[i], 0, (offset + (Math.ceil(size) * i)) / scaleY);
+                        }
                         ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
 
                         last.scaleX = scaleX;
@@ -3635,9 +3786,7 @@ Bagel = {
 
             let assets = game.internal.assets;
 
-            if (assets.assets[type] == null) {
-                assets.assets[type] = {};
-            }
+            if (assets.assets[type] == null) assets.assets[type] = {};
 
             asset = Bagel.check({
                 ob: asset,
@@ -3657,7 +3806,7 @@ Bagel = {
                 Bagel.internal.oops(game);
             }
 
-            let ready = ((assetJSON, game) => asset => {
+            let ready = ((assetJSON, game, type) => asset => {
                 let assets = game.internal.assets;
                 let combinedPlugins = game.internal.combinedPlugins;
                 let plural = combinedPlugins.types.internal.pluralAssetTypes[combinedPlugins.types.assets[type].get];
@@ -3677,12 +3826,34 @@ Bagel = {
                         Bagel.internal.subFunctions.init.onload(game);
                     }
                 }
-            })(asset, game); // This is called by the init function once the asset has loaded
+            })(asset, game, type); // This is called by the init function once the asset has loaded
+            let set;
+            if (assetLoader.set) {
+                set = ((assetJSON, game, ready, handler, type, i, where) => asset => {
+                    Bagel.internal.saveCurrent();
+                    let current = Bagel.internal.current;
+                    current.plugin = handler.internal.plugin;
+                    current.pluginProxy = true;
+                    current.game = game;
+                    current.asset = assetJSON;
+                    current.assetType = type;
+                    current.i = i;
+                    current.where = where;
+
+                    let output = assetLoader.set(asset, assetJSON, ready, game, handler.internal.plugin);
+                    if (output) {
+                        console.error(output);
+                        Bagel.internal.oops(game);
+                    }
+                    Bagel.internal.loadCurrent();
+                })(asset, game, ready, assetLoader, type, i, where);
+            }
+
             if (loadNow) {
                 let combinedPlugins = game.internal.combinedPlugins;
                 let plural = combinedPlugins.types.internal.pluralAssetTypes[combinedPlugins.types.assets[type].get];
 
-                assetLoader.init(asset, ready, game, assetLoader.internal.plugin, i);
+                assetLoader.init(asset, set? set : ready, game, assetLoader.internal.plugin, i);
                 assets.loading++;
                 if (assets.loadingIDs[plural] == null) assets.loadingIDs[plural] = {};
                 assets.loadingIDs[plural][asset.id] = true; // It's currently loading
@@ -3692,6 +3863,7 @@ Bagel = {
                 if (toLoad[type] == null) toLoad[type] = {};
                 toLoad[type][asset.id] = {
                     ready: ready,
+                    set: set,
                     asset: asset,
                     assetLoader: assetLoader,
                     i: i,
@@ -3761,7 +3933,8 @@ Bagel = {
                     onVisibleTriggered: false,
                     onVisibleTriggeredBefore: false,
                     onInvisibleTriggered: false,
-                    renderID: null
+                    renderID: null,
+                    actingPlugin: Bagel.internal.getActingPluginId(true)
                 },
                 dontClone: true
             };
@@ -3821,6 +3994,10 @@ Bagel = {
                     return clone;
                 };
                 sprite.delete = _ => {
+                    if (sprite.internal.actingPlugin && Bagel.internal.getActingPluginId() != sprite.internal.actingPlugin) {
+                        console.error("Sorry, you can't delete sprites created as parts of plugins as it would likely cause issues.");
+                        Bagel.internal.oops(me.game);
+                    }
                     let game = me.game;
                     let remove = Bagel.internal.subFunctions.delete;
 
@@ -3964,7 +4141,6 @@ Bagel = {
                     game.internal = {
                         renderer: {
                             // WebGL
-                            waitTick: 0,
                             bitmapIndexes: [],
                             bitmapCount: 0,
                             queue: {
@@ -4436,6 +4612,14 @@ Bagel = {
                         };
                     })(game);
                 },
+                bundledAssets: game => {
+                    Bagel.internal.saveCurrent();
+                    Bagel.internal.current.plugin = game.internal.plugins.Internal;
+
+                    game.set.asset.font(".Internal.defaultFont", {"widths":[4,4,4,4,4,4,4,4,3,4,4,4,5,4,5,3,5,4,4,3,4,3,5,5,3,4,3,3,3,3,3,3,3,3,3,3,3,1,5,5,5,3,5,3,2,2,3,3,4,3,1,2,1,3,2,2,5,5,3,3,4,1,2,2,2,2],"heights":[5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,5,2,6,3,5,5,3,1,1,3,5,5,2,2,2,2,5,5,5,5,2,5,5,5,5,5],"pixels":"011010011111100110011110100111101001111001111000100010000111111010011001100111101111100011101000111111111000111010001000111010001011100111111001100111111001100111101001001011101110001000110010110100110101100101010011000100010001000111110001110111010110001100011001110110111001100101110100011000110001011101111011111001000111010001100011001001101111010011110100110010111100001100001111011101001001001010011001100110010110101101101101010100011000110001101011101110001010100010001010100011011011010100101111000100100100111101010110110101011001001001011111100101010011111000101000111010110111100100111110011100111111110011110111111100101001001011110111110111111110111100100111100101100001011101011100100111100010001111000100011111010001110001011111000100100010001000100010001000101010100100010100110010101100100110110101010101101010011001010110010111010111111111100011110001100000011011101101111101100000100010001000100010000100000100000100000100000110001000101010000101010001000101011010111111110101011110101011111100110111101100111"});
+
+                    Bagel.internal.loadCurrent();
+                },
                 scripts: (game, type) => {
                     let scripts = game.game.scripts[type];
                     let index = game.internal.scripts.index[type];
@@ -4877,7 +5061,7 @@ Bagel = {
                                                     current.i = info.i;
                                                     current.where = info.where;
 
-                                                    info.assetLoader.init({...info.asset}, info.ready, info.game, info.assetLoader.internal.plugin, info.i);
+                                                    info.assetLoader.init({...info.asset}, info.set? info.set : info.ready, info.game, info.assetLoader.internal.plugin, info.i);
                                                     info.game.internal.assets.loading++;
 
                                                     if (assets.loadingIDs[plural] == null) assets.loadingIDs[plural] = {};
@@ -4895,7 +5079,7 @@ Bagel = {
                                                 else {
                                                     Bagel.internal.loadCurrent();
                                                     if (check) return false;
-                                                    console.error("Oops. That asset doesn't exist. You tried to get the asset with the id " + JSON.stringify(id) + ".");
+                                                    console.error("Oops. That " + typeJSON.get + " doesn't exist. You tried to get " + Bagel.internal.an(typeJSON.get) + " asset with the id " + JSON.stringify(id) + ".");
                                                     Bagel.internal.oops(boundGame);
                                                 }
                                             }
@@ -4903,7 +5087,76 @@ Bagel = {
                                             Bagel.internal.loadCurrent();
                                             return asset;
                                         };
+                                        if (typeJSON.set) { // Receives setting requests
+                                            Bagel.set.asset[typeJSON.get] = (id, value, game) => {
+                                                let current = Bagel.internal.current;
+                                                let plural = boundGame.internal.combinedPlugins.types.internal.pluralAssetTypes[typeJSON.get];
+                                                game = game == null? current.game : game;
+                                                if (game == null) {
+                                                    console.error("Oops. Looks like you're trying to run this function outside of a script. Try moving it and trying again. Alternatively, you can pass the game object in as the third argument to this function to fix this issue.");
+                                                    Bagel.internal.oops();
+                                                }
+                                                if (id == null) {
+                                                    console.error("Huh, looks like you forgot the \"id\" argument (the first argument). That's the id for the asset you want to set.");
+                                                    Bagel.internal.oops(game);
+                                                }
+
+                                                Bagel.internal.saveCurrent();
+
+                                                current.assetType = newType;
+                                                current.assetTypeName = typeJSON.get;
+                                                current.game = game;
+                                                current.plugin = plugin;
+                                                current.asset = typeJSON;
+                                                current.pluginProxy = true;
+
+                                                let prefix = id.split(".")[1];
+                                                let actingPluginID = Bagel.internal.getActingPluginId();
+
+                                                if (id[0] == ".") { // Reserved
+                                                    if (actingPluginID == null) {
+                                                        console.error("This is awkward... IDs starting with a dot are only for plugins. You tried to set " + Bagel.internal.an(typeJSON.get) + " using the id "
+                                                        + JSON.stringify(id)
+                                                        + ". If it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
+                                                        + JSON.stringify(prefix)
+                                                        + " ;)");
+                                                        Bagel.internal.oops();
+                                                    }
+                                                    else {
+                                                        if (prefix != actingPluginID) { // Plugins are allowed to use ids starting with a dot and then their id (if it starts with a dot)
+                                                            console.error("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + actingPluginID) + " and you tried to use the id " + JSON.stringify(value)
+                                                            + "In Game.id.\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".");
+                                                            Bagel.internal.oops();
+                                                        }
+                                                    }
+                                                }
+
+                                                let ready = ((id, game, plural, type) => asset => {
+                                                    let assets = game.internal.assets;
+                                                    let combinedPlugins = game.internal.combinedPlugins;
+
+                                                    if (assets.assets[type] == null) assets.assets[type] = {};
+                                                    assets.assets[plural][id] = asset;
+                                                })(id, game, plural, newType); // This is called by the init function once the asset has loaded
+
+                                                let output = typeJSON.set(value, {
+                                                    id: id,
+                                                    src: null
+                                                }, ready, game, plugin);
+                                                if (output) {
+                                                    console.error(output);
+                                                    Bagel.internal.oops(game);
+                                                }
+
+                                                Bagel.internal.loadCurrent();
+
+                                            };
+                                        }
+
                                         boundGame.get.asset[typeJSON.get] = (id, check) => Bagel.get.asset[typeJSON.get](id, boundGame, check); // An alias
+                                        if (typeJSON.set) {
+                                            boundGame.set.asset[typeJSON.get] = (id, value) => Bagel.set.asset[typeJSON.get](id, value, boundGame);
+                                        }
                                         boundGame.add.asset[typeJSON.get] = (asset, where) => {
                                             if (asset == null) {
                                                 console.error("Oops, looks like you forgot the \"asset\" argument (the first argument). That's the arguments for the asset as an object.");
@@ -6446,10 +6699,6 @@ Bagel = {
                     let subFunctions = Bagel.internal.subFunctions.tick;
 
                     let renderer = game.internal.renderer;
-                    if (renderer.type == "webgl" && renderer.waitTick < game.config.display.webgl.initialDelay) {
-                        renderer.waitTick++;
-                        return;
-                    }
 
                     if (! game.paused) {
                         subFunctions.pluginScripts(game);
@@ -6552,12 +6801,7 @@ Bagel = {
                                 */
                             }
                             else {
-                                if (renderer.waitTick >= game.config.display.webgl.initialDelay) {
-                                    Bagel.internal.subFunctions.tick.render.webgl.tick(game);
-                                }
-                                else {
-                                    renderer.waitTick++;
-                                }
+                                Bagel.internal.subFunctions.tick.render.webgl.tick(game);
                             }
                         }
 
@@ -6760,11 +7004,11 @@ Bagel = {
                             return "Oh no! You used an id for your game that is already being used. Try and think of something else.\nYou used " + JSON.stringify(value) + " in \"Game.id\".";
                         }
 
-                        let lastPluginID = Bagel.internal.getActingPluginId();
+                        let actingPluginID = Bagel.internal.getActingPluginId();
                         let prefix = value.split(".")[1];
 
                         if (value[0] == ".") { // Reserved
-                            if (lastPluginID == null) {
+                            if (actingPluginID == null) {
                                 console.error("This is awkward... IDs starting with a dot are only for plugins. You tried to use the id "
                                 + JSON.stringify(value)
                                 + ". In Game.id.\nIf it's important that it has this name, you could write a plugin instead, just make sure its id is set to "
@@ -6773,8 +7017,8 @@ Bagel = {
                                 Bagel.internal.oops();
                             }
                             else {
-                                if (prefix != lastPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
-                                    console.error("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + lastPluginID) + " and you tried to use the id " + JSON.stringify(value)
+                                if (prefix != actingPluginID) { // Plugins are allowed to use ids starting with a dot and then their id (if it starts with a dot)
+                                    console.error("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + actingPluginID) + " and you tried to use the id " + JSON.stringify(value)
                                     + "In Game.id.\nYou can fix this by changing the prefix, removing it or changing the plugin id in \"Plugin.info.id\".");
                                     Bagel.internal.oops();
                                 }
@@ -7015,12 +7259,6 @@ Bagel = {
                                     default: {},
                                     types: ["object"],
                                     subcheck: {
-                                        initialDelay: {
-                                            required: false,
-                                            default: 0,
-                                            types: ["number"],
-                                            description: "The number of frames to delay rendering and scripts by when the game is initialised in order to allow WebGL to initialise first."
-                                        },
                                         minimumLimits: {
                                             required: false,
                                             default: {},
@@ -7298,11 +7536,11 @@ Bagel = {
                     id: {
                         required: true,
                         check: (id, sprite, name, game) => {
-                            let lastPluginID = Bagel.internal.getActingPluginId();
+                            let actingPluginID = Bagel.internal.getActingPluginId();
 
                             let prefix = id.split(".")[1];
                             if (id[0] == ".") { // Reserved
-                                if (lastPluginID == null) {
+                                if (actingPluginID == null) {
                                     return ("This is awkward... ids starting with a dot are only for plugins. You tried to use the id "
                                     + JSON.stringify(id)
                                     + ".\nIf it's important that it has this name, you could write a plugin instead, just make sure its id (Plugin.info.id) is set to "
@@ -7310,8 +7548,8 @@ Bagel = {
                                     + " ;)");
                                 }
                                 else {
-                                    if (prefix != lastPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
-                                        return ("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + lastPluginID) + " and you tried to use the id "
+                                    if (prefix != actingPluginID) { // Plugins are allowed to use ids starting with a dot and then their id
+                                        return ("Erm... the only reserved prefix you can use in this plugin is " + JSON.stringify("." + actingPluginID) + " and you tried to use the id "
                                         + JSON.stringify(id)
                                         + ".\nYou can fix this by changing the prefix (the bit after a full stop starting but before the next full stop), removing it or changing the plugin id in \"Plugin.info.id\".");
                                     }
@@ -7666,7 +7904,7 @@ Bagel = {
                                         set: {
                                             required: false,
                                             types: ["function"],
-                                            description: "Runs instead of the init function when the asset is set. Called with asset, ready, game, plugin."
+                                            description: "Runs instead of the init function when the asset is set. Called with asset, ready, game and plugin. Setting this will replace the ready function in the init function with a function that will call this. Call it with the resource that init fetched and process it in set."
                                         },
                                         hrefArgs: {
                                             required: false,
@@ -9076,7 +9314,7 @@ Bagel = {
                         let height = Math.ceil(texture.height);
                         let maxSize = renderer.maxTextureSize;
                         let downscaled = false;
-                        if (width > maxSize || height > maxSize) {
+                        if (width > 4096 || height > 4096) {
                             downscaled = true;
                             singleTexture = true;
 
@@ -10515,6 +10753,9 @@ Bagel = {
             }
             return Bagel.internal.games[id];
         }
+    },
+    set: {
+        asset: {}
     },
     step: {
         sprite: (id, sprite, game) => {

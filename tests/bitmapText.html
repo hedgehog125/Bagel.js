@@ -15,15 +15,6 @@ game = Bagel.init({
     id: "game",
     state: "game",
     game: {
-        assets: {
-            fonts: [
-                {
-                    id: "Basic",
-                    src: "../assets/fonts/default.bagelFont"
-                }
-            ],
-            snds: []
-        },
         sprites: [
             {
                 id: "Text",
@@ -38,7 +29,6 @@ game = Bagel.init({
                     ]
                 },
                 bitmap: true,
-                font: "Basic",
                 size: 12,
                 scripts: {
                     init: [

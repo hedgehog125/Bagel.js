@@ -4,9 +4,7 @@
         Multi-line text example
     </title>
 </head>
-<body bgColor="blue">
-    <p id="debug"></p>
-</body>
+<body bgColor="blue"></body>
 
 <script src="../bagel.js"></script>
 <script>
@@ -15,22 +13,28 @@ game = Bagel.init({
     id: "game",
     state: "game",
     game: {
-        assets: {
-            fonts: [
-                {
-                    id: "Basic",
-                    src: "../assets/fonts/default.bagelFont"
-                }
-            ],
-            snds: []
-        },
         sprites: [
             {
                 id: "Text",
                 type: "text",
                 text: "Short line\nLonger line",
-                font: "Basic",
                 size: 12,
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ]
+                }
+            },
+            {
+                id: "Text2",
+                type: "text",
+                text: "Short line\nLonger line",
+                bitmap: true,
+                size: 12,
+                y: 275,
                 scripts: {
                     init: [
                         {
