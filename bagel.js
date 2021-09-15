@@ -335,23 +335,23 @@ Bagel = {
                             args: {
                                 x: {
                                     required: false,
-                                    default: "centred",
+                                    default: "centered",
                                     types: [
                                         "number",
                                         "string",
                                         "function"
                                     ],
-                                    description: "The x position for the sprite. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                    description: "The x position for the sprite. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                 },
                                 y: {
                                     required: false,
-                                    default: "centred",
+                                    default: "centered",
                                     types: [
                                         "number",
                                         "string",
                                         "function"
                                     ],
-                                    description: "The y position for the sprite. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                    description: "The y position for the sprite. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                 },
                                 img: {
                                     required: false,
@@ -402,13 +402,13 @@ Bagel = {
                             cloneArgs: {
                                 x: {
                                     syntax: {
-                                        description: "The x position for the clone. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                        description: "The x position for the clone. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                     },
                                     mode: "replace"
                                 },
                                 y: {
                                     syntax: {
-                                        description: "The y position for the clone. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                        description: "The y position for the clone. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                     },
                                     mode: "replace"
                                 },
@@ -467,7 +467,7 @@ Bagel = {
                                         }
 
                                         if (typeof value == "string") {
-                                            if (value == "centred") {
+                                            if (value == "centered") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
                                                 plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                                 triggerSprite.internal.renderUpdate = true;
@@ -482,7 +482,7 @@ Bagel = {
                                         }
 
                                         // It's invalid if it wasn't any of those valid values
-                                        return "Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
+                                        return "Oops, this can only be a function, a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (! game.loaded) { // The game needs to have loaded first
@@ -803,23 +803,23 @@ Bagel = {
                             args: {
                                 x: {
                                     required: false,
-                                    default: "centred",
+                                    default: "centered",
                                     types: [
                                         "number",
                                         "string",
                                         "function"
                                     ],
-                                    description: "The x position for the canvas. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                    description: "The x position for the canvas. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                 },
                                 y: {
                                     required: false,
-                                    default: "centred",
+                                    default: "centered",
                                     types: [
                                         "number",
                                         "string",
                                         "function"
                                     ],
-                                    description: "The y position for the canvas. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                    description: "The y position for the canvas. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                 },
                                 width: {
                                     required: true,
@@ -886,13 +886,13 @@ Bagel = {
                             cloneArgs: {
                                 x: {
                                     syntax: {
-                                        description: "The x position for the clone. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                        description: "The x position for the clone. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                     },
                                     mode: "replace"
                                 },
                                 y: {
                                     syntax: {
-                                        description: "The y position for the clone. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                        description: "The y position for the clone. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                     },
                                     mode: "replace"
                                 },
@@ -951,7 +951,7 @@ Bagel = {
                                             return;
                                         }
                                         if (typeof value == "string") {
-                                            if (value == "centred") {
+                                            if (value == "centered") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
                                                 plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                                 triggerSprite.internal.renderUpdate = true;
@@ -971,7 +971,7 @@ Bagel = {
                                         }
 
                                         // It's invalid if it wasn't any of those valid values
-                                        console.error("Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        console.error("Oops, this can only be a function, a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
                                         Bagel.internal.oops(game);
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
@@ -1236,13 +1236,19 @@ Bagel = {
                                     sprite.internal.renderUpdate = false;
                                 },
                                 onVisible: (sprite, newBitmap) => {
-                                    sprite.internal.renderUpdate = false;
+                                    let internal = sprite.internal;
+                                    internal.renderUpdate = false;
+                                    if (! internal.prerendered) {
+                                        if (internal.prerenderBase) {
+                                            sprite.prerender();
+                                        }
+                                    }
                                     return newBitmap({
                                         x: sprite.x,
                                         y: sprite.y,
                                         width: sprite.width,
                                         height: sprite.height,
-                                        image: sprite.internal.canvasID,
+                                        image: internal.canvasID,
                                         rotation: sprite.angle,
                                         alpha: sprite.alpha
                                     }, sprite.game, false);
@@ -1322,23 +1328,23 @@ Bagel = {
                             args: {
                                 x: {
                                     required: false,
-                                    default: "centred",
+                                    default: "centered",
                                     types: [
                                         "number",
                                         "string",
                                         "function"
                                     ],
-                                    description: "The x position for the text. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                    description: "The x position for the text. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                 },
                                 y: {
                                     required: false,
-                                    default: "centred",
+                                    default: "centered",
                                     types: [
                                         "number",
                                         "string",
                                         "function"
                                     ],
-                                    description: "The y position for the text. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                    description: "The y position for the text. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                 },
                                 alpha: {
                                     required: false,
@@ -1383,7 +1389,7 @@ Bagel = {
                                     types: ["boolean"],
                                     description: "If HTML (false) or bitmap (true) fonts should be used."
                                 },
-                                colour: {
+                                color: {
                                     required: false,
                                     default: "black",
                                     types: ["string"],
@@ -1393,13 +1399,13 @@ Bagel = {
                             cloneArgs: {
                                 x: {
                                     syntax: {
-                                        description: "The x position for the clone. Can also be set to \"centred\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                        description: "The x position for the clone. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
                                     },
                                     mode: "replace"
                                 },
                                 y: {
                                     syntax: {
-                                        description: "The y position for the clone. Can also be set to \"centred\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                        description: "The y position for the clone. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                     },
                                     mode: "replace"
                                 },
@@ -1427,7 +1433,7 @@ Bagel = {
                                 bitmap: {
                                     mode: "replace"
                                 },
-                                colour: {
+                                color: {
                                     mode: "replace"
                                 }
                             },
@@ -1440,7 +1446,7 @@ Bagel = {
                                             return;
                                         }
                                         if (typeof value == "string") {
-                                            if (value == "centred") {
+                                            if (value == "centered") {
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
                                                 plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                                 triggerSprite.internal.renderUpdate = true;
@@ -1460,7 +1466,7 @@ Bagel = {
                                         }
 
                                         // It's invalid if it wasn't any of those valid values
-                                        console.error("Oops, this can only be a function, a number or the string \"centred\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        console.error("Oops, this can only be a function, a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
                                         Bagel.internal.oops(game);
                                     },
                                     rerender: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
@@ -1521,7 +1527,7 @@ Bagel = {
                                             }
                                         }
                                     },
-                                    colour: {
+                                    color: {
                                         set: "rerender"
                                     }
                                 },
@@ -1813,8 +1819,8 @@ Bagel = {
                                             },
                                         },
                                         fn: args => {
-                                            if (Bagel.internal.pwaInitialised) {
-                                                console.error("Erm, you can only run this function once per page. The PWA's already initialised.");
+                                            if (Bagel.internal.pwaInitialized) {
+                                                console.error("Erm, you can only run this function once per page. The PWA's already initialized.");
                                             }
                                             if (args.worker) {
                                                 if (navigator.serviceWorker) {
@@ -1943,7 +1949,7 @@ Bagel = {
                                                 console.warn("PWA debug mode is enabled, make sure you disable it before releasing by setting \"debug\" in Bagel.pwa.init to false.");
                                             }
 
-                                            Bagel.internal.pwaInitialised = true;
+                                            Bagel.internal.pwaInitialized = true;
                                         }
                                     }
                                 },
@@ -2131,12 +2137,12 @@ Bagel = {
                                                         description: "The URL for the PWA to start at when it's opened."
                                                     },
 
-                                                    backgroundColour: {
+                                                    backgroundColor: {
                                                         required: false,
                                                         types: ["string"],
                                                         description: "The background colour for the PWA. Is an HTML colour. Defaults to the page's background colour."
                                                     },
-                                                    themeColour: {
+                                                    themeColor: {
                                                         required: false,
                                                         types: ["string"],
                                                         description: "The theme colour for the app. See https://developer.mozilla.org/en-US/docs/Web/Manifest/theme_color"
@@ -2204,8 +2210,8 @@ Bagel = {
                                                         icons: "icons",
                                                         name: "name",
                                                         shortName: "short_name",
-                                                        backgroundColour: "background_color",
-                                                        themeColour: "theme_color",
+                                                        backgroundColor: "background_color",
+                                                        themeColor: "theme_color",
                                                         categories: "categories",
                                                         description: "description",
                                                         dir: "dir",
@@ -2222,7 +2228,7 @@ Bagel = {
                                                     let newArgs = {};
                                                     for (let i in args) {
                                                         if (args[i] == null) {
-                                                            if (i == "backgroundColour") {
+                                                            if (i == "backgroundColor") {
                                                                 if (document.body) {
                                                                     newArgs[map[i]] = document.body.bgColor;
                                                                 }
@@ -3614,7 +3620,7 @@ Bagel = {
 
                         canvas.width = maxWidth * 2;
                         canvas.height = asset.maxHeight * lines.length * 2;
-                        ctx.fillStyle = sprite.colour;
+                        ctx.fillStyle = sprite.color;
 
                         let y = 0;
                         for (let i in lines) {
@@ -3720,7 +3726,7 @@ Bagel = {
                         canvas.width = width * scaleX; // It's not affected by scaling
                         canvas.height = Math.ceil(size) * lines.length;
                         ctx.font = sprite.size + "px " + sprite.font;
-                        ctx.fillStyle = sprite.colour;
+                        ctx.fillStyle = sprite.color;
 
                         ctx.textBaseline = "middle";
                         ctx.scale(scaleX, scaleY);
@@ -3929,7 +3935,7 @@ Bagel = {
                     },
                     rerunListeners: [],
                     rerunIndex: {},
-                    rendererNotInitialised: true,
+                    rendererNotInitialized: true,
                     onVisibleTriggered: false,
                     onVisibleTriggeredBefore: false,
                     onInvisibleTriggered: false,
@@ -4160,9 +4166,9 @@ Bagel = {
                             vertices: new Float32Array(),
                             textureCoordinates: new Float32Array(),
                             bitmapSpriteData: [],
-                            colourCanvas: null,
-                            colourCtx: null,
-                            lastBackgroundColour: null,
+                            colorCanvas: null,
+                            colorCtx: null,
+                            lastBackgroundColor: null,
                             verticesUpdated: false,
                             displayedDownscaleWarning: false,
                             activeGLTextureContexts: [],
@@ -4503,10 +4509,10 @@ Bagel = {
                                 if (deviceWebGL.textureSizeLimit < limits.textureSize || deviceWebGL.textureCountLimit < limits.textureCount) {
                                     subFunctions.errorScreen(game, 0);
                                 }
-                                renderer.colourCanvas = document.createElement("canvas");
-                                renderer.colourCanvas.width = 1;
-                                renderer.colourCanvas.height = 1;
-                                renderer.colourCtx = renderer.colourCanvas.getContext("2d");
+                                renderer.colorCanvas = document.createElement("canvas");
+                                renderer.colorCanvas.width = 1;
+                                renderer.colorCanvas.height = 1;
+                                renderer.colorCtx = renderer.colorCanvas.getContext("2d");
                             }
                             else {
                                 subFunctions.errorScreen(game, 0);
@@ -4824,12 +4830,12 @@ Bagel = {
                         loadingScreen.width = game.width;
                         loadingScreen.height = game.height;
 
-                        let backgroundColour;
-                        if (game.config.display.backgroundColour == "transparent") {
-                            backgroundColour = document.body.bgColor;
+                        let backgroundColor;
+                        if (game.config.display.backgroundColor == "transparent") {
+                            backgroundColor = document.body.bgColor;
                         }
                         else {
-                            backgroundColour = game.config.display.backgroundColour;
+                            backgroundColor = game.config.display.backgroundColor;
                         }
 
                         loadingScreen.config = {
@@ -4838,7 +4844,7 @@ Bagel = {
                                 mode: "preload"
                             },
                             display: {
-                                backgroundColour: backgroundColour,
+                                backgroundColor: backgroundColor,
                                 dom: false
                             },
                             disableBagelJSMessage: true, // Otherwise there would be 2 per game
@@ -5222,7 +5228,7 @@ Bagel = {
 
                                                         if (value) {
                                                             if (typeJSON.render.onVisible) {
-                                                                if (triggerSprite.internal.Bagel.rendererNotInitialised) {
+                                                                if (triggerSprite.internal.Bagel.rendererNotInitialized) {
                                                                     return ".rerun";
                                                                 }
                                                                 else {
@@ -5596,9 +5602,9 @@ Bagel = {
                         Bagel.internal.triggerSpriteListener("set", "visible", sprite, game, true);
                     }
 
-                    if (sprite.internal.Bagel.rendererNotInitialised) {
+                    if (sprite.internal.Bagel.rendererNotInitialized) {
                         if (noReruns) { // Otherwise will be run after the rerun
-                            sprite.internal.Bagel.rendererNotInitialised = false;
+                            sprite.internal.Bagel.rendererNotInitialized = false;
                             Bagel.internal.subFunctions.createSprite.initRender(sprite, game);
                         }
                     }
@@ -5934,7 +5940,7 @@ Bagel = {
                             Bagel.internal.subFunctions.tick.render.canvas.queues.bitmapLayers(game);
 
                             // Clear the canvas
-                            let clearStyle = game.config.display.backgroundColour;
+                            let clearStyle = game.config.display.backgroundColor;
                             if (clearStyle == "transparent") {
                                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                             }
@@ -6616,7 +6622,7 @@ Bagel = {
                             renderer.locations.textures = textureLocation;
 
 
-                            renderer.webGLInitialised = true;
+                            renderer.webGLInitialized = true;
                         },
                         tick: game => {
                             let renderer = game.internal.renderer;
@@ -6629,16 +6635,16 @@ Bagel = {
                             queues.texturemaps(game);
 
 
-                            let backgroundColour = game.config.display.backgroundColour;
-                            if (backgroundColour != renderer.lastBackgroundColour) {
-                                renderer.colourCtx.fillStyle = backgroundColour;
-                                renderer.colourCtx.fillRect(0, 0, 1, 1);
-                                let pixel = renderer.colourCtx.getImageData(0, 0, 1, 1).data;
-                                renderer.backgroundColour = [...pixel].map(value => value / 255);
+                            let backgroundColor = game.config.display.backgroundColor;
+                            if (backgroundColor != renderer.lastBackgroundColor) {
+                                renderer.colorCtx.fillStyle = backgroundColor;
+                                renderer.colorCtx.fillRect(0, 0, 1, 1);
+                                let pixel = renderer.colorCtx.getImageData(0, 0, 1, 1).data;
+                                renderer.backgroundColor = [...pixel].map(value => value / 255);
 
-                                renderer.lastBackgroundColour = backgroundColour;
+                                renderer.lastBackgroundColor = backgroundColor;
                             }
-                            gl.clearColor(...renderer.backgroundColour);
+                            gl.clearColor(...renderer.backgroundColor);
                             gl.clear(gl.COLOR_BUFFER_BIT);
 
                             if (renderer.vertices.length != 0) {
@@ -6661,7 +6667,7 @@ Bagel = {
                         let sprite = game.game.sprites[i];
                         if (sprite == null) continue;
 
-                        if (! sprite.internal.Bagel.rendererNotInitialised) {
+                        if (! sprite.internal.Bagel.rendererNotInitialized) {
                             let handler = game.internal.combinedPlugins.types.sprites[sprite.type];
 
                             let bitmapFunctions = Bagel.internal.render.bitmapSprite;
@@ -6787,20 +6793,7 @@ Bagel = {
 
 
                         if (! game.config.isLoadingScreen) {
-                            if (renderer.type == "canvas") {
-                                /*
-                                let clearStyle = game.config.display.backgroundColour;
-                                if (clearStyle == "transparent") {
-                                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                                }
-                                else {
-                                    ctx.fillStyle = clearStyle;
-                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                                }
-                                ctx.drawImage(loadingScreen.internal.renderer.canvas, 0, 0, canvas.width, canvas.height);
-                                */
-                            }
-                            else {
+                            if (renderer.type == "webgl") {
                                 Bagel.internal.subFunctions.tick.render.webgl.tick(game);
                             }
                         }
@@ -7248,7 +7241,7 @@ Bagel = {
                                     types: ["string"],
                                     description: "An element to append the canvas to. If unspecified, it will be added to the document or body."
                                 },
-                                backgroundColour: {
+                                backgroundColor: {
                                     required: false,
                                     default: "white",
                                     types: ["string"],
@@ -7366,7 +7359,7 @@ Bagel = {
                                                         let midPoint = canvas.width / 2;
 
                                                         ctx.imageSmoothingEnabled = false;
-                                                        ctx.fillStyle = game.config.display.backgroundColour;
+                                                        ctx.fillStyle = game.config.display.backgroundColor;
 
                                                         if (game.vars.stage == 0) {
                                                             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -7437,7 +7430,7 @@ Bagel = {
                                                                     me.vars.halfBagelHeight = Bagel.get.sprite("Bagel").height / 2;
 
                                                                     step("calculateSize");
-                                                                    step("calculateColour");
+                                                                    step("calculateColor");
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
@@ -7445,7 +7438,7 @@ Bagel = {
                                                         main: [
                                                             {
                                                                 code: (me, game, step) => {
-                                                                    step("calculateColour");
+                                                                    step("calculateColor");
                                                                     step("calculateSize");
                                                                 },
                                                                 stateToRun: "loading"
@@ -7461,17 +7454,17 @@ Bagel = {
                                                                 me.y = (game.height / 2) + me.vars.halfBagelHeight;
                                                                 me.y += me.height;
                                                             },
-                                                            calculateColour: (me, game) => {
+                                                            calculateColor: (me, game) => {
                                                                 // A slightly hackish way of converting colours to hex
                                                                 let ctx = me.vars.ctx;
-                                                                let backgroundColour = game.vars.loading.game.config.display.backgroundColour;
-                                                                if (backgroundColour == "transparent") {
-                                                                    backgroundColour = document.body.bgColor;
+                                                                let backgroundColor = game.vars.loading.game.config.display.backgroundColor;
+                                                                if (backgroundColor == "transparent") {
+                                                                    backgroundColor = document.body.bgColor;
                                                                 }
-                                                                ctx.fillStyle = backgroundColour;
-                                                                backgroundColour = ctx.fillStyle; // Makes it a hex colour
+                                                                ctx.fillStyle = backgroundColor;
+                                                                backgroundColor = ctx.fillStyle; // Makes it a hex colour
 
-                                                                let rgb = backgroundColour;
+                                                                let rgb = backgroundColor;
                                                                 let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
                                                                 if (brightness <= 127) {
                                                                     me.img = "Loading.White";
@@ -10123,9 +10116,9 @@ Bagel = {
                     noReruns = false;
                 }
             }
-            if (sprite.internal.Bagel.rendererNotInitialised) {
+            if (sprite.internal.Bagel.rendererNotInitialized) {
                 if (noReruns) {
-                    sprite.internal.Bagel.rendererNotInitialised = false;
+                    sprite.internal.Bagel.rendererNotInitialized = false;
                     Bagel.internal.subFunctions.createSprite.initRender(sprite, game);
                 }
             }
@@ -10243,7 +10236,7 @@ Bagel = {
                                         me.y += (me.height / 2) - (lineWidth / 2);
 
 
-                                        ctx.fillStyle = game.config.display.backgroundColour;
+                                        ctx.fillStyle = game.config.display.backgroundColor;
                                         ctx.fillRect(0, 0, me.width, me.height);
 
                                         ctx.strokeStyle = "#6B6B6B";
@@ -10274,7 +10267,7 @@ Bagel = {
                                 if (me.vars.waitTick == 30) {
                                     ctx.scale(me.scaleX, me.scaleY);
 
-                                    ctx.fillStyle = game.config.display.backgroundColour;
+                                    ctx.fillStyle = game.config.display.backgroundColor;
                                     ctx.fillRect(0, 0, me.width, me.height);
 
                                     me.vars.shrinkVel += me.width / 300;
