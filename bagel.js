@@ -981,15 +981,17 @@ Bagel = {
                                             triggerSprite.internal.renderUpdate = true;
                                             valid = true;
                                         }
-                                        if ((! game.loaded) || initialTrigger) { // Make sure the game has loaded for the next one
-                                            return ".rerun";
-                                        }
 
                                         if (typeof value == "function") {
-                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
-                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
-                                            triggerSprite.internal.renderUpdate = true;
-                                            valid = true;
+                                            if (game.loaded && (! initialTrigger)) {
+                                                sprite[property] = value(triggerSprite, game); // Avoid the setter
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
+                                                triggerSprite.internal.renderUpdate = true;
+                                                valid = true;
+                                            }
+                                            else {
+                                                return ".rerun";
+                                            }
                                         }
 
                                         if (triggerSprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
@@ -1559,33 +1561,41 @@ Bagel = {
 
                                     internal.ctx = internal.canvas.getContext("2d");
                                 },
-                                onVisible: (sprite, newBitmap) => {
-                                    sprite.internal.renderUpdate = false;
+                                onVisible: (sprite, newBitmap, game, plugin) => {
+                                    let internal = sprite.internal;
+                                    internal.renderUpdate = false;
                                     if (sprite.bitmap) {
-                                        if (! sprite.game.get.asset.font(sprite.font)) {
-                                            return newBitmap({
-                                                x: sprite.x,
-                                                y: sprite.y,
-                                                width: sprite.width,
-                                                height: sprite.height,
-                                                image: sprite.internal.canvasID,
-                                                rotation: 90,
-                                                alpha: sprite.alpha
-                                            }, sprite.game, false);
+                                        if (sprite.game.get.asset.font(sprite.font) === true) {
+                                            return;
                                         }
                                     }
+
+                                    let scaleX = game.internal.renderer.scaleX;
+                                    let scaleY = game.internal.renderer.scaleY;
+                                    if (internal.needsRerender || ((! sprite.bitmap) && (internal.last.scaleX != scaleX || internal.last.scaleY != scaleY))) {
+                                        internal.needsRerender = false;
+                                        plugin.vars.font.prerender(sprite, scaleX, scaleY, plugin);
+                                    }
+                                    return newBitmap({
+                                        x: sprite.x,
+                                        y: sprite.y,
+                                        width: sprite.width,
+                                        height: sprite.height,
+                                        image: sprite.internal.canvasID,
+                                        rotation: 90,
+                                        alpha: sprite.alpha
+                                    }, game, false);
                                 },
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
                                 whileVisible: (sprite, updateBitmap, newBitmap, deleteBitmap, game, plugin) => {
                                     let mainCanvas = sprite.game.internal.renderer.canvas;
-                                    let scaleX = sprite.game.internal.renderer.scaleX;
-                                    let scaleY = sprite.game.internal.renderer.scaleY;
+                                    let scaleX = game.internal.renderer.scaleX;
+                                    let scaleY = game.internal.renderer.scaleY;
 
                                     let internal = sprite.internal;
                                     if (internal.needsRerender || ((! sprite.bitmap) && (internal.last.scaleX != scaleX || internal.last.scaleY != scaleY))) {
                                         internal.needsRerender = false;
                                         plugin.vars.font.prerender(sprite, scaleX, scaleY, plugin);
-                                        plugin.vars.sprite.updateAnchors(sprite, true, true);
                                     }
                                     if (internal.renderUpdate) {
                                         internal.renderUpdate = false;
@@ -1597,7 +1607,7 @@ Bagel = {
                                             image: internal.canvasID,
                                             rotation: 90,
                                             alpha: sprite.alpha
-                                        }, sprite.game, false);
+                                        }, game, false);
                                     }
                                 }
                             }
@@ -2805,7 +2815,8 @@ Bagel = {
                                     fn: {
                                         appliesTo: [
                                             "sprite",
-                                            "canvas"
+                                            "canvas",
+                                            "text"
                                         ],
                                         obArg: false,
                                         args: {},
@@ -2821,7 +2832,7 @@ Bagel = {
                                         appliesTo: [
                                             "sprite",
                                             "canvas",
-                                            "renderer"
+                                            "text"
                                         ],
                                         obArg: false,
                                         args: {},
@@ -2837,7 +2848,7 @@ Bagel = {
                                         appliesTo: [
                                             "sprite",
                                             "canvas",
-                                            "renderer"
+                                            "text"
                                         ],
                                         obArg: false,
                                         args: {},
@@ -2853,7 +2864,7 @@ Bagel = {
                                         appliesTo: [
                                             "sprite",
                                             "canvas",
-                                            "renderer"
+                                            "text"
                                         ],
                                         obArg: false,
                                         args: {},
@@ -3521,6 +3532,7 @@ Bagel = {
                             canvas = game.internal.renderer.blankTexture;
                         }
                         Bagel.internal.render.texture.update(internal.canvasID, canvas, game);
+                        plugin.vars.sprite.updateAnchors(sprite, true, true);
                         internal.renderUpdate = true;
                     },
                     prerenderBitmap: (lines, sprite, scaleX, scaleY, plugin, canvas, ctx) => {
