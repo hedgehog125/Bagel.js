@@ -10,6 +10,8 @@ Should the loading screen use the full resolution? Need to commit to a set resol
 == Bugs ==
 Change WebGL rounding to match canvas <==========
 
+Text anchors. Setting anchors in sprites initially
+
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
 
 Send to back can cause a crash in the update bitmap function. Maybe requires combination of it and bringToFront in another sprite?
@@ -4007,6 +4009,9 @@ Bagel = {
                     for (let i in clone.scripts.init) {
                         clone.scripts.init[i](clone, game, Bagel.step.sprite);
                     }
+                    for (let i in clone.scripts.main) {
+                        clone.scripts.main[i](clone, game, Bagel.step.sprite);
+                    }
                     Bagel.internal.current.sprite = parent;
 
                     return clone;
@@ -4551,7 +4556,7 @@ Bagel = {
 
 
                     if (game.config.display.mode == "fill") {
-                        renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);"; // From https://www.w3schools.com/howto/howto_css_center-vertical.asp and Phaser
+                        renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // From Phaser (https://phaser.io)
                     }
                     else {
                         renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // CSS from Phaser (https://phaser.io)
@@ -4582,6 +4587,20 @@ Bagel = {
                                     }
                                     Bagel.internal.loadCurrent();
                                 }
+                                let current = Bagel.internal.current;
+                                Bagel.internal.saveCurrent();
+
+                                current.sprite = sprite;
+                                current.game = game;
+                                for (let i in sprite.scripts.main) {
+                                    let script = sprite.scripts.main[i];
+                                    if (script.stateToRun == game.internal.lastState) {
+                                        if (typeof script.code == "function") {
+                                            script.code(sprite, game, Bagel.step.sprite);
+                                        }
+                                    }
+                                }
+                                Bagel.internal.loadCurrent();
                                 return sprite;
                             },
                             asset: {}
@@ -4595,7 +4614,12 @@ Bagel = {
                         };
                         game.delete = _ => {
                             if (game.config.display.dom) {
-                                game.internal.renderer.canvas.remove();
+                                if (game.config.display.htmlElementID == null && game.config.display.mode == "fill") {
+                                    game.internal.renderer.canvas.parentElement.remove();
+                                }
+                                else {
+                                    game.internal.renderer.canvas.remove();
+                                }
                             }
 
                             let renderer = game.internal.renderer;
@@ -4911,7 +4935,15 @@ Bagel = {
                             if (document.body == null) {
                                 document.body = document.createElement("body");
                             }
-                            document.body.appendChild(game.internal.renderer.canvas);
+                            if (game.config.display.mode == "fill") {
+                                let p = document.createElement("p");
+                                p.style = "position: absolute;top:0;bottom:0;left:0;right:0;margin:auto;";
+                                p.appendChild(game.internal.renderer.canvas);
+                                document.body.appendChild(p);
+                            }
+                            else {
+                                document.body.appendChild(game.internal.renderer.canvas);
+                            }
                         }
                     }
                     Bagel.internal.subFunctions.init.plugins(game);
@@ -4937,6 +4969,12 @@ Bagel = {
                     if (game.config.isLoadingScreen) {
                         return;
                     }
+
+                    let blankTexture = document.createElement("canvas");
+                    blankTexture.width = 1;
+                    blankTexture.height = 1;
+                    game.internal.renderer.blankTexture = blankTexture;
+
 
                     let rendererType = game.internal.renderer.type;
                     let renderers = Bagel.internal.subFunctions.tick.render;
@@ -5858,7 +5896,7 @@ Bagel = {
                                 continue;
                             }
 
-                            if (type == "init") { // The sprite's active
+                            if (type == "init" && sprite.scripts.init[scriptInfo.script].affectVisible) { // The sprite's active
                                 // Don't trigger it twice
                                 if (sprite.internal.Bagel.rerunIndex.visible) {
                                     sprite.internal.Bagel.properties.visible = true;
@@ -6610,10 +6648,7 @@ Bagel = {
                             gl.vertexAttribPointer(textureLocation, 4, gl.FLOAT, false, 0, 0);
                             gl.bufferData(gl.ARRAY_BUFFER, renderer.textureCoordinates, gl.STATIC_DRAW);
 
-                            let blankTexture = document.createElement("canvas");
-                            blankTexture.width = 1;
-                            blankTexture.height = 1;
-                            renderer.blankTexture = blankTexture;
+                            let blankTexture = renderer.blankTexture;
 
                             let i = 0;
                             while (i < textureCount) { // Fill the webgl textures with blank textures
@@ -6854,8 +6889,8 @@ Bagel = {
 
                     renderWidth = Math.ceil(renderWidth); // The canvas width has to be a whole number
                     renderHeight = Math.ceil(renderHeight);
-                    width = Math.round(width) + 1;
-                    height = Math.round(height) + 1;
+                    width = Math.round(width);
+                    height = Math.round(height);
 
                     let max = renderer.maxViewportSize;
                     if (renderWidth > max || renderHeight > max) { // Cap it
@@ -6891,6 +6926,13 @@ Bagel = {
                     canvas.style.height = height + "px";
                     renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
                     renderer.styleHeight = height;
+
+                    let x = (window.innerWidth - width) / 2; // From Phaser (https://phaser.io)
+                    canvas.style.marginLeft = Math.floor(x) + "px";
+                    canvas.style.marginRight = -Math.ceil(x) + "px";
+                    let y = (window.innerHeight - height) / 2;
+                    canvas.style.marginTop = Math.floor(y) + "px";
+                    canvas.style.marginBottom = -Math.ceil(y) + "px";
 
                     if (! game.config.display.antialiasing) {
                         Bagel.internal.tryStyles(canvas, "image-rendering", [
@@ -7077,6 +7119,12 @@ Bagel = {
                                             required: true,
                                             types: ["string"],
                                             description: "The state when this script will be run."
+                                        },
+                                        affectVisible: {
+                                            required: false,
+                                            default: true,
+                                            types: ["boolean"],
+                                            description: "If the script should make the sprite visible or not when it runs."
                                         }
                                     },
                                     types: ["array"],
@@ -7616,6 +7664,12 @@ Bagel = {
                                         required: true,
                                         types: ["string"],
                                         description: "The state when this script will be run."
+                                    },
+                                    affectVisible: {
+                                        required: false,
+                                        default: true,
+                                        types: ["boolean"],
+                                        description: "If the script should make the sprite visible or not when it runs."
                                     }
                                 },
                                 arrayLike: true,
@@ -10698,7 +10752,7 @@ Bagel = {
                                 else {
                                     console.log("In " + args.where + "." + argID + " item " + c + ".");
                                 }
-                                console.log("Object:");
+                                console.log("Value:");
                                 console.log(args.ob[argID][c]);
                                 Bagel.internal.oops(args.game);
                             }
@@ -10709,7 +10763,7 @@ Bagel = {
                         if (error) {
                             console.error(error);
                             console.log("In " + args.where + "." + argID + ".");
-                            console.log("Object:");
+                            console.log("Value:");
                             console.log(args.ob[argID]);
                             Bagel.internal.oops(args.game);
                         }
