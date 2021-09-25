@@ -3,14 +3,14 @@ Bagel.js by hedgehog125, see https://github.com/hedgehog125/Bagel.js. License in
 Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.0
 WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_test
 
-TODO:
+TODO
 == Testing ==
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
 Change WebGL rounding to match canvas <==========
 
-Text anchors. Setting anchors in sprites initially
+Text anchors. Setting anchors in canvases initially
 
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
 
@@ -32,6 +32,8 @@ How is audio stored in PWAs? Is it only saved after it's played once?
 Is storing the combined textures as images more efficient when they are deactivated?
 
 = Optimisations =
+Use bitmap text in loading screen instead of images
+
 Keep textures in single textures unless memory pressure, maybe animated textures should stay longer? Remove explainations on technical details about how the textures work as it's too complicated already.
 
 Use texsubimage2d for updating the parts of textures that were updated. It's also faster even when the whole image needs to be updated. Might make single textures less necessary?
@@ -355,6 +357,28 @@ Bagel = {
                                     ],
                                     description: "The y position for the sprite. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                 },
+                                left: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the left side of the sprite to be positioned along the x axis."
+                                },
+                                right: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the right side of the sprite to be positioned along the x axis."
+                                },
+                                top: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the top of the sprite to be positioned along the y axis."
+                                },
+                                bottom: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the bottom of the sprite to be positioned along the y axis."
+                                },
+
+
                                 img: {
                                     required: false,
                                     default: null,
@@ -414,6 +438,20 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
+
+                                left: {
+                                    mode: "replace"
+                                },
+                                right: {
+                                    mode: "replace"
+                                },
+                                top: {
+                                    mode: "replace"
+                                },
+                                bottom: {
+                                    mode: "replace"
+                                },
+
                                 img: {
                                     syntax: {
                                         description: "The image for the clone to use to start with. If set to null or not specified anywhere, the clone will be invisible."
@@ -459,28 +497,39 @@ Bagel = {
                                                 return "Huh, looks like you've done something wrong in a calculation somewhere in your program. Sprite " + JSON.stringify(triggerSprite.id) + "'s " + property + " is NaN. This is usually caused by having a non number somewhere in a calcuation.";
                                             }
                                             else {
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property == "y");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
-                                        };
-                                        if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first for the next 2
-                                            return ".rerun";
                                         }
-
                                         if (typeof value == "string") {
                                             if (value == "centered") {
+                                                if (initialTrigger) {
+                                                    if (
+                                                        (property == "x" && (sprite.hasOwnProperty("left") || sprite.hasOwnProperty("right")))
+                                                        || (property == "y" && (sprite.hasOwnProperty("top") || sprite.hasOwnProperty("bottom")))
+                                                    ) {
+                                                        return;
+                                                    }
+                                                }
+
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property == "y");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
                                         }
+
                                         if (typeof value == "function") {
-                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
-                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
-                                            triggerSprite.internal.renderUpdate = true;
-                                            return;
+                                            if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first for this
+                                                return ".rerun";
+                                            }
+                                            else {
+                                                sprite[property] = value(triggerSprite, game); // Avoid the setter
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property == "y");
+                                                triggerSprite.internal.renderUpdate = true;
+                                                return;
+                                            }
                                         }
 
                                         // It's invalid if it wasn't any of those valid values
@@ -513,7 +562,9 @@ Bagel = {
                                                         return "Huh, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
                                                     }
                                                 }
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
+                                                if (! initialTrigger) {
+                                                    plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property == "height");
+                                                }
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -544,7 +595,9 @@ Bagel = {
                                                     let scaleY = sprite.height / img.height;
                                                     sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
                                                 }
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
+                                                if (! initialTrigger) {
+                                                    plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property == "height");
+                                                }
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -567,7 +620,10 @@ Bagel = {
                                                 let scaleY = sprite.height / img.height;
                                                 sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
                                             }
-                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
+
+                                            if (! initialTrigger) {
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property == "height");
+                                            }
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
@@ -588,7 +644,9 @@ Bagel = {
                                                 if (typeof img == "boolean") return ".rerun";
                                                 sprite[property] = img[property] * sprite.scale;
 
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
+                                                if (! initialTrigger) {
+                                                    plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property == "height");
+                                                }
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -605,49 +663,19 @@ Bagel = {
                                         set: "xy"
                                     },
 
-                                    left: {
-                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.x = value + (sprite.width / 2);
-                                            }
-                                        }
-                                    },
-                                    right: {
-                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.x = value - (sprite.width / 2);
-                                            }
-                                        }
-                                    },
-                                    top: {
-                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.y = value + (sprite.height / 2);
-                                            }
-                                        }
-                                    },
-                                    bottom: {
-                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.y = value - (sprite.height / 2);
-                                            }
-                                        }
-                                    },
-
-
                                     img: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                             triggerSprite.internal.imgWaiting = true;
                                             if (value) {
-                                                let img = Bagel.get.asset.img(value, triggerSprite.game, true);
+                                                let img = Bagel.get.asset.img(value, game, true);
                                                 if (typeof img == "boolean") {
                                                     if (img) { // Loading
                                                         return ".rerun";
                                                     }
                                                     else { // No asset
-                                                        img = Bagel.internal.render.texture.get(value, triggerSprite.game);
+                                                        img = Bagel.internal.render.texture.get(value, game);
                                                         if (! img) {
-                                                            if (triggerSprite.game.loaded) {
+                                                            if (game.loaded) {
                                                                 return "Oh no! Bagel.js couldn't find an image asset or a texture with the id " + JSON.stringify(value) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
                                                             }
                                                             else {
@@ -673,6 +701,52 @@ Bagel = {
                                     height: {
                                         set: "dimensions"
                                     },
+
+                                    left: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (initialTrigger) {
+                                                if (sprite.x != "centered") { // Only takes priority when the x is the default value
+                                                    return;
+                                                }
+                                                if (sprite.width == null) return ".rerun";
+                                            }
+                                            triggerSprite.x = value + (sprite.width / 2);
+                                        }
+                                    },
+                                    right: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (initialTrigger) {
+                                                if (sprite.x != "centered") { // Only takes priority when the x is the default value
+                                                    return;
+                                                }
+                                                if (sprite.width == null) return ".rerun";
+                                            }
+                                            triggerSprite.x = value - (sprite.width / 2);
+                                        }
+                                    },
+                                    top: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (initialTrigger) {
+                                                if (sprite.y != "centered") { // Only takes priority when the y is the default value
+                                                    return;
+                                                }
+                                                if (sprite.height == null) return ".rerun";
+                                            }
+                                            triggerSprite.y = value + (sprite.height / 2);
+                                        }
+                                    },
+                                    bottom: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (initialTrigger) {
+                                                if (sprite.y != "centered") { // Only takes priority when the y is the default value
+                                                    return;
+                                                }
+                                                if (sprite.height == null) return ".rerun";
+                                            }
+                                            triggerSprite.y = value - (sprite.height / 2);
+                                        }
+                                    },
+
                                     scale: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                             if (initialTrigger) {
@@ -685,9 +759,9 @@ Bagel = {
 
                                             if (typeof value == "number") {
                                                 if (sprite.img) {
-                                                    let img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
+                                                    let img = Bagel.get.asset.img(sprite.img, game, true);
                                                     if (! img) {
-                                                        img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
+                                                        img = Bagel.internal.render.texture.get(sprite.img, game);
                                                     }
                                                     if (! img) {
                                                         return "Hmm, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + " (Sprite.img must be set in order to change the sprite scale). Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
@@ -748,7 +822,6 @@ Bagel = {
                                 };
                                 sprite.internal.cache = {};
                                 sprite.internal.imgWaiting = true;
-                                plugin.vars.sprite.updateAnchors(sprite, true, true);
 
                                 let properties = sprite.internal.Bagel.properties;
                                 let specified = (properties.width != null) + (properties.height != null);
@@ -4138,6 +4211,15 @@ Bagel = {
                         game.internal.FPSFrames = 0;
                         game.internal.lastFPSUpdate = now;
                     }
+
+                    let mo = game.input.touchScrollMomentum;
+                    game.input.scrollDelta.x = mo.x;
+                    game.input.scrollDelta.y = mo.y;
+                    let multiplier = game.config.input.touch.scrollMomentum;
+                    mo.x *= multiplier;
+                    mo.y *= multiplier;
+
+                    game.input.scrollDelta.z = 0;
                 }
             }
             Bagel.internal.resetCurrent(); // Just in case something messes it up, although it might make debugging harder :/
@@ -4260,6 +4342,12 @@ Bagel = {
                             },
                             listeners: {}
                         }, // The plugins are combined as they're loaded
+                        input: {
+                            pendingTouchScrollMomentum: {
+                                x: 0,
+                                y: 0
+                            }
+                        },
                         lastState: (! game.state),
                         lastPrepState: (! game.state),
                         plugins: {},
@@ -4288,6 +4376,15 @@ Bagel = {
                             keys: {
                                 keys: {},
                                 keyCodes: {}
+                            },
+                            scrollDelta: {
+                                x: 0,
+                                y: 0,
+                                z: 0
+                            },
+                            touchScrollMomentum: {
+                                x: 0,
+                                y: 0
                             }
                         };
                         game.input.keys.isDown = keyName => {
@@ -4302,19 +4399,25 @@ Bagel = {
                             }
                             return false;
                         };
-                        (game => {
-                            if (document.readyState == "complete") {
-                                Bagel.internal.subFunctions.init.documentReady(game);
-                            }
-                            else {
-                                document.addEventListener("readystatechange", _ => {
-                                    if (document.readyState == "complete") { // Wait for the document to load
-                                        Bagel.internal.subFunctions.init.documentReady(game);
-                                    }
-                                });
-                            }
-                        })(game);
+                        if (document.readyState == "complete") {
+                            Bagel.internal.subFunctions.init.documentReady(game);
+                        }
+                        else {
+                            document.addEventListener("readystatechange", _ => {
+                                if (document.readyState == "complete") { // Wait for the document to load
+                                    Bagel.internal.subFunctions.init.documentReady(game);
+                                }
+                            });
+                        }
 
+                        canvas.addEventListener("wheel", e => {
+                            let sensitivity = game.config.input.mouse.scrollSensitivity;
+                            game.input.scrollDelta.x += e.deltaX * sensitivity;
+                            game.input.scrollDelta.y += e.deltaY * sensitivity;
+                            game.input.scrollDelta.z += e.deltaZ * sensitivity;
+
+                            e.preventDefault();
+                        }, true); // Scroll wheel but not actual scrolling
                         canvas.addEventListener("mousemove", e => {
                             let renderer = game.internal.renderer;
                             let rect = renderer.canvas.getBoundingClientRect();
@@ -4396,9 +4499,15 @@ Bagel = {
                             let rect = renderer.canvas.getBoundingClientRect();
                             let mouse = game.input.mouse;
 
+
+                            let xMove, yMove;
                             if (e.touches == null) {
-                                mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
-                                mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
+                                let x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
+                                let y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
+                                xMove = x - mouse.x;
+                                yMove = y - mouse.y;
+                                mouse.x = x;
+                                mouse.y = y;
                                 game.input.touches = [
                                     {
                                         x: mouse.x,
@@ -4407,8 +4516,12 @@ Bagel = {
                                 ];
                             }
                             else {
-                                mouse.x = ((e.touches[0].clientX - rect.left) / renderer.styleWidth) * game.width;
-                                mouse.y = ((e.touches[0].clientY  - rect.top) / renderer.styleHeight) * game.height;
+                                let x = ((e.touches[0].clientX - rect.left) / renderer.styleWidth) * game.width;
+                                let y = ((e.touches[0].clientY  - rect.top) / renderer.styleHeight) * game.height;
+                                xMove = x - mouse.x;
+                                yMove = y - mouse.y;
+                                mouse.x = x;
+                                mouse.y = y;
 
                                 game.input.touches = [];
                                 for (let i in e.touches) {
@@ -4419,6 +4532,13 @@ Bagel = {
                                 }
                             }
 
+                            game.input.scrollDelta.x -= xMove;
+                            game.input.scrollDelta.y -= yMove;
+                            let mo = game.internal.input.pendingTouchScrollMomentum;
+                            mo.x = -(xMove / 1.5);
+                            mo.y = -(yMove / 1.5);
+
+
                             if (e.cancelable) {
                                 e.preventDefault();
                             }
@@ -4427,6 +4547,9 @@ Bagel = {
                             Bagel.device.is.touchscreen = true;
 
                             game.input.touches = [];
+                            let mo = game.internal.input.pendingTouchScrollMomentum;
+                            game.input.touchScrollMomentum.x = mo.x;
+                            game.input.touchScrollMomentum.y = mo.y;
 
                             game.input.mouse.down = false;
                             if (e.cancelable) {
@@ -5548,14 +5671,16 @@ Bagel = {
                                     if (parent.clones.hasOwnProperty(i)) {
                                         sprite[i] = clone(parent.clones[i]);
                                     }
-                                    else {
+                                    else if (parent.hasOwnProperty(i)) {
                                         sprite[i] = clone(parent[i]);
                                     }
                                 }
                             }
                             else if (argJSON.mode == "merge") {
                                 if (! (parent.hasOwnProperty(i) || parent.clones.hasOwnProperty(i) || sprite.hasOwnProperty(i))) {
-                                    sprite[i] = argJSON.syntax.default; // No values specified. Default to the default
+                                    if (argJSON.syntax.hasOwnProperty("default")) {
+                                        sprite[i] = argJSON.syntax.default; // No values specified. Default to the default
+                                    }
                                     continue;
                                 }
 
@@ -5563,11 +5688,11 @@ Bagel = {
                             }
                             else if (argJSON.mode == "ignore") { // Ignore the parent's properties
                                 if (! sprite.hasOwnProperty(i)) {
-                                    if (! parent.clones.hasOwnProperty(i)) {
-                                        sprite[i] = argJSON.syntax.default;
-                                    }
-                                    else {
+                                    if (parent.clones.hasOwnProperty(i)) {
                                         sprite[i] = clone(parent.clones[i]);
+                                    }
+                                    else if (argJSON.syntax.hasOwnProperty("default")) {
+                                        sprite[i] = argJSON.syntax.default;
                                     }
                                 }
                             }
@@ -5802,7 +5927,9 @@ Bagel = {
                         for (let property in listeners.property) {
                             let handlers = listeners.property[property];
 
-                            sprite.internal.Bagel.properties[property] = sprite[property];
+                            if (sprite.hasOwnProperty(property)) {
+                                sprite.internal.Bagel.properties[property] = sprite[property];
+                            }
                             ((sprite, property, game, plugin, handlers) => {
                                 let get = _ => {
                                     Bagel.internal.triggerSpriteListener("get", property, sprite, game, false);
@@ -7347,6 +7474,47 @@ Bagel = {
                                 }
                             },
                             description: "Contains a few options for how the game is displayed."
+                        },
+                        input: {
+                            required: false,
+                            default: {},
+                            subcheck: {
+                                touch: {
+                                    required: false,
+                                    default: {},
+                                    subcheck: {
+                                        scrollMomentum: {
+                                            required: false,
+                                            default: 0.9,
+                                            check: value => {
+                                                if (value >= 1 || value < 0) {
+                                                    return "Oh no! This has to be between 0 (inclusive) and 1 (exclusive).";
+                                                }
+                                            },
+                                            types: ["number"],
+                                            description: "What the scroll velocity should be multiplied by each frame to reduce it. Only used for touch scrolling."
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "Some options for input on touch devices."
+                                },
+                                mouse: {
+                                    required: false,
+                                    default: {},
+                                    subcheck: {
+                                        scrollSensitivity: {
+                                            required: false,
+                                            default: 0.5,
+                                            types: ["number"],
+                                            description: "The sensitivity for scrolling with the scroll wheel."
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: ""
+                                }
+                            },
+                            types: ["object"],
+                            description: "Contains some options for how input is handled."
                         },
                         loading: {
                             required: false,
@@ -10559,14 +10727,16 @@ Bagel = {
                     missing.push(argID);
                 }
                 else {
-                    if (syntax.skipCloning) {
-                        args.ob[argID] = syntax.default;
-                    }
-                    else {
-                        args.ob[argID] = Bagel.internal.deepClone(syntax.default);
-                    }
+                    if (syntax.hasOwnProperty("default")) {
+                        if (syntax.skipCloning) {
+                            args.ob[argID] = syntax.default;
+                        }
+                        else {
+                            args.ob[argID] = Bagel.internal.deepClone(syntax.default);
+                        }
 
-                    arg = args.ob[argID];
+                        arg = args.ob[argID];
+                    }
                     defaulted = true;
                 }
             }
