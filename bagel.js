@@ -438,7 +438,6 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
-
                                 left: {
                                     mode: "replace"
                                 },
@@ -708,7 +707,10 @@ Bagel = {
                                                 if (sprite.x != "centered") { // Only takes priority when the x is the default value
                                                     return;
                                                 }
-                                                if (sprite.width == null) return ".rerun";
+                                                if (sprite.width == null) {
+                                                    triggerSprite.x = value;
+                                                    return ".rerun";
+                                                }
                                             }
                                             triggerSprite.x = value + (sprite.width / 2);
                                         }
@@ -719,7 +721,10 @@ Bagel = {
                                                 if (sprite.x != "centered") { // Only takes priority when the x is the default value
                                                     return;
                                                 }
-                                                if (sprite.width == null) return ".rerun";
+                                                if (sprite.width == null) {
+                                                    triggerSprite.x = value;
+                                                    return ".rerun";
+                                                }
                                             }
                                             triggerSprite.x = value - (sprite.width / 2);
                                         }
@@ -730,7 +735,10 @@ Bagel = {
                                                 if (sprite.y != "centered") { // Only takes priority when the y is the default value
                                                     return;
                                                 }
-                                                if (sprite.height == null) return ".rerun";
+                                                if (sprite.height == null) {
+                                                    triggerSprite.y = value;
+                                                    return ".rerun";
+                                                }
                                             }
                                             triggerSprite.y = value + (sprite.height / 2);
                                         }
@@ -741,7 +749,10 @@ Bagel = {
                                                 if (sprite.y != "centered") { // Only takes priority when the y is the default value
                                                     return;
                                                 }
-                                                if (sprite.height == null) return ".rerun";
+                                                if (sprite.height == null) {
+                                                    triggerSprite.y = value;
+                                                    return ".rerun";
+                                                }
                                             }
                                             triggerSprite.y = value - (sprite.height / 2);
                                         }
@@ -1021,9 +1032,14 @@ Bagel = {
                                 fns: {
                                     xy: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (typeof value == "number") {
-                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
-                                            triggerSprite.internal.renderUpdate = true;
-                                            return;
+                                            if (isNaN(value)) {
+                                                return "Huh, looks like you've done something wrong in a calculation somewhere in your program. Sprite " + JSON.stringify(triggerSprite.id) + "'s " + property + " is NaN. This is usually caused by having a non number somewhere in a calcuation.";
+                                            }
+                                            else {
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
+                                                triggerSprite.internal.renderUpdate = true;
+                                                return;
+                                            }
                                         }
                                         if (typeof value == "string") {
                                             if (value == "centered") {
@@ -1108,6 +1124,7 @@ Bagel = {
                                     y: {
                                         set: "xy"
                                     },
+
                                     left: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                             if (! initialTrigger) {
@@ -1331,7 +1348,7 @@ Bagel = {
                                     }, sprite.game, false);
                                 },
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
-                                whileVisible: (sprite, updateBitmap) => {
+                                whileVisible: (sprite, updateBitmap, newBitmap, deleteBitmap, game, plugin) => {
                                     let internal = sprite.internal;
                                     if (sprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
                                         let width;
@@ -1385,6 +1402,7 @@ Bagel = {
                                         Bagel.internal.render.texture.update(sprite.internal.canvasID, sprite.canvas, sprite.game);
                                         sprite.internal.canvasUpdated = false;
                                         sprite.updated = false;
+                                        plugin.vars.sprite.updateAnchors(sprite, true, true);
                                     }
                                     if (sprite.internal.renderUpdate) {
                                         sprite.internal.renderUpdate = false;
@@ -1423,6 +1441,27 @@ Bagel = {
                                     ],
                                     description: "The y position for the text. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                 },
+                                left: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the left side of the text to be positioned along the x axis."
+                                },
+                                right: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the right side of the text to be positioned along the x axis."
+                                },
+                                top: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the top of the text to be positioned along the y axis."
+                                },
+                                bottom: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the bottom of the text to be positioned along the y axis."
+                                },
+
                                 alpha: {
                                     required: false,
                                     default: 1,
@@ -1486,6 +1525,19 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
+                                left: {
+                                    mode: "replace"
+                                },
+                                right: {
+                                    mode: "replace"
+                                },
+                                top: {
+                                    mode: "replace"
+                                },
+                                bottom: {
+                                    mode: "replace"
+                                },
+
                                 alpha: {
                                     syntax: {
                                         description: "The alpha of the clone. 1 is fully visible, 0.5 is partially and 0's invisible."
@@ -1518,14 +1570,27 @@ Bagel = {
                                 fns: {
                                     xy: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (typeof value == "number") {
-                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
-                                            triggerSprite.internal.renderUpdate = true;
-                                            return;
+                                            if (isNaN(value)) {
+                                                return "Huh, looks like you've done something wrong in a calculation somewhere in your program. Sprite " + JSON.stringify(triggerSprite.id) + "'s " + property + " is NaN. This is usually caused by having a non number somewhere in a calcuation.";
+                                            }
+                                            else {
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property == "y");
+                                                triggerSprite.internal.renderUpdate = true;
+                                                return;
+                                            }
                                         }
                                         if (typeof value == "string") {
                                             if (value == "centered") {
+                                                if (initialTrigger) {
+                                                    if (
+                                                        (property == "x" && (sprite.hasOwnProperty("left") || sprite.hasOwnProperty("right")))
+                                                        || (property == "y" && (sprite.hasOwnProperty("top") || sprite.hasOwnProperty("bottom")))
+                                                    ) {
+                                                        return;
+                                                    }
+                                                }
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property == "y");
                                                 triggerSprite.internal.renderUpdate = true;
                                                 return;
                                             }
@@ -1537,7 +1602,7 @@ Bagel = {
 
                                         if (typeof value == "function") {
                                             sprite[property] = value(triggerSprite, game); // Avoid the setter
-                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property == "y");
                                             triggerSprite.internal.renderUpdate = true;
                                             return;
                                         }
@@ -1549,6 +1614,8 @@ Bagel = {
                                     rerender: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (! initialTrigger) {
                                             triggerSprite.internal.needsRerender = true;
+                                            plugin.vars.font.prerender(triggerSprite, plugin, true); // Half prerender
+                                            plugin.vars.sprite.updateAnchors(triggerSprite, true, true);
                                         }
                                     }
                                 },
@@ -1559,6 +1626,48 @@ Bagel = {
                                     y: {
                                         set: "xy"
                                     },
+
+                                    left: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (initialTrigger) {
+                                                if (sprite.x != "centered") { // Only takes priority when the x is the default value
+                                                    return;
+                                                }
+                                            }
+                                            triggerSprite.x = value + (triggerSprite.width / 2);
+                                        }
+                                    },
+                                    right: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (initialTrigger) {
+                                                if (sprite.x != "centered") { // Only takes priority when the x is the default value
+                                                    return;
+                                                }
+                                            }
+                                            triggerSprite.x = value - (triggerSprite.width / 2);
+                                        }
+                                    },
+                                    top: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (initialTrigger) {
+                                                if (sprite.y != "centered") { // Only takes priority when the y is the default value
+                                                    return;
+                                                }
+                                            }
+                                            triggerSprite.y = value + (triggerSprite.height / 2);
+                                        }
+                                    },
+                                    bottom: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
+                                            if (initialTrigger) {
+                                                if (sprite.y != "centered") { // Only takes priority when the y is the default value
+                                                    return;
+                                                }
+                                            }
+                                            triggerSprite.y = value - (triggerSprite.height / 2);
+                                        }
+                                    },
+
                                     alpha: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step) => {
                                             if (value > 1) {
@@ -1582,6 +1691,8 @@ Bagel = {
                                             }
                                             if (! initialTrigger) {
                                                 triggerSprite.internal.needsRerender = true;
+                                                plugin.vars.font.prerender(triggerSprite, plugin, true); // Half prerender
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, true, true);
                                             }
                                         }
                                     },
@@ -1601,6 +1712,8 @@ Bagel = {
                                                     sprite.font = "Arial";
                                                 }
                                                 triggerSprite.internal.needsRerender = true;
+                                                plugin.vars.font.prerender(triggerSprite, plugin, true); // Half prerender
+                                                plugin.vars.sprite.updateAnchors(triggerSprite, true, true);
                                             }
                                         }
                                     },
@@ -1617,25 +1730,24 @@ Bagel = {
                             },
                             description: "A text sprite. Allows you to easily display text onscreen.",
                             init: (sprite, game, plugin) => {
-                                sprite.internal.last = {};
-                                sprite.internal.needsRerender = true;
+                                let internal = sprite.internal;
+                                internal.last = {};
+                                internal.needsRerender = true;
                                 sprite.last = {
                                     collision: null
                                 };
                                 sprite.internal.canvasID = ".Internal.text." + sprite.id;
-                                plugin.vars.sprite.updateAnchors(sprite, true, true);
+
+                                internal.canvas = document.createElement("canvas");
+                                internal.canvas.width = 1;
+                                internal.canvas.height = 1;
+
+                                Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, game, false, "static");
+
+                                internal.ctx = internal.canvas.getContext("2d");
+                                plugin.vars.font.prerender(sprite, plugin, true); // Half prerender
                             },
                             render: {
-                                init: (sprite, newBitmap, game, plugin) => {
-                                    let internal = sprite.internal;
-                                    internal.canvas = document.createElement("canvas");
-                                    internal.canvas.width = 1;
-                                    internal.canvas.height = 1;
-
-                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, sprite.game, false, "static");
-
-                                    internal.ctx = internal.canvas.getContext("2d");
-                                },
                                 onVisible: (sprite, newBitmap, game, plugin) => {
                                     let internal = sprite.internal;
                                     internal.renderUpdate = false;
@@ -1649,7 +1761,7 @@ Bagel = {
                                     let scaleY = game.internal.renderer.scaleY;
                                     if (internal.needsRerender || ((! sprite.bitmap) && (internal.last.scaleX != scaleX || internal.last.scaleY != scaleY))) {
                                         internal.needsRerender = false;
-                                        plugin.vars.font.prerender(sprite, scaleX, scaleY, plugin);
+                                        plugin.vars.font.prerender(sprite, plugin);
                                     }
                                     return newBitmap({
                                         x: sprite.x,
@@ -1670,7 +1782,7 @@ Bagel = {
                                     let internal = sprite.internal;
                                     if (internal.needsRerender || ((! sprite.bitmap) && (internal.last.scaleX != scaleX || internal.last.scaleY != scaleY))) {
                                         internal.needsRerender = false;
-                                        plugin.vars.font.prerender(sprite, scaleX, scaleY, plugin);
+                                        plugin.vars.font.prerender(sprite, plugin);
                                     }
                                     if (internal.renderUpdate) {
                                         internal.renderUpdate = false;
@@ -3556,18 +3668,26 @@ Bagel = {
                 sprite: {
                     updateAnchors: (sprite, x, y) => {
                         let properties = sprite.internal.Bagel.properties;
-                        if (x) {
+                        if (x && properties.x != "centered") {
                             x = properties.x;
-                            let half = Math.abs((properties.width != null? properties.width : sprite.width) / 2);
-                            if (! isNaN(half)) {
+                            let half = Math.abs((properties.hasOwnProperty("width")? properties.width : sprite.width) / 2);
+                            if (isNaN(half)) {
+                                properties.left = x;
+                                properties.right = x;
+                            }
+                            else {
                                 properties.left = x - half;
                                 properties.right = x + half;
                             }
                         }
-                        if (y) {
+                        if (y && properties.y != "centered") {
                             y = properties.y;
-                            let half = Math.abs((properties.height != null? properties.height : sprite.height) / 2);
-                            if (! isNaN(half)) {
+                            let half = Math.abs((properties.hasOwnProperty("height")? properties.height : sprite.height) / 2);
+                            if (isNaN(half)) {
+                                properties.top = y;
+                                properties.bottom = y;
+                            }
+                            else {
                                 properties.top = y - half;
                                 properties.bottom = y + half;
                             }
@@ -3589,19 +3709,22 @@ Bagel = {
                         ",": 1,
                         "_": 1
                     },
-                    prerender: (sprite, scaleX, scaleY, plugin) => {
-                        let internal = sprite.internal;
+                    prerender: (sprite, plugin, half) => {
                         let game = sprite.game;
+                        let renderer = game.internal.renderer;
+                        let scaleX = renderer.scaleX;
+                        let scaleY = renderer.scaleY;
+
+                        let internal = sprite.internal;
+                        let indexes = half? null : internal.indexes;
                         let canvas = internal.canvas;
                         let ctx = internal.ctx;
 
                         let texts = sprite.text.split("\n");
-                        if (sprite.bitmap) {
-                            plugin.vars.font.prerenderBitmap(texts, sprite, scaleX, scaleY, plugin, canvas, ctx);
-                        }
-                        else {
-                            plugin.vars.font.prerenderNonBitmap(texts, sprite, scaleX, scaleY, canvas, ctx);
-                        }
+                        let output = sprite.bitmap?
+                            plugin.vars.font.prerenderBitmap(texts, sprite, scaleX, scaleY, plugin, canvas, ctx, half, indexes)
+                            : plugin.vars.font.prerenderNonBitmap(texts, sprite, scaleX, scaleY, canvas, ctx, half, indexes);
+                        if (output) internal.indexes = output;
 
                         if (canvas.width == 0) { // No text, having a texture this small would cause an error
                             canvas = game.internal.renderer.blankTexture;
@@ -3610,11 +3733,10 @@ Bagel = {
                         plugin.vars.sprite.updateAnchors(sprite, true, true);
                         internal.renderUpdate = true;
                     },
-                    prerenderBitmap: (lines, sprite, scaleX, scaleY, plugin, canvas, ctx) => {
+                    prerenderBitmap: (lines, sprite, scaleX, scaleY, plugin, canvas, ctx, half, indexes) => {
                         let asset = sprite.game.get.asset.font(sprite.font);
                         let characterSet = plugin.vars.font.characterSets[asset.widths.length];
 
-                        let indexes = [];
                         let maxWidth = 0;
                         let wordWrapWidth = sprite.wordWrapWidth;
                         let min = Math.max(asset.widths) * 2.5;
@@ -3624,89 +3746,105 @@ Bagel = {
                         let scale = (sprite.size / ((asset.avgWidth + asset.avgHeight) / 2)) / 2;
                         wordWrapWidth /= scale * 2;
 
-                        let i = 0;
-                        let totalWidth;
-                        while (i < lines.length) {
-                            indexes.push([]);
-                            totalWidth = 0;
-                            text = lines[i].toLowerCase();
-                            let wordFitted = false;
-                            let wordWidth = 0;
-                            let wordLength = 0;
-                            for (let c in text) {
-                                let character = text[c];
+                        let canvasWidth, canvasHeight;
+                        if (indexes) {
+                            canvasWidth = sprite.width / scale;
+                            canvasHeight = sprite.height / scale;
+                        }
+                        else {
+                            indexes = [];
+                            let i = 0;
+                            let totalWidth;
+                            while (i < lines.length) {
+                                indexes.push([]);
+                                totalWidth = 0;
+                                text = lines[i].toLowerCase();
+                                let wordFitted = false;
+                                let wordWidth = 0;
+                                let wordLength = 0;
+                                for (let c in text) {
+                                    let character = text[c];
 
-                                let index = characterSet.indexOf(character);
-                                let charWidth = character == " "? asset.avgWidth : (asset.widths[index] + Math.ceil(asset.avgWidth / 4));
-                                if (wordWrapWidth != null && totalWidth + charWidth > wordWrapWidth) {
-                                    if (wordFitted) {
-                                        totalWidth -= wordWidth;
-                                        let newLine = text.slice(c - wordLength);
-                                        if (newLine[0] == " ") {
-                                            newLine.split("").splice(0, 1).join("");
+                                    let index = characterSet.indexOf(character);
+                                    let charWidth = character == " "? asset.avgWidth : (asset.widths[index] + Math.ceil(asset.avgWidth / 4));
+                                    if (wordWrapWidth != null && totalWidth + charWidth > wordWrapWidth) {
+                                        if (wordFitted) {
+                                            totalWidth -= wordWidth;
+                                            let newLine = text.slice(c - wordLength);
+                                            if (newLine[0] == " ") {
+                                                newLine.split("").splice(0, 1).join("");
+                                            }
+                                            lines.splice(i + 1, 0, newLine);
+                                            lines[i] = lines[i].split("").splice(0, c - wordLength).join("");
                                         }
-                                        lines.splice(i + 1, 0, newLine);
-                                        lines[i] = lines[i].split("").splice(0, c - wordLength).join("");
+                                        else {
+                                            let thisLine = "";
+                                            totalWidth -= wordWidth;
+                                            let dashIndex = characterSet.indexOf("-");
+                                            totalWidth += asset.widths[dashIndex] + Math.ceil(asset.avgWidth / 4);
+                                            c -= wordLength;
+                                            let a = c;
+                                            while (c < text.length) {
+                                                let charWidth = asset.widths[indexes[i][c]] + Math.ceil(asset.avgWidth / 4);
+                                                if (totalWidth + charWidth > wordWrapWidth) {
+                                                    break;
+                                                }
+                                                thisLine += text[c];
+                                                totalWidth += charWidth;
+                                                c++;
+                                            }
+                                            thisLine += "-";
+                                            indexes[i].splice(c);
+                                            indexes[i].push(dashIndex);
+                                            lines[i] = thisLine;
+                                            lines.push(text.slice(c));
+                                        }
+                                        break;
+                                    }
+
+                                    if (character == " ") {
+                                        totalWidth += charWidth;
+                                        indexes[i].push(-1);
+                                        wordFitted = true;
+                                        wordWidth = asset.avgWidth;
+                                        wordLength = 0;
+                                        if (totalWidth > maxWidth) maxWidth = totalWidth;
                                     }
                                     else {
-                                        let thisLine = "";
-                                        totalWidth -= wordWidth;
-                                        let dashIndex = characterSet.indexOf("-");
-                                        totalWidth += asset.widths[dashIndex] + Math.ceil(asset.avgWidth / 4);
-                                        c -= wordLength;
-                                        let a = c;
-                                        while (c < text.length) {
-                                            let charWidth = asset.widths[indexes[i][c]] + Math.ceil(asset.avgWidth / 4);
-                                            if (totalWidth + charWidth > wordWrapWidth) {
-                                                break;
-                                            }
-                                            thisLine += text[c];
-                                            totalWidth += charWidth;
-                                            c++;
+                                        totalWidth += charWidth;
+                                        wordWidth += charWidth;
+                                        if (index == -1) {
+                                            console.error(
+                                                "Oh no! The text sprite "
+                                                + JSON.stringify(sprite.id)
+                                                + " tried to use the character "
+                                                + JSON.stringify(character)
+                                                + ". The "
+                                                + (sprite.font == ".Internal.defaultFont"? "default font" : JSON.stringify(sprite.font))
+                                                + " only supports these characters:\n" + characterSet
+                                            );
+                                            Bagel.internal.oops(sprite.game);
                                         }
-                                        thisLine += "-";
-                                        indexes[i].splice(c);
-                                        indexes[i].push(dashIndex);
-                                        lines[i] = thisLine;
-                                        lines.push(text.slice(c));
+                                        indexes[i].push(index);
+                                        wordLength++;
                                     }
-                                    break;
                                 }
 
-                                if (character == " ") {
-                                    totalWidth += charWidth;
-                                    indexes[i].push(-1);
-                                    wordFitted = true;
-                                    wordWidth = asset.avgWidth;
-                                    wordLength = 0;
-                                    if (totalWidth > maxWidth) maxWidth = totalWidth;
-                                }
-                                else {
-                                    totalWidth += charWidth;
-                                    wordWidth += charWidth;
-                                    if (index == -1) {
-                                        console.error(
-                                            "Oh no! The text sprite "
-                                            + JSON.stringify(sprite.id)
-                                            + " tried to use the character "
-                                            + JSON.stringify(character)
-                                            + ". The "
-                                            + (sprite.font == ".Internal.defaultFont"? "default font" : JSON.stringify(sprite.font))
-                                            + " only supports these characters:\n" + characterSet
-                                        );
-                                        Bagel.internal.oops(sprite.game);
-                                    }
-                                    indexes[i].push(index);
-                                    wordLength++;
-                                }
+                                if (totalWidth > maxWidth) maxWidth = totalWidth;
+                                i++;
                             }
 
-                            if (totalWidth > maxWidth) maxWidth = totalWidth;
-                            i++;
+                            canvasWidth = maxWidth * 2;
+                            canvasHeight = asset.maxHeight * lines.length * 2;
                         }
 
-                        canvas.width = maxWidth * 2;
-                        canvas.height = asset.maxHeight * lines.length * 2;
+
+                        sprite.width = canvasWidth * scale;
+                        sprite.height = canvasHeight * scale;
+                        if (half) return indexes;
+
+                        canvas.width = canvasWidth;
+                        canvas.height = canvasHeight;
                         ctx.fillStyle = sprite.color;
 
                         let y = 0;
@@ -3752,11 +3890,8 @@ Bagel = {
                             }
                             y += asset.maxHeight;
                         }
-
-                        sprite.width = canvas.width * scale;
-                        sprite.height = canvas.height * scale;
                     },
-                    prerenderNonBitmap: (lines, sprite, scaleX, scaleY, canvas, ctx) => {
+                    prerenderNonBitmap: (lines, sprite, scaleX, scaleY, canvas, ctx, half, wrappedLines) => {
                         let last = sprite.internal.last;
                         ctx.font = sprite.size + "px " + sprite.font;
                         let size = (ctx.measureText("M").width * 1.5) * scaleY;
@@ -3766,52 +3901,67 @@ Bagel = {
                             wordWrapWidth = min;
                         }
 
-                        let width = 0;
-                        let i = 0;
-                        while (i < lines.length) {
-                            let words = lines[i].split(" ");
-                            let space = ctx.measureText(" ").width;
-                            let currentWidth = 0;
-                            let wordFitted = false;
-                            for (let c in words) {
-                                let wordWidth = ctx.measureText(words[c]).width;
-                                currentWidth += wordWidth;
-                                if (wordWrapWidth != null && currentWidth > wordWrapWidth) { // Wrap it
-                                    currentWidth -= wordWidth;
-                                    if (wordFitted) {
-                                        lines.splice(i + 1, 0, words.slice(c).join(" "));
-                                        words.splice(c, words.length - c);
-                                        lines[i] = words.join(" ");
-                                    }
-                                    else { // Need to break up the word, otherwise the line would be blank
-                                        let thisLine = "";
-                                        currentWidth += ctx.measureText("-").width;
-                                        let a;
-                                        for (a in words[c]) {
-                                            let charWidth = ctx.measureText(words[c][a]).width;
-                                            if (currentWidth + charWidth > wordWrapWidth) {
-                                                break;
-                                            }
-                                            thisLine += words[c][a];
-                                            currentWidth += charWidth;
-                                        }
-                                        thisLine += "-";
-                                        lines.splice(i + 1, 0, words.slice(c).join(" ").slice(a));
-                                        words.splice(c, words.length - c);
-                                        lines[i] = words.join(" ") + thisLine;
-                                    }
-                                    break;
-                                }
-                                wordFitted = true;
-                                if (c != words.length - 1) {
-                                    currentWidth += space;
-                                }
-                            }
-                            if (currentWidth > width) width = currentWidth;
-                            i++;
+                        if (wrappedLines) {
+                            lines = wrappedLines;
+                            canvas.width = sprite.width * scaleX; // It's not affected by scaling
+                            canvas.height = sprite.height * scaleY;
                         }
-                        canvas.width = width * scaleX; // It's not affected by scaling
-                        canvas.height = Math.ceil(size) * lines.length;
+                        else {
+                            let width = 0;
+                            let i = 0;
+                            while (i < lines.length) {
+                                let words = lines[i].split(" ");
+                                let space = ctx.measureText(" ").width;
+                                let currentWidth = 0;
+                                let wordFitted = false;
+                                for (let c in words) {
+                                    let wordWidth = ctx.measureText(words[c]).width;
+                                    currentWidth += wordWidth;
+                                    if (wordWrapWidth != null && currentWidth > wordWrapWidth) { // Wrap it
+                                        currentWidth -= wordWidth;
+                                        if (wordFitted) {
+                                            lines.splice(i + 1, 0, words.slice(c).join(" "));
+                                            words.splice(c, words.length - c);
+                                            lines[i] = words.join(" ");
+                                        }
+                                        else { // Need to break up the word, otherwise the line would be blank
+                                            let thisLine = "";
+                                            currentWidth += ctx.measureText("-").width;
+                                            let a;
+                                            for (a in words[c]) {
+                                                let charWidth = ctx.measureText(words[c][a]).width;
+                                                if (currentWidth + charWidth > wordWrapWidth) {
+                                                    break;
+                                                }
+                                                thisLine += words[c][a];
+                                                currentWidth += charWidth;
+                                            }
+                                            thisLine += "-";
+                                            lines.splice(i + 1, 0, words.slice(c).join(" ").slice(a));
+                                            words.splice(c, words.length - c);
+                                            lines[i] = words.join(" ") + thisLine;
+                                        }
+                                        break;
+                                    }
+                                    wordFitted = true;
+                                    if (c != words.length - 1) {
+                                        currentWidth += space;
+                                    }
+                                }
+                                if (currentWidth > width) width = currentWidth;
+                                i++;
+                            }
+                            sprite.width = Math.round(width);
+                            sprite.height = Math.round((Math.ceil(size) * lines.length) / scaleY);
+                            last.scaleX = scaleX;
+                            last.scaleY = scaleY;
+                            if (half) return lines;
+
+                            canvas.width = width * scaleX; // It's not affected by scaling
+                            canvas.height = sprite.height * scaleY;
+                        }
+
+
                         ctx.font = sprite.size + "px " + sprite.font;
                         ctx.fillStyle = sprite.color;
 
@@ -3822,11 +3972,6 @@ Bagel = {
                             ctx.fillText(lines[i], 0, (offset + (Math.ceil(size) * i)) / scaleY);
                         }
                         ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
-
-                        last.scaleX = scaleX;
-                        last.scaleY = scaleY;
-                        sprite.width = Math.round(canvas.width / scaleX);
-                        sprite.height = Math.round(canvas.height / scaleY);
                     },
                 }
             }
