@@ -43,6 +43,8 @@ put in front of and behind layer operations. Should also work for groups like cl
 = Features =
 Text rotation? Negative widths and heights? Changing them should set font size?
 
+Put ogg/webp support in console message
+
 Change font to the default when bitmap is set to true on a text sprite.
 
 Steps for clones
@@ -166,7 +168,13 @@ Bagel = {
                 types: {
                     assets: {
                         imgs: {
-                            args: {},
+                            args: {
+                                webP: {
+                                    required: false,
+                                    types: ["string"],
+                                    description: "The src of the webP version of the image. Is only used if the browser supports it, otherwise the src is used."
+                                }
+                            },
                             description: "Images give a sprite (only the sprite type though) its appearance. Just set its \"img\" argument to the id of the image you want to use.",
                             init: (asset, ready, game, plugin, index) => {
                                 let img = new Image();
@@ -187,7 +195,13 @@ Bagel = {
                             get: "img"
                         },
                         snds: {
-                            args: {},
+                            args: {
+                                ogg: {
+                                    required: false,
+                                    types: ["string"],
+                                    description: "The src of the ogg version of the sound. Is only used if the browser supports it, otherwise the src is used."
+                                }
+                            },
                             description: "Sounds can be played by anything. They're played using game.playSound(<id>)",
                             init: (asset, ready, game, plugin, index) => {
                                 let snd = new Audio();
@@ -4308,14 +4322,18 @@ Bagel = {
                     }
                     if (internal.pluginsDone) {
                         if (game.state != internal.lastPrepState) {
-                            Bagel.internal.triggerPluginListener("prepState", game, game.state);
-                            if (internal.assets.loading != 0) { // Something needs to load
-                                game.loaded = false;
-                                if (internal.loadingScreen == null) {
-                                    Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                            if (internal.assets.loading == 0) {
+                                Bagel.internal.triggerPluginListener("prepState", game, game.state);
+                                if (internal.assets.loading == 0) { // Something needs to load
+                                    internal.lastPrepState = game.state;
+                                }
+                                else {
+                                    game.loaded = false;
+                                    if (internal.loadingScreen == null) {
+                                        Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                                    }
                                 }
                             }
-                            internal.lastPrepState = game.state;
                         }
 
 
@@ -5911,10 +5929,12 @@ Bagel = {
                     let noReruns = true;
                     if (handler.listeners.trigger) { // Trigger all the listeners to initialise them
                         for (let property in handler.listeners.property) {
-                            let output = Bagel.internal.triggerSpriteListener("set", property, sprite, game, true);
+                            if (sprite.internal.Bagel.properties.hasOwnProperty(property)) {
+                                let output = Bagel.internal.triggerSpriteListener("set", property, sprite, game, true);
 
-                            if (property != "visible" && output) {
-                                noReruns = false;
+                                if (property != "visible" && output) {
+                                    noReruns = false;
+                                }
                             }
                         }
                     }
@@ -7229,14 +7249,16 @@ Bagel = {
                 },
                 calculateRenderTime: _ => {
                     let fps = 1000 / (performance.now() - Bagel.internal.frameStartTime);
-                    let renderTime = performance.now() - game.internal.scriptEndTime;
                     for (let i in Bagel.internal.games) {
                         let game = Bagel.internal.games[i];
-                        if (game.internal.renderer.type != "canvas") {
-                            game.renderTime = renderTime;
-                            game.frameTime = game.scriptTime + renderTime;
+                        if (game) {
+                            let renderTime = performance.now() - game.internal.scriptEndTime;
+                            if (game.internal.renderer.type != "canvas") {
+                                game.renderTime = renderTime;
+                                game.frameTime = game.scriptTime + renderTime;
+                            }
+                            game.maxPossibleFPS = fps;
                         }
-                        game.maxPossibleFPS = fps;
                     }
                 }
             },
