@@ -10,8 +10,6 @@ Should the loading screen use the full resolution? Need to commit to a set resol
 == Bugs ==
 Change WebGL rounding to match canvas <==========
 
-Text anchors. Setting anchors in canvases initially
-
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
 
 Send to back can cause a crash in the update bitmap function. Maybe requires combination of it and bringToFront in another sprite?
@@ -173,6 +171,39 @@ Bagel = {
                                     required: false,
                                     types: ["string"],
                                     description: "The src of the webP version of the image. Is only used if the browser supports it, otherwise the src is used."
+                                },
+                                upscale: {
+                                    required: false,
+                                    subcheck: {
+                                        width: {
+                                            required: true,
+                                            types: ["number"],
+                                            description: "The width you want to upscale the texture to."
+                                        },
+                                        height: {
+                                            required: true,
+                                            types: ["number"],
+                                            description: "The height you want to upscale the texture to."
+                                        },
+                                        antialias: {
+                                            required: true,
+                                            types: ["boolean"],
+                                            description: "If you want to use antialiasing when upscaling the texture. Don't use for pixel art."
+                                        },
+                                        quality: {
+                                            required: false,
+                                            default: "high",
+                                            check: value => {
+                                                if (! ["low", "medium", "high"].includes(value)) {
+                                                    return "Huh, that's not a valid quality option. It has to be either \"low\", \"medium\" or \"high\".";
+                                                }
+                                            },
+                                            types: ["string"],
+                                            description: "The image smoothing quality to use if antialiasing is enabled. Either \"low\", \"medium\" or \"high\"."
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "How the texture should be upscaled. It won't be by default. Enabling antialiasing may help smooth out low resolution textures on non-antialiased games but it's best to upscale pixel art with it disabled instead if a lot of antialiased textures are being used."
                                 }
                             },
                             description: "Images give a sprite (only the sprite type though) its appearance. Just set its \"img\" argument to the id of the image you want to use.",
@@ -180,6 +211,23 @@ Bagel = {
                                 let img = new Image();
                                 ((img, asset, game, ready) => {
                                     img.onload = _ => {
+                                        if (asset.upscale) {
+                                            let canvas = document.createElement("canvas");
+                                            canvas.width = asset.upscale.width;
+                                            canvas.height = asset.upscale.height;
+                                            let ctx = canvas.getContext("2d");
+                                            ctx.imageSmoothingEnabled = asset.upscale.antialias;
+                                            ctx.imageSmoothingQuality = asset.upscale.quality;
+
+                                            if (asset.upscale.antialias) { // Prevent the smoothing from clipping off the edge
+                                                ctx.drawImage(img, 1, 1, canvas.width - 2, canvas.height - 2);
+                                            }
+                                            else {
+                                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                            }
+                                            img = canvas;
+                                        }
+
                                         ready(img);
                                         Bagel.internal.render.texture.new(asset.id, img, game, false, "static");
                                     };
@@ -921,6 +969,27 @@ Bagel = {
                                     ],
                                     description: "The y position for the canvas. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
                                 },
+                                left: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the left side of the canvas sprite to be positioned along the x axis."
+                                },
+                                right: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the right side of the canvas sprite to be positioned along the x axis."
+                                },
+                                top: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the top of the canvas sprite to be positioned along the y axis."
+                                },
+                                bottom: {
+                                    required: false,
+                                    types: ["number"],
+                                    description: "Where you want the bottom of the canvas sprite to be positioned along the y axis."
+                                },
+
                                 width: {
                                     required: true,
                                     types: [
@@ -996,6 +1065,19 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
+                                left: {
+                                    mode: "replace"
+                                },
+                                right: {
+                                    mode: "replace"
+                                },
+                                top: {
+                                    mode: "replace"
+                                },
+                                bottom: {
+                                    mode: "replace"
+                                },
+
                                 width: {
                                     syntax: {
                                         description: "The width for the clone. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width * 0.2\""
@@ -1057,6 +1139,15 @@ Bagel = {
                                         }
                                         if (typeof value == "string") {
                                             if (value == "centered") {
+                                                if (initialTrigger) {
+                                                    if (
+                                                        (property == "x" && (sprite.hasOwnProperty("left") || sprite.hasOwnProperty("right")))
+                                                        || (property == "y" && (sprite.hasOwnProperty("top") || sprite.hasOwnProperty("bottom")))
+                                                    ) {
+                                                        return;
+                                                    }
+                                                }
+
                                                 sprite[property] = game[property == "x"? "width" : "height"] / 2;
                                                 plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
                                                 triggerSprite.internal.renderUpdate = true;
@@ -1141,30 +1232,42 @@ Bagel = {
 
                                     left: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.x = value + (sprite.width / 2);
+                                            if (initialTrigger) {
+                                                if (sprite.x != "centered") { // Only takes priority when the x is the default value
+                                                    return;
+                                                }
                                             }
+                                            triggerSprite.x = value + (sprite.width / 2);
                                         }
                                     },
                                     right: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.x = value - (sprite.width / 2);
+                                            if (initialTrigger) {
+                                                if (sprite.x != "centered") { // Only takes priority when the x is the default value
+                                                    return;
+                                                }
                                             }
+                                            triggerSprite.x = value - (sprite.width / 2);
                                         }
                                     },
                                     top: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.y = value + (sprite.height / 2);
+                                            if (initialTrigger) {
+                                                if (sprite.y != "centered") { // Only takes priority when the y is the default value
+                                                    return;
+                                                }
                                             }
+                                            triggerSprite.y = value + (sprite.height / 2);
                                         }
                                     },
                                     bottom: {
                                         set: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
-                                            if (! initialTrigger) {
-                                                triggerSprite.y = value - (sprite.height / 2);
+                                            if (initialTrigger) {
+                                                if (sprite.y != "centered") { // Only takes priority when the y is the default value
+                                                    return;
+                                                }
                                             }
+                                            triggerSprite.y = value - (sprite.height / 2);
                                         }
                                     },
 
@@ -7652,7 +7755,7 @@ Bagel = {
                                     subcheck: {
                                         scrollMomentum: {
                                             required: false,
-                                            default: 0.9,
+                                            default: 0.94,
                                             check: value => {
                                                 if (value >= 1 || value < 0) {
                                                     return "Oh no! This has to be between 0 (inclusive) and 1 (exclusive).";
