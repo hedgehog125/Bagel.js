@@ -8,6 +8,8 @@ TODO
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
+Prevent upscale aspect ratio from being different to the source unless an option is enabled.
+
 Change WebGL rounding to match canvas <==========
 
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
@@ -28,6 +30,8 @@ Sprites get pushed to left when shrinking window, test by putting a sprite with 
 How is audio stored in PWAs? Is it only saved after it's played once?
 
 Is storing the combined textures as images more efficient when they are deactivated?
+
+webP is actually supported in desktop Safari Big Sur and later. (the browser version doesn't matter)
 
 = Optimisations =
 Use bitmap text in loading screen instead of images
@@ -10263,11 +10267,11 @@ Bagel = {
                     let renderer = game.internal.renderer;
                     let texture = renderer.textures[id];
                     if (texture) {
-                        return {
+                        return renderer.type == "webgl"? {
                             width: texture[10],
                             height: texture[11],
                             internal: texture
-                        };
+                        } : texture;
                     }
                     else {
                         return false;
@@ -10593,7 +10597,7 @@ Bagel = {
 
             if (error) {
                 if (error == ".rerun") { // Not actually an error, just means it needs to be run again the next frame
-                    sprite.internal.Bagel.rerunListeners.push([type, property]);
+                    sprite.internal.Bagel.rerunListeners.push([type, property, initialTrigger]);
                     sprite.internal.Bagel.rerunIndex[property] = true;
                 }
                 else {
@@ -10615,7 +10619,7 @@ Bagel = {
 
             let noReruns = true;
             for (let c in rerun) {
-                let output = Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game, false);
+                let output = Bagel.internal.triggerSpriteListener(rerun[c][0], rerun[c][1], sprite, game, rerun[c][2]);
                 if (rerun[c][1] != "visible" && output) {
                     noReruns = false;
                 }
