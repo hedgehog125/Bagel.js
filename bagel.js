@@ -25,6 +25,8 @@ Resume playing audio from the position it would be in rather than the start. May
 Audio is still apparently broken in Safari. Sounds can only play once? Safari tells Bagel.js the audio is playing even when it isn't. e.g onplay fires, the promise resolves and paused is false but currentTime is still 0 even after a delay
 
 == Low priority bugs ==
+Upscale unmute button when antialiasing is enabled
+
 Sprites get pushed to left when shrinking window, test by putting a sprite with an x coordinate of the game width. Possibly out of my control? Happens when resising window and devtools
 
 How is audio stored in PWAs? Is it only saved after it's played once?
@@ -3264,7 +3266,7 @@ Bagel = {
 
                                             let inputs;
                                             if (Bagel.device.is.touchscreen) {
-                                                inputs = game.input.touches;
+                                                inputs = game.input.touch.touches;
                                             }
                                             else {
                                                 inputs = [{
@@ -3344,7 +3346,7 @@ Bagel = {
 
                                             let inputs;
                                             if (Bagel.device.is.touchscreen) {
-                                                inputs = game.input.touches;
+                                                inputs = game.input.touch.touches;
                                             }
                                             else {
                                                 inputs = [{
@@ -4485,7 +4487,7 @@ Bagel = {
                     let mo = game.input.touchScrollMomentum;
                     game.input.scrollDelta.x = mo.x;
                     game.input.scrollDelta.y = mo.y;
-                    let multiplier = game.config.input.touch.scrollMomentum;
+                    let multiplier = game.config.input.touch.scroll.momentum;
                     mo.x *= multiplier;
                     mo.y *= multiplier;
 
@@ -4616,6 +4618,65 @@ Bagel = {
                             pendingTouchScrollMomentum: {
                                 x: 0,
                                 y: 0
+                            },
+                            processTouches: (e, game) => {
+                                let renderer = game.internal.renderer;
+                                let rect = renderer.canvas.getBoundingClientRect();
+                                let mouse = game.input.mouse;
+                                let input = game.input;
+
+                                let xMove, yMove;
+                                let firstTouch = [...e.touches].find(value => value.identifier == 0);
+                                let mainTouch = e.touches[e.touches.length - 1];
+                                let touch = firstTouch? firstTouch : mainTouch;
+                                if (touch) { // Make sure there's a touch point
+                                    let x = ((touch.clientX - rect.left) / renderer.styleWidth) * game.width;
+                                    let y = ((touch.clientY  - rect.top) / renderer.styleHeight) * game.height;
+                                    if (firstTouch) {
+                                        xMove = x - mouse.x;
+                                        yMove = y - mouse.y;
+                                    }
+                                    else {
+                                        input.touch.dragging = false;
+                                    }
+                                    mouse.x = x;
+                                    mouse.y = y;
+                                    input.mouse.down = true;
+                                    input.touch.down = true;
+                                }
+                                else {
+                                    input.touch.dragging = false;
+                                    input.mouse.down = false;
+                                    input.touch.down = false;
+                                }
+
+                                let old = input.touch.touches;
+                                input.touch.touches = [];
+                                let i = 0;
+                                while (i < e.touches.length) {
+                                    let touch = e.touches[i];
+                                    let touchCoords = {
+                                        x: ((touch.clientX - rect.left) / renderer.styleWidth) * game.width,
+                                        y: ((touch.clientY  - rect.top) / renderer.styleHeight) * game.height
+                                    };
+
+                                    let oldTouch = old.find(value => value.id == touch.identifier);
+                                    if (oldTouch) {
+                                        oldTouch = oldTouch.origin;
+                                    }
+                                    else {
+                                        oldTouch = touchCoords;
+                                    }
+
+                                    input.touch.touches.push({
+                                        x: touchCoords.x,
+                                        y: touchCoords.y,
+                                        id: touch.identifier,
+                                        origin: oldTouch
+                                    });
+                                    i++;
+                                }
+                                return [xMove, yMove];
                             }
                         },
                         lastState: (! game.state),
@@ -4637,9 +4698,14 @@ Bagel = {
                 listeners: (game, canvas, previousGames) => {
                     (game => {
                         game.input = {
-                            touches: [],
+                            touch: {
+                                down: false,
+                                dragging: false,
+                                touches: []
+                            },
                             mouse: {
                                 down: false,
+                                dragging: false,
                                 x: game.width / 2, // The centre of the game
                                 y: game.height / 2
                             },
@@ -4728,100 +4794,50 @@ Bagel = {
 
                         canvas.addEventListener("touchstart", e => {
                             Bagel.device.is.touchscreen = true;
+                            game.internal.input.processTouches(e, game);
 
-                            let renderer = game.internal.renderer;
-                            let rect = renderer.canvas.getBoundingClientRect();
-                            let mouse = game.input.mouse;
-
-                            if (e.touches == null) {
-                                mouse.x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
-                                mouse.y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
-                                game.input.touches = [
-                                    {
-                                        x: game.input.mouse.x,
-                                        y: game.input.mouse.y
-                                    }
-                                ];
-                            }
-                            else {
-                                mouse.x = ((e.touches[0].clientX - rect.left) / renderer.styleWidth) * game.width;
-                                mouse.y = ((e.touches[0].clientY  - rect.top) / renderer.styleHeight) * game.height;
-
-                                game.input.touches = [];
-                                for (let i in e.touches) {
-                                    game.input.touches.push({
-                                        x: ((e.touches[i].clientX - rect.left) / renderer.styleWidth) * game.width,
-                                        y: ((e.touches[i].clientY  - rect.top) / renderer.styleHeight) * game.height
-                                    });
-                                }
-                            }
-
-                            mouse.down = true;
                             if (e.cancelable) {
                                 e.preventDefault();
                             }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
                         canvas.addEventListener("touchmove", e => {
+                            let input = game.input;
                             Bagel.device.is.touchscreen = true;
+                            let output = game.internal.input.processTouches(e, game);
+                            let [xMove, yMove] = output;
+                            let firstTouch = input.touch.touches.find(value => value.id == 0);
 
-                            let renderer = game.internal.renderer;
-                            let rect = renderer.canvas.getBoundingClientRect();
-                            let mouse = game.input.mouse;
-
-
-                            let xMove, yMove;
-                            if (e.touches == null) {
-                                let x = ((e.clientX - rect.left) / renderer.styleWidth) * game.width;
-                                let y = ((e.clientY  - rect.top) / renderer.styleHeight) * game.height;
-                                xMove = x - mouse.x;
-                                yMove = y - mouse.y;
-                                mouse.x = x;
-                                mouse.y = y;
-                                game.input.touches = [
-                                    {
-                                        x: mouse.x,
-                                        y: mouse.y
-                                    }
-                                ];
-                            }
-                            else {
-                                let x = ((e.touches[0].clientX - rect.left) / renderer.styleWidth) * game.width;
-                                let y = ((e.touches[0].clientY  - rect.top) / renderer.styleHeight) * game.height;
-                                xMove = x - mouse.x;
-                                yMove = y - mouse.y;
-                                mouse.x = x;
-                                mouse.y = y;
-
-                                game.input.touches = [];
-                                for (let i in e.touches) {
-                                    game.input.touches.push({
-                                        x: ((e.touches[i].clientX - rect.left) / renderer.styleWidth) * game.width,
-                                        y: ((e.touches[i].clientY  - rect.top) / renderer.styleHeight) * game.height
-                                    });
+                            let mo = game.internal.input.pendingTouchScrollMomentum;
+                            mo.x = 0;
+                            mo.y = 0;
+                            if (firstTouch) {
+                                let deadzone = game.config.input.touch.scroll.deadzone;
+                                if (Math.abs(firstTouch.x - firstTouch.origin.x) > deadzone) {
+                                    input.scrollDelta.x -= xMove;
+                                    mo.x = -(xMove / 1.5);
+                                    input.touch.dragging = true;
+                                }
+                                if (Math.abs(firstTouch.y - firstTouch.origin.y) > deadzone) {
+                                    input.scrollDelta.y -= yMove;
+                                    mo.y = -(yMove / 1.5);
+                                    input.touch.dragging = true;
                                 }
                             }
-
-                            game.input.scrollDelta.x -= xMove;
-                            game.input.scrollDelta.y -= yMove;
-                            let mo = game.internal.input.pendingTouchScrollMomentum;
-                            mo.x = -(xMove / 1.5);
-                            mo.y = -(yMove / 1.5);
-
 
                             if (e.cancelable) {
                                 e.preventDefault();
                             }
                         }, false);
                         canvas.addEventListener("touchend", e => {
+                            let input = game.input;
                             Bagel.device.is.touchscreen = true;
+                            game.internal.input.processTouches(e, game);
 
-                            game.input.touches = [];
                             let mo = game.internal.input.pendingTouchScrollMomentum;
-                            game.input.touchScrollMomentum.x = mo.x;
-                            game.input.touchScrollMomentum.y = mo.y;
+                            input.touchScrollMomentum.x = mo.x;
+                            input.touchScrollMomentum.y = mo.y;
 
-                            game.input.mouse.down = false;
                             if (e.cancelable) {
                                 e.preventDefault();
                             }
@@ -4851,6 +4867,12 @@ Bagel = {
 
                     if (! config.isLoadingScreen) {
                         let renderer = game.internal.renderer;
+
+                        let blankTexture = document.createElement("canvas");
+                        blankTexture.width = 1;
+                        blankTexture.height = 1;
+                        renderer.blankTexture = blankTexture;
+
                         let subFunctions = Bagel.internal.subFunctions.init;
                         let gl;
 
@@ -5362,12 +5384,6 @@ Bagel = {
                     if (game.config.isLoadingScreen) {
                         return;
                     }
-
-                    let blankTexture = document.createElement("canvas");
-                    blankTexture.width = 1;
-                    blankTexture.height = 1;
-                    game.internal.renderer.blankTexture = blankTexture;
-
 
                     let rendererType = game.internal.renderer.type;
                     let renderers = Bagel.internal.subFunctions.tick.render;
@@ -7757,16 +7773,30 @@ Bagel = {
                                     required: false,
                                     default: {},
                                     subcheck: {
-                                        scrollMomentum: {
+                                        scroll: {
                                             required: false,
-                                            default: 0.94,
-                                            check: value => {
-                                                if (value >= 1 || value < 0) {
-                                                    return "Oh no! This has to be between 0 (inclusive) and 1 (exclusive).";
+                                            default: {},
+                                            subcheck: {
+                                                momentum: {
+                                                    required: false,
+                                                    default: 0.94,
+                                                    check: value => {
+                                                        if (value >= 1 || value < 0) {
+                                                            return "Oh no! This has to be between 0 (inclusive) and 1 (exclusive).";
+                                                        }
+                                                    },
+                                                    types: ["number"],
+                                                    description: "What the scroll velocity should be multiplied by each frame to reduce it. Only used for touch scrolling."
+                                                },
+                                                deadzone: {
+                                                    required: false,
+                                                    default: 5,
+                                                    types: ["number"],
+                                                    description: "The minimum number of in game pixels a touch point must move from its original point to be registered as a scroll input and/or drag."
                                                 }
                                             },
-                                            types: ["number"],
-                                            description: "What the scroll velocity should be multiplied by each frame to reduce it. Only used for touch scrolling."
+                                            types: ["object"],
+                                            description: "Some options related to scrolling for touch devices."
                                         }
                                     },
                                     types: ["object"],
