@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        Sprite cropping
+    </title>
+</head>
+<body bgColor="blue">
+    <p id="debug"></p>
+</body>
+
+<script src="../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "game",
+    state: "game",
+    game: {
+        assets: {
+            imgs: [
+                {
+                    id: "Bagel",
+                    src: "../assets/imgs/bagel.png"
+                }
+            ]
+        },
+        sprites: [
+            {
+                id: "Bagel",
+                vars: {
+                    debugDisplay: document.getElementById("debug")
+                },
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ],
+                    main: [
+                        {
+                            code: me => {
+                                me.vars.debugDisplay.innerHTML = "FPS: " + game.currentFPS;
+                                me.angle++;
+                            },
+                            stateToRun: "game"
+                        }
+                    ]
+                },
+                img: "Bagel",
+                crop: {
+                    x: 5,
+                    y: 5,
+                    width: 39,
+                    height: 39
+                },
+                scale: 5
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    config: {
+        display: {
+            renderer: "canvas" // Only supported in the canvas renderer atm
+        }
+    }
+});
+
+</script>

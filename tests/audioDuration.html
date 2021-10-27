@@ -2,13 +2,14 @@
 <html lang="en" dir="ltr">
     <head>
         <meta charset="utf-8">
-        <meta name="description" content="A simple audio test in Bagel.js">
+        <meta name="description" content="Another simple audio test in Bagel.js">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>
-            Audio demo
+            Audio duration demo
         </title>
     </head>
     <body bgColor="white">
+        <b>Check the network requests in your browser console. Note that since the duration is specified, the sound is only loaded when you click on the game to play it.</b>
         <p id="debug"></p>
     </body>
 </html>
@@ -24,15 +25,18 @@ game = Bagel.init({
             snds: [
                 {
                     id: "Testing",
-                    src: "../assets/snds/music.mp3"
+                    src: "../assets/snds/music.mp3",
+                    duration: 223.3992
                 }
             ]
         },
         scripts: {
-            init: [
+            main: [
                 {
                     code: _ => {
-                        game.playSound("Testing");
+                        if (game.input.mouse.down) {
+                            game.playSound("Testing");
+                        }
                     },
                     stateToRun: "game"
                 }
@@ -41,7 +45,13 @@ game = Bagel.init({
     },
     width: 800,
     height: 450,
-    state: "game"
+    state: "game",
+    config: {
+        display: {
+            backgroundColor: "#202020",
+            mode: "static"
+        }
+    }
 });
 
 </script>
