@@ -51,6 +51,7 @@ Text rotation? Negative widths and heights? Changing them should set font size?
 Cropping for canvases
 
 Put ogg/webp support in console message
+WebP support for PWA icons
 
 Steps for clones
 
@@ -100,8 +101,6 @@ Gamepad support
 
 = Tweaks =
 Move currentFPS and maximumPossibleFPS to game.debug. Also add render percentage time, script time and render time
-
-No wait, Phaser still is big (or at least the version in Frontier). GZip compression helps a lot and I think I saw the GZip size
 
 Tidy up canvas prerendering by using the prerender property of canvas sprites
 
@@ -2544,8 +2543,8 @@ Bagel = {
                                                                 console.warn("Huh, the image width doesn't match image height.");
                                                             }
                                                             if (! args.pixelArt) {
-                                                                if (img.width != 512 || img.height != 512) {
-                                                                    console.warn("Hmm, the image isn't 512x512 and it's not pixel art.");
+                                                                if (img.width < 512 || img.height < 512) {
+                                                                    console.warn("Hmm, the image resolution is less than 512x512 and it's not pixel art. It may appear blurry.");
                                                                 }
                                                             }
 
@@ -4586,7 +4585,7 @@ Bagel = {
                         }
                     }
 
-                    if (internal.pluginsDone) {
+                    if (internal.pluginsDone && ((! game.config.isLoadingScreen) || game.internal.mainGame.internal.pluginsDone)) {
                         if (internal.assets.initialized) {
                             if (game.state != internal.lastPrepState) {
                                 if (internal.assets.loading == 0) {
@@ -5485,6 +5484,7 @@ Bagel = {
 
                         loadingScreen = Bagel.init(loadingScreen);
                         game.internal.loadingScreen = loadingScreen;
+                        loadingScreen.internal.mainGame = game;
                         loadingScreen.internal.renderer = game.internal.renderer;
 
                         if (game.internal.pluginsDone) {
@@ -9991,10 +9991,6 @@ Bagel = {
                         }
 
                         let renderer = game.internal.renderer;
-                        if (game.config.isLoadingScreen) {
-                            renderer.loadingScreenBitmaps[id] = true;
-                            id = ".Internal.loadingScreen." + id;
-                        }
 
                         if (renderer.bitmapSpriteData[id] == null) {
                             console.error("Err, Bagel.js couldn't find the bitmap sprite with the id " + JSON.stringify(id) + ". You might have deleted it.");
