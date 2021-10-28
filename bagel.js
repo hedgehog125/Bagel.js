@@ -131,12 +131,7 @@ Bagel = {
 
         subFunctions.listeners(game, game.internal.renderer.canvas, previousGames);
         subFunctions.bundledAssets(game);
-        if (game.internal.assets.loading == 0) {
-            game.loaded = true;
-        }
-        else {
-            subFunctions.loadingScreen(game);
-        }
+        subFunctions.loadingScreen(game);
 
         if (! game.config.disableBagelJSMessage) { // Display a message that provides an overview of the how the game is running
             let hpText = "🥯🥯";
@@ -4590,50 +4585,58 @@ Bagel = {
                             internal.pluginsDone = true;
                         }
                     }
+
                     if (internal.pluginsDone) {
-                        if (game.state != internal.lastPrepState) {
-                            if (internal.assets.loading == 0) {
-                                Bagel.internal.triggerPluginListener("prepState", game, game.state);
-                                if (internal.assets.loading == 0) { // Something needs to load
-                                    internal.lastPrepState = game.state;
-                                }
-                                else {
-                                    game.loaded = false;
-                                    if (internal.loadingScreen == null) {
-                                        Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                        if (internal.assets.initialized) {
+                            if (game.state != internal.lastPrepState) {
+                                if (internal.assets.loading == 0) {
+                                    Bagel.internal.triggerPluginListener("prepState", game, game.state);
+                                    if (internal.assets.loading == 0) { // Something needs to load
+                                        internal.lastPrepState = game.state;
+                                    }
+                                    else {
+                                        game.loaded = false;
+                                        if (internal.loadingScreen == null) {
+                                            Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                                        }
                                     }
                                 }
                             }
-                        }
 
 
-                        if (game.loaded) {
-                            if (subFunctions.loaded(game, start)) { // Loading screen triggered
-                                Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
-                                subFunctions.loading(game);
+                            if (game.loaded) {
+                                if (subFunctions.loaded(game, start)) { // Loading screen triggered
+                                    Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
+                                    subFunctions.loading(game);
+                                }
+                                if (renderer.type != "canvas") {
+                                    game.scriptTime = performance.now() - start;
+                                }
                             }
-                            if (renderer.type != "canvas") {
+                            else {
+                                subFunctions.loading(game);
                                 game.scriptTime = performance.now() - start;
+                            }
+
+                            let configRenderer = game.config.display.renderer;
+                            if (configRenderer != "auto" && renderer.type != configRenderer) {
+                                if (renderer.type == "webgl") {
+                                    renderer.gl.getExtension("WEBGL_lose_context").loseContext();
+                                    let slots = renderer.textureSlots;
+                                    for (let i in slots) {
+                                        if (slots[i].gl) {
+                                            slots[i].gl.getExtension("WEBGL_lose_context").loseContext();
+                                        }
+                                    }
+                                }
+                                renderer.type = configRenderer;
+                                console.error("Renderers currently can't be switched for active games.");
                             }
                         }
                         else {
-                            subFunctions.loading(game);
-                            game.scriptTime = performance.now() - start;
-                        }
-
-                        let configRenderer = game.config.display.renderer;
-                        if (configRenderer != "auto" && renderer.type != configRenderer) {
-                            if (renderer.type == "webgl") {
-                                renderer.gl.getExtension("WEBGL_lose_context").loseContext();
-                                let slots = renderer.textureSlots;
-                                for (let i in slots) {
-                                    if (slots[i].gl) {
-                                        slots[i].gl.getExtension("WEBGL_lose_context").loseContext();
-                                    }
-                                }
+                            if ((! internal.loadingScreen) || internal.loadingScreen.loaded) {
+                                Bagel.internal.subFunctions.init.assets(game);
                             }
-                            renderer.type = configRenderer;
-                            // TODO: reinitialise
                         }
                     }
 
@@ -4755,6 +4758,7 @@ Bagel = {
                             toLoad: {},
                             loadingIDs: {},
                             ranTasks: false,
+                            initialized: false,
                             assetsLoading: 0
                         },
                         combinedPlugins: {
@@ -5199,23 +5203,24 @@ Bagel = {
                             }
 
                             let renderer = game.internal.renderer;
-                            if (renderer.type == "webgl") {
-                                if (game.config.isLoadingScreen) {
-                                    let bitmaps = renderer.loadingScreenBitmaps;
+                            if (game.config.isLoadingScreen) {
+                                let bitmaps = renderer.loadingScreenBitmaps;
 
-                                    for (let id in bitmaps) {
-                                        if (bitmaps[id]) {
-                                            Bagel.internal.render.bitmapSprite.delete(id, game);
-                                        }
-                                    }
-                                    let textures = renderer.loadingScreenTextures;
-                                    for (let id in textures) {
-                                        if (textures[id]) {
-                                            Bagel.internal.render.texture.delete(id, game, true, false, true);
-                                        }
+                                for (let id in bitmaps) {
+                                    if (bitmaps[id]) {
+                                        Bagel.internal.render.bitmapSprite.delete(id, game);
                                     }
                                 }
-                                else {
+                                let textures = renderer.loadingScreenTextures;
+                                for (let id in textures) {
+                                    if (textures[id]) {
+                                        Bagel.internal.render.texture.delete(id, game, true, false, true);
+                                    }
+                                }
+                            }
+
+                            if (renderer.type == "webgl") {
+                                if (! game.config.isLoadingScreen) {
                                     game.internal.renderer.gl.getExtension("WEBGL_lose_context").loseContext();
                                     let slots = game.internal.renderer.textureSlots;
                                     for (let i in slots) {
@@ -5290,6 +5295,7 @@ Bagel = {
                     }
                 },
                 assets: (game, dontLoad) => {
+                    game.internal.assets.initialized = true;
                     let allAssets = game.game.assets;
                     for (let type in allAssets) {
                         let assets = allAssets[type];
@@ -5429,7 +5435,7 @@ Bagel = {
                         Bagel.internal.current.plugin = game.internal.plugins.Internal;
 
                         let loadingScreen = Bagel.internal.deepClone(game.config.loading.animation);
-                        let resolution = "fixed";
+                        let resolution = "full";
                         if (loadingScreen.config) {
                             if (loadingScreen.config.display) {
                                 if (loadingScreen.config.display.resolution != null) {
@@ -5457,7 +5463,8 @@ Bagel = {
                             },
                             display: {
                                 backgroundColor: backgroundColor,
-                                dom: false
+                                dom: false,
+                                renderer: game.internal.renderer.type
                             },
                             disableBagelJSMessage: true, // Otherwise there would be 2 per game
                             isLoadingScreen: true
@@ -5579,7 +5586,9 @@ Bagel = {
                 onPluginsReady: game => {
                     let subFunctions = Bagel.internal.subFunctions.init;
                     subFunctions.methods(game);
-                    subFunctions.assets(game);
+                    if ((! game.internal.loadingScreen) || game.internal.loadingScreen.loaded) { // Make sure the loading screen has priority
+                        subFunctions.assets(game);
+                    }
                     subFunctions.rendererInit(game);
                     subFunctions.preloadTasks(game);
                     subFunctions.initScripts(game);
@@ -6376,7 +6385,7 @@ Bagel = {
                         for (let property in listeners.property) {
                             let handlers = listeners.property[property];
 
-                            if (typeof sprite[property] == "object" && handlers.subListen) {
+                            if (["object", "array"].includes(Bagel.internal.getTypeOf(sprite[property])) && handlers.subListen) {
                                 sprite.internal.Bagel.properties[property] = Bagel.internal.deepClone(sprite[property]);
                                 Object.defineProperty(sprite, property, {
                                     writable: false
@@ -7413,20 +7422,18 @@ Bagel = {
                         if (Bagel.internal.games[game.id] == null) return;
 
                         subFunctions.spriteRenderTick(game);
-                        if (! game.config.isLoadingScreen) {
-                            let renderStart;
-                            if (renderer.type == "canvas") {
-                                renderStart = performance.now();
-                                game.scriptTime = renderStart - start;
-                            }
-                            else {
-                                game.internal.scriptEndTime = performance.now();
-                            }
-                            subFunctions.render[game.internal.renderer.type].tick(game);
-                            if (renderer.type == "canvas") {
-                                game.renderTime = performance.now() - renderStart;
-                                game.frameTime = game.scriptTime + game.renderTime;
-                            }
+                        let renderStart;
+                        if (renderer.type == "canvas") {
+                            renderStart = performance.now();
+                            game.scriptTime = renderStart - start;
+                        }
+                        else {
+                            game.internal.scriptEndTime = performance.now();
+                        }
+                        subFunctions.render[game.internal.renderer.type].tick(game);
+                        if (renderer.type == "canvas") {
+                            game.renderTime = performance.now() - renderStart;
+                            game.frameTime = game.scriptTime + game.renderTime;
                         }
                     }
                 },
@@ -7469,14 +7476,6 @@ Bagel = {
                                 }
                             }
                         }
-
-
-                        if (! game.config.isLoadingScreen) {
-                            if (renderer.type == "webgl") {
-                                Bagel.internal.subFunctions.tick.render.webgl.tick(game);
-                            }
-                        }
-
 
                         if (loadingScreen.vars.loading.done) {
                             game.loaded = true;
@@ -9432,7 +9431,7 @@ Bagel = {
 
             let i = 0;
             while (i < keys.length) {
-                if (typeof entity[keys[i]] == "object") {
+                if (entity[keys[i]] != null && typeof entity[keys[i]] == "object") {
                     newEntity[keys[i]] = Bagel.internal.deepClone(entity[keys[i]], true);
                 }
                 else {
@@ -10555,6 +10554,10 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
 
+                    if (game.config.isLoadingScreen) {
+                        id = ".Internal.loadingScreen." + id;
+                    }
+
                     let renderer = game.internal.renderer;
                     let texture = renderer.textures[id];
                     if (texture) {
@@ -10887,7 +10890,7 @@ Bagel = {
             let listener = handler.listeners.property[property];
             let properties = sprite.internal.Bagel.properties;
             let errors = [];
-            if (typeof sprite[property] == "object" && listener.subListen) {
+            if (["object", "array"].includes(Bagel.internal.getTypeOf(sprite[property])) && listener.subListen) {
                 if (subProperty) {
                     errors.push([
                         listener[type](properties[property], properties[property][subProperty], subProperty, game, plugin, properties, sprite, Bagel.step.plugin.spriteListener, initialTrigger, original, property)
