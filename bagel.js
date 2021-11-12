@@ -7909,7 +7909,7 @@ Bagel = {
                                 },
                                 renderer: {
                                     required: false,
-                                    default: "auto",
+                                    default: "canvas",
                                     check: value => {
                                         if (! ["auto", "canvas", "webgl"].includes(value)) {
                                             return "Oops. You used an invalid option. You used " + JSON.stringify(value) + ", it can only be either \"auto\", \"canvas\" or \"webgl\".";
