@@ -11,7 +11,7 @@ Should the loading screen use the full resolution? Need to commit to a set resol
 Prevent upscale aspect ratio from being different to the source unless an option is enabled.
 
 Change WebGL rounding to match canvas <==========
-Add bitmapSprite cropping to the webgl renderer
+Add bitmapSprite cropping and tinting to the webgl renderer
 
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
 
@@ -49,6 +49,7 @@ put in front of and behind layer operations. Should also work for groups like cl
 Text rotation? Negative widths and heights? Changing them should set font size?
 
 Cropping for canvases
+Tints for canvases and text. Maybe used instead of renrendering?
 
 Put ogg/webp support in console message
 WebP support for PWA icons
@@ -229,8 +230,8 @@ Bagel = {
                                             img = canvas;
                                         }
 
-                                        ready(img);
                                         Bagel.internal.render.texture.new(asset.id, img, game, false, "static");
+                                        ready(img);
                                     };
                                 })(img, asset, game, ready);
                                 if (asset.webP && Bagel.device.is.webPSupported) {
@@ -6636,27 +6637,44 @@ Bagel = {
                             for (let i in renderer.layers) {
                                 let data = renderer.scaledBitmaps[renderer.layers[i]];
                                 if (data) {
-                                    ctx.globalAlpha = data.alpha;
-
                                     let flipX = Math.sign(data.width);
                                     let flipY = Math.sign(data.height);
 
-                                    ctx.scale(flipX, flipY);
-                                    if (data.angle == 90) { // Don't rotate if we don't need to
+                                    let compositeWas = ctx.globalCompositeOperation;
+
+                                    let halfWidth = data.width / 2;
+                                    let halfHeight = data.height / 2;
+                                    if (data.rotation == 90) { // Don't rotate if we don't need to
+                                        let x = data.x * flipX;
+                                        let y = data.y * flipY;
+                                        let width = data.width;
+                                        let height = data.height;
+
+                                        if (data.tint) {
+                                            ctx.globalAlpha = 1;
+                                            ctx.globalCompositeOperation = "destination-atop";
+                                            ctx.fillStyle = data.tint;
+                                            ctx.fillRect(Math.abs(x), Math.abs(y), Math.abs(width), Math.abs(height));
+                                        }
+                                        ctx.globalAlpha = data.alpha;
+                                        ctx.scale(flipX, flipY);
                                         if (data.crop) {
-                                            ctx.drawImage(textures[data.image], data.crop.x, data.crop.y, data.crop.width, data.crop.height, data.x * flipX, data.y * flipY, data.width, data.height);
+                                            ctx.drawImage(textures[data.image], data.crop.x, data.crop.y, data.crop.width, data.crop.height, x, y, width, height);
                                         }
                                         else {
-                                            ctx.drawImage(textures[data.image], data.x * flipX, data.y * flipY, data.width, data.height);
+                                            ctx.drawImage(textures[data.image], x, y, width, height);
+                                        }
+                                        if (data.tint) {
+                                            ctx.globalCompositeOperation = compositeWas;
                                         }
                                     }
                                     else {
                                         let angle = Bagel.maths.degToRad(data.rotation - 90);
-                                        let halfWidth = data.width / 2;
-                                        let halfHeight = data.height / 2;
 
+                                        ctx.globalAlpha = data.alpha;
+                                        ctx.scale(flipX, flipY);
                                         ctx.translate((data.x + halfWidth) * flipX, (data.y + halfHeight) * flipY);
-                                        ctx.rotate(angle);
+                                        ctx.rotate(angle * Math.min(flipX, flipY));
                                         if (data.crop) {
                                             ctx.drawImage(textures[data.image], data.crop.x, data.crop.y, data.crop.width, data.crop.height, -halfWidth, -halfHeight, data.width, data.height);
                                         }
@@ -6770,8 +6788,14 @@ Bagel = {
                             let scaleY = renderer.scaleY;
                             let canvas = renderer.canvas;
 
-                            data.x -= data.width / 2;
-                            data.y -= data.height / 2;
+                            if (data.rotation == 90) {
+                                data.x -= Math.abs(data.width) / 2;
+                                data.y -= Math.abs(data.height) / 2;
+                            }
+                            else {
+                                data.x -= data.width / 2;
+                                data.y -= data.height / 2;
+                            }
                             data.width = (Math.ceil((data.width + data.x) * scaleX)) - (data.x * scaleX);
                             data.height = (Math.ceil((data.height + data.y) * scaleY)) - (data.y * scaleY);
                             data.x = Math.round(data.x * scaleX);
@@ -9389,6 +9413,11 @@ Bagel = {
                     },
                     types: ["object"],
                     description: "How the texture the bitmapSprite uses should be cropped. Won't affect the original texture and is affected by rotation. Source pixels are used instead of game or canvas pixels."
+                },
+                tint: {
+                    required: false,
+                    types: ["string"],
+                    description: "The HTML colour the sprite should be tinted with. If the opacity is 255, all opaque pixels will be fully replaced with the colour and if it's 0, none will be effected."
                 }
             }
         },
