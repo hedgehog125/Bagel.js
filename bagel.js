@@ -535,6 +535,11 @@ Bagel = {
                                     },
                                     types: ["object"],
                                     description: "How the sprite should be cropped."
+                                },
+                                tint: {
+                                    required: false,
+                                    types: ["string"],
+                                    description: "The HTML colour to tint the sprite with. Defaults to none (#00000000). The alpha is the amount."
                                 }
                             },
                             cloneArgs: {
@@ -600,6 +605,9 @@ Bagel = {
                                     mode: "replace"
                                 },
                                 crop: {
+                                    mode: "replace"
+                                },
+                                tint: {
                                     mode: "replace"
                                 }
                             },
@@ -1028,6 +1036,12 @@ Bagel = {
                                             return "Oh no! This has to be a number and you tried to use " + Bagel.internal.an(Bagel.internal.getTypeOf(value)) + ".";
                                         },
                                         subListen: true
+                                    },
+                                    tint: {
+                                        set: (sprite, value, property, game, plugin, triggerSprite) => {
+                                            triggerSprite.internal.renderUpdate = true;
+                                            triggerSprite.internal.tint = ! (value == null || value == "#00000000" || value == "rbga(0, 0, 0, 0)");
+                                        }
                                     }
                                 },
                                 trigger: true
@@ -1070,7 +1084,8 @@ Bagel = {
                                             image: properties.img,
                                             rotation: properties.angle,
                                             alpha: properties.alpha,
-                                            crop: internal.crop? properties.crop : null
+                                            crop: internal.crop? properties.crop : null,
+                                            tint: internal.tint? properties.tint : null
                                         }, sprite.game, false);
                                     }
                                 },
@@ -1092,7 +1107,8 @@ Bagel = {
                                                 image: properties.img,
                                                 rotation: properties.angle,
                                                 alpha: properties.alpha,
-                                                crop: internal.crop? properties.crop : null
+                                                crop: internal.crop? properties.crop : null,
+                                                tint: internal.tint? properties.tint : null
                                             }, sprite.game, false);
                                         }
                                     }
@@ -4714,6 +4730,8 @@ Bagel = {
                             textureSlotsUsed: 0,
                             bitmapsUsingTextures: {},
                             maxTextureSlots: null,
+                            tintedTextures: {}, // Key is the texture id, then the next key is the tint
+                            tintedTextureCounts: {},
 
                             downscaled: {},
                             animatedIntoCombined: {},
@@ -6620,7 +6638,8 @@ Bagel = {
 
                             let handlers = game.internal.combinedPlugins.types.sprites;
 
-                            Bagel.internal.subFunctions.tick.render.canvas.queues.bitmapLayers(game);
+                            let subFunctions = Bagel.internal.subFunctions.tick.render.canvas;
+                            subFunctions.queues.bitmapLayers(game);
 
                             // Clear the canvas
                             let clearStyle = game.config.display.backgroundColor;
@@ -6639,47 +6658,36 @@ Bagel = {
                                 if (data) {
                                     let flipX = Math.sign(data.width);
                                     let flipY = Math.sign(data.height);
-
-                                    let compositeWas = ctx.globalCompositeOperation;
+                                    ctx.scale(flipX, flipY);
+                                    ctx.globalAlpha = data.alpha;
 
                                     let halfWidth = data.width / 2;
                                     let halfHeight = data.height / 2;
+                                    let img = subFunctions.getTint(data, game, renderer);
                                     if (data.rotation == 90) { // Don't rotate if we don't need to
                                         let x = data.x * flipX;
                                         let y = data.y * flipY;
                                         let width = data.width;
                                         let height = data.height;
 
-                                        if (data.tint) {
-                                            ctx.globalAlpha = 1;
-                                            ctx.globalCompositeOperation = "destination-atop";
-                                            ctx.fillStyle = data.tint;
-                                            ctx.fillRect(Math.abs(x), Math.abs(y), Math.abs(width), Math.abs(height));
-                                        }
-                                        ctx.globalAlpha = data.alpha;
-                                        ctx.scale(flipX, flipY);
                                         if (data.crop) {
-                                            ctx.drawImage(textures[data.image], data.crop.x, data.crop.y, data.crop.width, data.crop.height, x, y, width, height);
+                                            ctx.drawImage(img, data.crop.x, data.crop.y, data.crop.width, data.crop.height, x, y, width, height);
                                         }
                                         else {
-                                            ctx.drawImage(textures[data.image], x, y, width, height);
-                                        }
-                                        if (data.tint) {
-                                            ctx.globalCompositeOperation = compositeWas;
+                                            ctx.drawImage(img, x, y, width, height);
                                         }
                                     }
                                     else {
                                         let angle = Bagel.maths.degToRad(data.rotation - 90);
 
-                                        ctx.globalAlpha = data.alpha;
                                         ctx.scale(flipX, flipY);
                                         ctx.translate((data.x + halfWidth) * flipX, (data.y + halfHeight) * flipY);
                                         ctx.rotate(angle * Math.min(flipX, flipY));
                                         if (data.crop) {
-                                            ctx.drawImage(textures[data.image], data.crop.x, data.crop.y, data.crop.width, data.crop.height, -halfWidth, -halfHeight, data.width, data.height);
+                                            ctx.drawImage(img, data.crop.x, data.crop.y, data.crop.width, data.crop.height, -halfWidth, -halfHeight, data.width, data.height);
                                         }
                                         else {
-                                            ctx.drawImage(textures[data.image], -halfWidth, -halfHeight, data.width, data.height);
+                                            ctx.drawImage(img, -halfWidth, -halfHeight, data.width, data.height);
                                         }
                                     }
                                     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -6801,6 +6809,10 @@ Bagel = {
                             data.x = Math.round(data.x * scaleX);
                             data.y = Math.round(data.y * scaleY);
                             return data;
+                        },
+                        getTint: (data, game, renderer) => {
+                            if (data.tint) return renderer.tintedTextures[data.image][data.tint][0];
+                            else return renderer.textures[data.image];
                         }
                     },
                     webgl: {
@@ -9778,6 +9790,11 @@ Bagel = {
                         renderer.bitmapIndexes[id] = renderer.layers.length;
                         renderer.layers.push(id);
                         renderer.scaledBitmaps[id] = Bagel.internal.subFunctions.tick.render.canvas.scaleData(data, renderer);
+
+                        if (data.tint) {
+                            Bagel.internal.render.bitmapSprite.internal.canvasTint(renderer, data.image, data.tint);
+                        }
+
                         return id;
                     }
                 },
@@ -9818,6 +9835,7 @@ Bagel = {
                             }
                         }
                         else {
+                            let data = renderer.scaledBitmaps[id];
                             renderer.scaledBitmaps[id] = null;
                             renderer.layers.splice(renderer.bitmapIndexes[id], 1);
                             let index = renderer.bitmapIndexes[id];
@@ -9825,6 +9843,10 @@ Bagel = {
                                 if (renderer.bitmapIndexes[i] > index) {
                                     renderer.bitmapIndexes[i]--;
                                 }
+                            }
+
+                            if (data.tint) { // Had a tint
+                                Bagel.internal.render.bitmapSprite.internal.reduceCanvasTint(renderer, data.image, data.tint);
                             }
                         }
                         renderer.bitmapIndexes[id] = null;
@@ -9991,6 +10013,15 @@ Bagel = {
                             }
                         }
                         else {
+                            let old = renderer.scaledBitmaps[id];
+                            if (box.tint != old.tint || (old.tint && box.image != old.image)) { // Tint has changed
+                                if (old.tint) { // Had a tint before
+                                    Bagel.internal.render.bitmapSprite.internal.reduceCanvasTint(renderer, old.image, old.tint);
+                                }
+                                if (box.tint) {
+                                    Bagel.internal.render.bitmapSprite.internal.canvasTint(renderer, box.image, box.tint);
+                                }
+                            }
                             renderer.scaledBitmaps[id] = Bagel.internal.subFunctions.tick.render.canvas.scaleData(box, renderer);
                         }
                     }
@@ -10029,6 +10060,48 @@ Bagel = {
                             let queue = renderer.queue.bitmap.layer;
                             queue.push([id, type]);
                         }
+                    },
+                    reduceCanvasTint: (renderer, id, tint) => {
+                        renderer.tintedTextureCounts[id][tint]--;
+                        if (renderer.tintedTextureCounts[id][tint] == 0) {
+                            delete renderer.tintedTextures[id][tint];
+                        }
+                    },
+                    canvasTint: (renderer, id, tint, reapplying) => {
+                        if (! reapplying) {
+                            let counts = renderer.tintedTextureCounts[id];
+                            if (counts[tint] == null) {
+                                counts[tint] = 1;
+                            }
+                            else {
+                                counts[tint]++;
+                            }
+                        }
+
+                        let base = Bagel.internal.render.texture.get(id, game);
+                        let canvas, ctx;
+                        if (renderer.tintedTextures[id][tint]) {
+                            canvas = renderer.tintedTextures[id][tint][0];
+                            ctx = renderer.tintedTextures[id][tint][1];
+
+                            canvas.width = base.width;
+                            canvas.height = base.height;
+                            ctx.imageSmoothingEnabled = false;
+                            ctx.globalCompositeOperation = "source-over";
+                        }
+                        else {
+                            canvas = document.createElement("canvas");
+                            canvas.width = base.width;
+                            canvas.height = base.height;
+                            ctx = canvas.getContext("2d");
+                            ctx.imageSmoothingEnabled = false;
+                        }
+                        ctx.fillStyle = tint;
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.globalCompositeOperation = "destination-atop";
+                        ctx.drawImage(base, 0, 0);
+
+                        renderer.tintedTextures[id][tint] = [canvas, ctx];
                     }
                 }
             },
@@ -10406,8 +10479,15 @@ Bagel = {
                         }
                     }
                     else {
-                        if (textures[id] == null) {
+                        if (textures[id]) {
+                            for (let tint in renderer.tintedTextures[id]) {
+                                Bagel.internal.render.bitmapSprite.internal.canvasTint(renderer, id, tint, true);
+                            }
+                        }
+                        else {
                             renderer.bitmapsUsingTextures[id] = [];
+                            renderer.tintedTextures[id] = {};
+                            renderer.tintedTextureCounts[id] = 0;
                         }
                         textures[id] = texture;
                     }
@@ -10542,6 +10622,10 @@ Bagel = {
                             }
 
                             Bagel.internal.render.texture.internal.queueMapUpdate(game, renderer, texture[1]);
+                        }
+                        else {
+                            delete renderer.tintedTextures[id];
+                            delete renderer.tintedTextureCounts[id];
                         }
 
                         if (replaceSpriteTextures) {
