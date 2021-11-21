@@ -7643,7 +7643,7 @@ Bagel = {
                     current.plugin = handler.internal.plugin;
                     handler = handler.listeners.events.delete;
                     if (handler) {
-                        handler(sprite, game, handler.internal.plugin);
+                        handler(sprite, game, current.plugin);
                     }
                 },
                 bitmapSprite: (me, game) => {
