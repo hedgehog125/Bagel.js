@@ -10081,6 +10081,7 @@ Bagel = {
                         let base = Bagel.internal.render.texture.get(id, game);
                         let canvas, ctx;
                         if (renderer.tintedTextures[id][tint]) {
+                            if (! reapplying) return; // The tint already exists
                             canvas = renderer.tintedTextures[id][tint][0];
                             ctx = renderer.tintedTextures[id][tint][1];
 
