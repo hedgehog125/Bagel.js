@@ -4143,16 +4143,16 @@ Bagel = {
                         ctx.fillStyle = sprite.color;
 
                         let y = 0;
-                        for (let i in lines) {
-                            let text = lines[i];
+                        for (let i in indexes) {
                             let x = 0;
-                            for (let b in text) {
-                                let character = text[b];
-                                if (character == " ") {
+                            for (let b in indexes[i]) {
+                                let index = indexes[i][b];
+                                let character = characterSet[index];
+
+                                if (index == -1) {
                                     x += asset.avgWidth * 2;
                                 }
                                 else {
-                                    let index = indexes[i][b];
                                     let c = asset.starts[index];
                                     let width = asset.widths[index];
                                     let height = asset.heights[index];
