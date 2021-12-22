@@ -4011,15 +4011,23 @@ Bagel = {
                         let scaleY = renderer.scaleY;
 
                         let internal = sprite.internal;
-                        let indexes = half? null : internal.indexes;
+                        let clearCache = half || internal.lines == null;
+                        let indexes = clearCache? null : internal.indexes;
                         let canvas = internal.canvas;
                         let ctx = internal.ctx;
 
-                        let texts = sprite.text.split("\n");
                         let output = sprite.bitmap?
-                            plugin.vars.font.prerenderBitmap(texts, sprite, scaleX, scaleY, plugin, canvas, ctx, half, indexes)
-                            : plugin.vars.font.prerenderNonBitmap(texts, sprite, scaleX, scaleY, canvas, ctx, half, indexes);
-                        if (output) internal.indexes = output;
+                            plugin.vars.font.prerenderBitmap(clearCache? sprite.text.split("\n") : internal.lines, sprite, scaleX, scaleY, plugin, canvas, ctx, half, indexes)
+                            : plugin.vars.font.prerenderNonBitmap(sprite.text.split("\n"), sprite, scaleX, scaleY, canvas, ctx, half, clearCache? null : internal.lines);
+                        if (output) {
+                            if (sprite.bitmap) {
+                                internal.indexes = output[0];
+                                internal.lines = output[1];
+                            }
+                            else {
+                                internal.lines = output;
+                            }
+                        }
 
                         if (canvas.width == 0) { // No text, having a texture this small would cause an error
                             canvas = game.internal.renderer.blankTexture;
@@ -4053,7 +4061,7 @@ Bagel = {
                             while (i < lines.length) {
                                 indexes.push([]);
                                 totalWidth = 0;
-                                text = lines[i].toLowerCase();
+                                let text = lines[i].toLowerCase();
                                 let wordFitted = false;
                                 let wordWidth = 0;
                                 let wordLength = 0;
@@ -4133,26 +4141,25 @@ Bagel = {
                             canvasHeight = asset.maxHeight * lines.length * 2;
                         }
 
-
                         sprite.width = canvasWidth * scale;
                         sprite.height = canvasHeight * scale;
-                        if (half) return indexes;
+                        if (half) return [indexes, lines];
 
                         canvas.width = canvasWidth;
                         canvas.height = canvasHeight;
                         ctx.fillStyle = sprite.color;
 
                         let y = 0;
-                        for (let i in indexes) {
+                        for (let i in lines) {
                             let x = 0;
-                            for (let b in indexes[i]) {
-                                let index = indexes[i][b];
-                                let character = characterSet[index];
-
-                                if (index == -1) {
+                            let text = lines[i];
+                            for (let b in text) {
+                                let character = text[b];
+                                if (character == " ") {
                                     x += asset.avgWidth * 2;
                                 }
                                 else {
+                                    let index = indexes[i][b];
                                     let c = asset.starts[index];
                                     let width = asset.widths[index];
                                     let height = asset.heights[index];
