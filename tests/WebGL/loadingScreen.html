@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        WebGL Loading Screen
+    </title>
+</head>
+<body bgColor="blue"></body>
+
+<script src="../../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "game",
+    state: "game",
+    game: {
+        assets: {
+            imgs: [
+                {
+                    id: "Bagel",
+                    src: "../../assets/imgs/bagel.png"
+                } // To trigger the loading screen
+            ]
+        }
+    },
+    width: 800,
+    height: 450,
+    config: {
+        loading: {
+            mode: "preload",
+            skip: false
+        },
+        display: {
+            renderer: "webgl"
+        }
+    }
+});
+
+</script>

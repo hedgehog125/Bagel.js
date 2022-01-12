@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        WebGL Texture Freeing Automated Test
+    </title>
+</head>
+<body bgColor="blue"></body>
+
+<script src="../../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "game",
+    state: "test",
+    game: {
+        scripts: {
+            init: [
+                {
+                    code: _ => {
+                        let redSquare = document.createElement("canvas");
+                        let blueSquare = document.createElement("canvas");
+                        let redCtx = redSquare.getContext("2d");
+                        let blueCtx = blueSquare.getContext("2d");
+
+                        redSquare.width = 10;
+                        redSquare.height = 10;
+                        blueSquare.width = 10;
+                        blueSquare.height = 10;
+
+                        redCtx.fillStyle = "red";
+                        blueCtx.fillStyle = "blue";
+
+                        redCtx.fillRect(0, 0, redSquare.width, redSquare.height);
+                        blueCtx.fillRect(0, 0, blueSquare.width, blueSquare.height);
+
+                        Bagel.internal.render.texture.new("Red", redSquare, game);
+                        Bagel.internal.render.texture.new("Blue", blueSquare, game);
+                    },
+                    stateToRun: "test"
+                }
+            ],
+            main: [
+                {
+                    code: _ => {
+
+                    },
+                    stateToRun: "test"
+                }
+            ]
+        }
+    },
+    width: 800,
+    height: 450,
+    config: {
+        loading: {
+            mode: "preload"
+        },
+        display: {
+            renderer: "webgl"
+        }
+    }
+});
+
+</script>

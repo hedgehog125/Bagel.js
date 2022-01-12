@@ -8,12 +8,17 @@ TODO
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 == Bugs ==
+The default loading screen results in a renderer error? Can't replicate for some reason
+
 Prevent upscale aspect ratio from being different to the source unless an option is enabled.
 
 Change WebGL rounding to match canvas <==========
 Add bitmapSprite cropping and tinting to the webgl renderer
 
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
+
+Full stops are too low in bitmap text
+Text is weird in the loading screen at different game dimensions. Maybe text in general? Probably due to setting widths and heights
 
 Send to back can cause a crash in the update bitmap function. Maybe requires combination of it and bringToFront in another sprite?
 
@@ -49,7 +54,7 @@ put in front of and behind layer operations. Should also work for groups like cl
 Text rotation? Negative widths and heights? Changing them should set font size?
 
 Cropping for canvases
-Tints for canvases and text. Maybe used instead of renrendering?
+Tints for canvases and text. Maybe used instead of rerendering?
 
 Put ogg/webp support in console message
 WebP support for PWA icons
@@ -58,10 +63,11 @@ Steps for clones
 
 Bagel.add.asset and Bagel.add.sprite
 
+Might be able to antialias some bitmapSprites but not others by using a different texture alias for both. Use gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); to disable antialiasing, otherwise don't run it to keep it
+
 Allow reusing values in plugins from other plugins. Maybe can set all complicated arguments to ".<pluginID>.<...pathThroughPluginObject>" e.g ".Internal.plugin.types.sprites.sprite.listeners.fns.xy". Maybe should be a way to more easilly access functions in other plugins to use yourself.
 
 Allow enabling antialiasing and switching renderers on the fly. Requires reinitialising the webgl context for both
-
 game.renderTime, should these stats go in game.performance though?
 
 Copy canvas mode and/or textures. These are prerendered using webgl or the canvas depending on renderer. Should there be built in parent textures like circles and round lines?
@@ -7240,7 +7246,6 @@ Bagel = {
                             let renderer = game.internal.renderer;
                             let gl = renderer.gl;
 
-
                             let compileShader = Bagel.internal.subFunctions.tick.render.webgl.compileShader;
                             let vertex = compileShader(gl.VERTEX_SHADER, `
                                 attribute vec2 a_vertices;
@@ -7312,7 +7317,6 @@ Bagel = {
 
                             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                             gl.enable(gl.BLEND);
-                            //gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
 
                             // https://stackoverflow.com/questions/19592850/how-to-bind-an-array-of-textures-to-a-webgl-shader-uniform
                             renderer.locations.images = gl.getUniformLocation(program, "u_images");
@@ -8109,14 +8113,6 @@ Bagel = {
                                                     {
                                                         id: "Bagel",
                                                         src: "data:image/png;base64,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"
-                                                    },
-                                                    {
-                                                        id: "Loading.Black",
-                                                        src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAGCAYAAABAU4emAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AYht+mSou0ONhBRCFDdbIgKuIoVSyChdJWaNXB5NI/aNKQpLg4Cq4FB38Wqw4uzro6uAqC4A+Ik6OToouU+F1SaBHjHcc9vPe9L3ffAUKzylSzZwJQNctIJ+JiLr8qBl4RwAjCNIMSM/VkZjELz/F1Dx/f72I8y7vuzxFWCiYDfCLxHNMNi3iDeGbT0jnvE0dYWVKIz4nHDbog8SPXZZffOJccFnhmxMim54kjxGKpi+UuZmVDJZ4mjiqqRvlCzmWF8xZntVpn7XvyF4YK2kqG67SGkcASkkhBhIw6KqjCQox2jRQTaTqPe/iHHH+KXDK5KmDkWEANKiTHD/4Hv3trFqcm3aRQHOh9se2PUSCwC7Qatv19bNutE8D/DFxpHX+tCcx+kt7oaNEjoH8buLjuaPIecLkDDD7pkiE5kp+WUCwC72f0TXlg4BboW3P71j7H6QOQpV4t3wAHh8BYibLXPd4d7O7bvzXt/v0AOZJykKeF/tkAAAAGYktHRAD/AOwAAJPfVTcAAAAJcEhZcwAALiMAAC4jAXilP3YAAAAHdElNRQfkBx0TEyFitOyDAAAAGXRFWHRDb21tZW50AENyZWF0ZWQgd2l0aCBHSU1QV4EOFwAAAIZJREFUKFPFkUEOQiEMRGeMN5D7n7D/DM8NaEEQXPkSAh0G2rSWBCEr4SJyTMg7jZD1QLbfGtg2+W7qG/JLkot0H8VGe/BRwEx7Jba7giouAmqci9xw2xn+ybJzM8bRntK62YlptKsu/tQ5Qj4ZxxGXBWz/Ii9irRFSPo8eoNdqnO+++ob9Cdg1gf0PGCdvAAAAAElFTkSuQmCC"
-                                                    },
-                                                    {
-                                                        id: "Loading.White",
-                                                        src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAGCAYAAABAU4emAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AYht+mSou0ONhBRCFDdbIgKuIoVSyChdJWaNXB5NI/aNKQpLg4Cq4FB38Wqw4uzro6uAqC4A+Ik6OToouU+F1SaBHjHcc9vPe9L3ffAUKzylSzZwJQNctIJ+JiLr8qBl4RwAjCNIMSM/VkZjELz/F1Dx/f72I8y7vuzxFWCiYDfCLxHNMNi3iDeGbT0jnvE0dYWVKIz4nHDbog8SPXZZffOJccFnhmxMim54kjxGKpi+UuZmVDJZ4mjiqqRvlCzmWF8xZntVpn7XvyF4YK2kqG67SGkcASkkhBhIw6KqjCQox2jRQTaTqPe/iHHH+KXDK5KmDkWEANKiTHD/4Hv3trFqcm3aRQHOh9se2PUSCwC7Qatv19bNutE8D/DFxpHX+tCcx+kt7oaNEjoH8buLjuaPIecLkDDD7pkiE5kp+WUCwC72f0TXlg4BboW3P71j7H6QOQpV4t3wAHh8BYibLXPd4d7O7bvzXt/v0AOZJykKeF/tkAAAAGYktHRAD/AOwAAJPfVTcAAAAJcEhZcwAALiMAAC4jAXilP3YAAAAHdElNRQfkBx0TEjVhdQm/AAAAGXRFWHRDb21tZW50AENyZWF0ZWQgd2l0aCBHSU1QV4EOFwAAAIlJREFUKFPNk8ERwyAMBPcy6cDpv0NquDw0OEKBYP+yLzgECOmQbdMkMoc9zJu01WIOkOMEeFibxdX7Ab3gUcWTJn1tWmkQiTZBJDRemB+Rk5ydl1gn9wc8dwEDtbXXifZmcmsX1btXuU0bbpEtsCAqV41dtV/0uGr00Lv/4HD/HDGe+fBTYdn4DcirSc3L3FGIAAAAAElFTkSuQmCC"
                                                     }
                                                 ]
                                             },
@@ -8160,7 +8156,7 @@ Bagel = {
                                                             }
                                                             let maxAngle = ((game.vars.loading.progress / 100) * 360) - 90;
                                                             if (maxAngle > game.vars.angle) {
-                                                                game.vars.velocity += 5; // 5
+                                                                game.vars.velocity += 0.01; // 5
                                                                 game.vars.angle += game.vars.velocity;
                                                                 game.vars.velocity *= 0.9;
                                                                 if (maxAngle <= game.vars.angle) {
@@ -8207,8 +8203,9 @@ Bagel = {
                                                 },
                                                 {
                                                     id: "Text",
-                                                    type: "sprite",
-                                                    img: "Loading.Black",
+                                                    type: "text",
+                                                    text: "Loading...",
+                                                    bitmap: true,
                                                     scripts: {
                                                         init: [
                                                             {
@@ -8252,13 +8249,20 @@ Bagel = {
                                                                 if (backgroundColor == "transparent") {
                                                                     backgroundColor = document.body.bgColor;
                                                                 }
-                                                                ctx.fillStyle = backgroundColor;
-                                                                backgroundColor = ctx.fillStyle; // Makes it a hex colour
 
-                                                                let rgb = backgroundColor;
-                                                                let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
-                                                                if (brightness <= 127) {
-                                                                    me.img = "Loading.White";
+                                                                if (backgroundColor != me.vars.was) {
+                                                                    ctx.fillStyle = backgroundColor;
+                                                                    backgroundColor = ctx.fillStyle; // Makes it a hex colour
+
+                                                                    let rgb = backgroundColor;
+                                                                    let brightness = (parseInt(rgb[1] + rgb[2], 16) + parseInt(rgb[3] + rgb[4], 16) + parseInt(rgb[5] + rgb[6], 16)) / 3;
+                                                                    if (brightness <= 127) {
+                                                                        me.color = "White";
+                                                                    }
+                                                                    else {
+                                                                        me.color = "Black";
+                                                                    }
+                                                                    me.vars.was = backgroundColor;
                                                                 }
                                                             }
                                                         }
