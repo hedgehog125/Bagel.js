@@ -7,6 +7,8 @@ TODO
 == Testing ==
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
+Using a separate program for rendering textures to the atlas might be faster since it reduces the complication. Only vertices and texture coordinates are needed compared to also having the alpha, texture id and tint.
+
 == Bugs ==
 The default loading screen results in a renderer error? Can't replicate for some reason
 
@@ -55,6 +57,8 @@ Text rotation? Negative widths and heights? Changing them should set font size?
 
 Cropping for canvases
 Tints for canvases and text. Maybe used instead of rerendering?
+
+Renderer layers
 
 Put ogg/webp support in console message
 WebP support for PWA icons
@@ -4719,7 +4723,7 @@ Bagel = {
                                     delete: {},
                                     layer: []
                                 },
-                                texturemapsUpdated: {}
+                                textures: []
                             },
                             queueLengths: {
                                 add: 0,
@@ -4735,8 +4739,7 @@ Bagel = {
                             lastBackgroundColor: null,
                             verticesUpdated: false,
                             displayedDownscaleWarning: false,
-                            activeGLTextureContexts: [],
-                            glTextureContexts: 0,
+                            textureMapFrameBuffers: [],
 
                             textures: {},
                             textureSlots: [],
@@ -5085,7 +5088,8 @@ Bagel = {
 
                         if (config.display.renderer == "auto") {
                             // This is just to test
-                            gl = canvas.getContext("webgl", settings) || canvas.getContext("experimental-webgl", settings);
+                            gl = canvas.getContext("webgl", settings);
+                            console.log("A");
 
                             let deviceWebGL = Bagel.device.webgl;
                             if (gl) {
@@ -5112,7 +5116,8 @@ Bagel = {
                         renderer.type = config.display.renderer;
                         if (renderer.type == "webgl") {
                             if (! gl) {
-                                gl = renderer.canvas.getContext("webgl", settings) || renderer.canvas.getContext("experimental-webgl", settings);
+                                gl = renderer.canvas.getContext("webgl", settings);
+                                console.log("A");
                             }
                             renderer.gl = gl;
                             if (gl) {
@@ -7242,6 +7247,43 @@ Bagel = {
                                 renderer.textures[id][16] = false; // Reset if it's updated or not this frame (the object might not exist because of the deletion so texture isn't used)
                             }
                         },
+                        activateTextureMap: (id, game, renderer, unbind) => {
+                            let gl = renderer.gl;
+                            let frameBuffers = renderer.textureMapFrameBuffers;
+                            let textureMap = renderer.textureSlots[id];
+
+                            let existing = frameBuffers.find(value => value[0] == id);
+                            if (! existing) {
+                                let frameBuffer = frameBuffers.length == 2? frameBuffers[1] : gl.createFramebuffer();
+                            }
+                            if (! (unbind && existing)) {
+                                gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+                                gl.viewport(0, 0, textureMap.width, textureMap.height);
+                            }
+                            if (! existing) {
+                                gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+
+                                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureMap, 0);
+
+                                frameBuffers.splice(0, 0, [id, frameBuffer]);
+                                if (frameBuffers.length == 3) {
+                                    frameBuffers.pop();
+                                }
+
+                                if (unbind) { // Switch back to rendering on the canvas now it's set up
+                                    Bagel.internal.subFunctions.tick.render.webgl.renderToCanvas(game, renderer);
+                                }
+                            }
+                        },
+                        renderToCanvas: (game, renderer) => {
+                            let gl = renderer.gl;
+                            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                            gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+
+                            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                            gl.enable(gl.BLEND);
+                        },
+
                         init: game => {
                             let renderer = game.internal.renderer;
                             let gl = renderer.gl;
@@ -7286,7 +7328,7 @@ Bagel = {
                                 // From https://gamedev.stackexchange.com/questions/34278/can-you-dynamically-set-which-texture-to-use-in-shader
 
                                 vec4 pixel = vec4(0.0, 0.0, 0.0, 0.0);
-                                vec4 getPixel () {
+                                vec4 getPixel() {
                                     int textureID = int(v_texcoord.z);
                                     if (textureID == 0) {
                                         pixel = texture2D(u_images[0], v_texcoord.xy);
@@ -7294,7 +7336,7 @@ Bagel = {
                                     return pixel;
                                 }
 
-                                void main () {
+                                void main() {
                                     pixel = getPixel();
                                     pixel.rgb *= pixel.a * v_texcoord.a;
                                     pixel.a *= v_texcoord.a;
@@ -7340,18 +7382,20 @@ Bagel = {
 
                             let i = 0;
                             while (i < textureCount) { // Fill the webgl textures with blank textures
-                                let webgltexture = gl.createTexture();
+                                let glTexture = gl.createTexture();
                                 gl.activeTexture(gl.TEXTURE0 + i);
-                                gl.bindTexture(gl.TEXTURE_2D, webgltexture);
+                                gl.bindTexture(gl.TEXTURE_2D, glTexture);
                                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
                                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
                                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
                                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-                                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, blankTexture);
+                                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
-                                renderer.textureSlots.push([true, webgltexture]);
+                                renderer.textureSlots.push([true, glTexture]);
                                 i++;
                             }
+
+                            Bagel.internal.subFunctions.tick.render.webgl.activateTextureMap(0, renderer, game); // Might as well activate it now
 
                             renderer.locations.vertices = verticesLocation;
                             renderer.locations.textures = textureLocation;
@@ -10693,140 +10737,6 @@ Bagel = {
                     }
                 },
                 internal: {
-                    queueMapUpdate: (game, renderer, mapID) => {
-                        renderer.queue.texturemapsUpdated[mapID] = true;
-                    },
-                    initTexture: (slot, renderer, slotID, game) => {
-                        let functions = Bagel.internal.render.texture.internal;
-                        if (slot.gl) {
-                            return slot.gl;
-                        }
-
-                        let settings = {
-                            powerPreference: "high-performance",
-                            depth: false,
-                            antialias: false,
-                            preserveDrawingBuffer: true
-                        };
-
-
-                        if (renderer.glTextureContexts == 2) { // Maximum of 2 active contexts
-                            deactivateID = 0;
-                            for (let i in renderer.activeGLTextureContexts) {
-                                let id = renderer.activeGLTextureContexts[i];
-                                if (renderer.textureSlots[id].singleTexture) { // Single textures should be deactivated first
-                                    deactivateID = i;
-                                    break;
-                                }
-                            }
-
-                            Bagel.internal.render.texture.internal.deactivateCombined(renderer.activeGLTextureContexts[deactivateID], renderer, false, true);
-                        }
-                        else {
-                            renderer.glTextureContexts++;
-                        }
-
-                        let slotGL = slot.canvas.getContext("webgl", settings) || slot.canvas.getContext("experimental-webgl", settings);
-                        if (slotGL == null || slotGL.isContextLost()) {
-                            console.error("Hmm, not sure why this happened but Bagel.js couldn't get a webgl context for a combined texture.");
-                            Bagel.internal.oops(game);
-                            return false;
-                        }
-                        slot.gl = slotGL;
-
-
-                        let compileShader = Bagel.internal.subFunctions.tick.render.webgl.compileShader;
-                        let vertex = compileShader(slotGL.VERTEX_SHADER, `
-                            attribute vec2 a_vertices;
-                            attribute vec2 a_textcoord;
-
-                            uniform vec2 u_resolution;
-
-                            varying vec2 v_texcoord;
-
-                            void main () {
-                                v_texcoord = a_textcoord;
-                                gl_Position = vec4(
-                                    (((a_vertices / u_resolution) * 2.0) - 1.0) * vec2(1, -1),
-                                    0,
-                                    1
-                                );
-                            }
-                        `, slotGL, game);
-
-                        let fragment = compileShader(slotGL.FRAGMENT_SHADER, `
-                            precision mediump float;
-                            uniform sampler2D u_image;
-
-                            varying vec2 v_texcoord;
-
-                            void main () {
-                                gl_FragColor = texture2D(u_image, v_texcoord);
-                            }
-                        `, slotGL, game);
-
-                        let program = slotGL.createProgram();
-                        slotGL.attachShader(program, vertex);
-                        slotGL.attachShader(program, fragment);
-                        slotGL.linkProgram(program);
-                        if (! slotGL.getProgramParameter(program, slotGL.LINK_STATUS)) { // Error
-                            console.error("Err... a Bagel.js shader program failed to link. That wasn't supposed to happen.");
-                            console.log(slotGL.getProgramInfoLog(program));
-                            slotGL.deleteProgram(program); // Delete the program
-                            Bagel.internal.oops(game);
-                        }
-                        slotGL.useProgram(program);
-
-                        slotGL.blendFunc(slotGL.ONE, slotGL.ZERO); // Replace existing pixels
-                        slotGL.enable(slotGL.BLEND);
-
-                        slotGL.uniform2f(slotGL.getUniformLocation(program, "u_resolution"), slot.canvas.width, slot.canvas.height);
-
-                        let textureLocation = slotGL.getAttribLocation(program, "a_textcoord");
-                        slotGL.enableVertexAttribArray(textureLocation); // Enable it
-                        slot.buffers.images = slotGL.createBuffer();
-                        slotGL.bindBuffer(slotGL.ARRAY_BUFFER, slot.buffers.images);
-                        slotGL.vertexAttribPointer(textureLocation, 2, slotGL.FLOAT, false, 0, 0);
-                        slotGL.bufferData(slotGL.ARRAY_BUFFER, new Float32Array([
-                            0, 1,
-                            1, 1,
-                            0, 0,
-
-                            1, 1,
-                            1, 0,
-                            0, 0
-                        ]), slotGL.STATIC_DRAW);
-
-                        let verticesLocation = slotGL.getAttribLocation(program, "a_vertices");
-                        slotGL.enableVertexAttribArray(verticesLocation); // Enable it
-                        slot.buffers.vertices = slotGL.createBuffer();
-                        slotGL.bindBuffer(slotGL.ARRAY_BUFFER, slot.buffers.vertices);
-                        slotGL.vertexAttribPointer(verticesLocation, 2, slotGL.FLOAT, false, 0, 0);
-                        slotGL.bufferData(slotGL.ARRAY_BUFFER, new Float32Array(), slotGL.STREAM_DRAW);
-
-                        let blankTexture = renderer.blankTexture;
-
-                        let webgltexture = slotGL.createTexture();
-                        slotGL.activeTexture(slotGL.TEXTURE0);
-                        slotGL.bindTexture(slotGL.TEXTURE_2D, webgltexture);
-                        slotGL.texParameteri(slotGL.TEXTURE_2D, slotGL.TEXTURE_WRAP_S, slotGL.CLAMP_TO_EDGE);
-                        slotGL.texParameteri(slotGL.TEXTURE_2D, slotGL.TEXTURE_WRAP_T, slotGL.CLAMP_TO_EDGE);
-                        slotGL.texParameteri(slotGL.TEXTURE_2D, slotGL.TEXTURE_MIN_FILTER, slotGL.NEAREST);
-                        slotGL.texParameteri(slotGL.TEXTURE_2D, slotGL.TEXTURE_MAG_FILTER, slotGL.NEAREST);
-                        slotGL.texImage2D(slotGL.TEXTURE_2D, 0, slotGL.RGBA, slotGL.RGBA, slotGL.UNSIGNED_BYTE, blankTexture);
-
-                        slotGL.viewport(0, 0, slot.canvas.width, slot.canvas.height);
-
-
-                        renderer.activeGLTextureContexts.push(slotID);
-
-                        if (slot.previousTexture) {
-                            functions.drawImage(slotGL, slot.previousTexture, slot, renderer, 0, 0, slot.canvas.width, slot.canvas.height);
-                            delete slot.previousTexture;
-                        }
-
-                        return slotGL;
-                    },
                     initCombined: (index, renderer, singleTexture) => {
                         let slot = renderer.textureSlots[index];
                         let canvas, gl;
