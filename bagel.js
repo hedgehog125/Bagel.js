@@ -4,6 +4,9 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_test
 
 TODO
+Regenerate data for bitmap sprites that use a pending texture before it's ready
+
+
 == Testing ==
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
@@ -7136,27 +7139,18 @@ Bagel = {
                                     renderer.verticesUpdated = true;
                                 }
                             },
-                            texturemaps: game => {
+                            textures: game => {
                                 let renderer = game.internal.renderer;
                                 let gl = renderer.gl;
-                                let queue = renderer.queue.texturemapsUpdated;
+                                let queues = renderer.queue.textures;
 
-                                for (let id in queue) {
-                                    gl.activeTexture(gl.TEXTURE0 + parseInt(id));
-                                    let slot = renderer.textureSlots[id];
-                                    let canvas = slot.canvas;
-                                    if (canvas == null) {
-                                        if (slot[3]) {
-                                            canvas = slot[3];
-                                        }
-                                        else {
-                                            canvas = renderer.blankTexture;
-                                        }
+                                let actions = {}; // Batch up the actions for each texture map
+                                if (Object.keys(queues.delete).length != 0) {
+                                    for (let id in queues.delete) {
+                                        if (actions[] == null) actions[] = [];
                                     }
-
-                                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                                    renderer.queue.textures.delete = {};
                                 }
-                                renderer.queue.texturemapsUpdated = {};
                             }
                         },
                         rotateVertices: (vertices, i, angle, cx, cy) => {
@@ -7206,60 +7200,17 @@ Bagel = {
                             }
                             renderer.verticesUpdated = true;
                         },
-                        processTextures: (game, renderer) => {
-                            let functions = Bagel.internal.render.texture.internal;
-                            for (let id in renderer.textures) {
-                                let texture = renderer.textures[id];
-                                if (texture[12]) { // Single texture
-                                    if (! texture[16]) { // Not updated this frame
-                                        texture[17]++; // Idle counter
-                                        if (texture[17] == 60) { // Not updated for a second
-                                            let render = Bagel.internal.render.texture;
-                                            let tmpTexture = texture[15];
-                                            let tmpMode = texture[13];
-                                            let tmpBitmapsUsing = renderer.bitmapsUsingTextures[id];
-
-                                            render.delete(id, game, false, true, true);
-                                            render.new(id, tmpTexture, game, false, tmpMode, false, true);
-
-                                            renderer.bitmapsUsingTextures[id] = tmpBitmapsUsing;
-                                            functions.regenerateBitmapCoords(id, renderer, game);
-                                        }
-                                    }
-                                }
-                                else {
-                                    if (! texture[16]) { // Not updated this frame
-                                        texture[14] = 0; // Reset the update counter
-                                    }
-                                    if (texture[14] == 3 || ((texture[13] == "animated" || texture[13] == "auto") && texture[14] >= 1)) { // 3 consecutive updates or 1 update for an animated or auto texture
-                                        if (renderer.textureSlotsUsed / renderer.maxTextureSlots < 0.9 || texture[13] == "animated") {
-                                            let render = Bagel.internal.render.texture;
-                                            let tmpTexture = texture[15];
-                                            let tmpMode = texture[13];
-                                            let tmpBitmapsUsing = renderer.bitmapsUsingTextures[id];
-
-                                            render.delete(id, game, false, false, true);
-                                            render.new(id, tmpTexture, game, false, tmpMode, true, true);
-
-                                            renderer.bitmapsUsingTextures[id] = tmpBitmapsUsing;
-                                            functions.regenerateBitmapCoords(id, renderer, game);
-                                        }
-                                        else {
-                                            texture[16] = 2; // So it can try again next frame
-                                        }
-                                    }
-                                }
-                                renderer.textures[id][16] = false; // Reset if it's updated or not this frame (the object might not exist because of the deletion so texture isn't used)
-                            }
-                        },
                         activateTextureMap: (id, game, renderer, unbind) => {
                             let gl = renderer.gl;
                             let frameBuffers = renderer.textureMapFrameBuffers;
                             let textureMap = renderer.textureSlots[id];
 
-                            let existing = frameBuffers.find(value => value[0] == id);
+                            let existing = textureMap.frameBufferID;
                             let frameBuffer;
-                            if (! existing) {
+                            if (existing) {
+                                frameBuffer = existing;
+                            }
+                            else {
                                 frameBuffer = frameBuffers.length == 2? frameBuffers[1] : gl.createFramebuffer();
                             }
                             if (! (unbind && existing)) {
@@ -7271,7 +7222,7 @@ Bagel = {
 
                                 gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureMap.texture, 0);
 
-                                frameBuffers.splice(0, 0, [id, frameBuffer]);
+                                frameBuffers.splice(0, 0, frameBuffer);
                                 if (frameBuffers.length == 3) {
                                     frameBuffers.pop();
                                 }
@@ -7404,7 +7355,7 @@ Bagel = {
                                 i++;
                             }
 
-                            Bagel.internal.subFunctions.tick.render.webgl.activateTextureMap(0, game, renderer); // Might as well activate it now
+                            Bagel.internal.subFunctions.tick.render.webgl.activateTextureMap(0, game, renderer, true); // Might as well activate it now but don't make it the active framebuffer
 
                             renderer.locations.vertices = verticesLocation;
                             renderer.locations.textures = textureLocation;
@@ -7417,10 +7368,9 @@ Bagel = {
                             let gl = renderer.gl;
                             let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
                             let queues = subFunctions.queues;
-                            subFunctions.processTextures(game, renderer);
+                            queues.textures(game, renderer);
                             queues.bitmap(game);
                             queues.bitmapLayers(game);
-                            queues.texturemaps(game);
 
 
                             let backgroundColor = game.config.display.backgroundColor;
