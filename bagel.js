@@ -7147,9 +7147,30 @@ Bagel = {
                                 let actions = {}; // Batch up the actions for each texture map
                                 if (Object.keys(queues.delete).length != 0) {
                                     for (let id in queues.delete) {
-                                        if (actions[] == null) actions[] = [];
+                                        let position = queues.delete[id].position;
+                                        if (actions[position.textureMapID] == null) actions[position.textureMapID] = [];
+
+                                        actions[position.textureMapID].push([null, position.x, position.y, position.x + position.width, position.y + position.height]);
                                     }
                                     renderer.queue.textures.delete = {};
+                                }
+                                if (Object.keys(queues.new).length != 0) {
+                                    for (let texture of queues.new) {
+                                        // TODO: chose location
+
+
+                                        let chosenMap;
+                                        if (actions[chosenMap] == null) actions[chosenMap] = [];
+
+                                        let position = texture.position;
+                                        actions[chosenMap].push([texture.texture, position.x, position.y, position.x + position.width, position.y + position.height]);
+                                    }
+                                    renderer.queue.textures.new = {};
+                                }
+
+                                // TODO: render textures
+                                for (let textureMapID in actions) {
+                                    
                                 }
                             }
                         },
