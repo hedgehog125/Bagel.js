@@ -4748,6 +4748,7 @@ Bagel = {
                             verticesUpdated: false,
                             displayedDownscaleWarning: false,
                             textureMapFrameBuffers: [],
+                            textureMapResolutions: [1024, 2048, 4096, 8192],
 
                             textures: {},
                             textureSlots: [],
@@ -5083,9 +5084,8 @@ Bagel = {
                         let subFunctions = Bagel.internal.subFunctions.init;
                         let gl;
 
-                        let antialiasing = config.display.antialiasing;
                         let settings = {
-                            antialias: antialiasing,
+                            antialias: false,
                             powerPreference: "high-performance",
                             depth: false,
                             preserveDrawingBuffer: true,
@@ -5130,7 +5130,7 @@ Bagel = {
                             renderer.gl = gl;
                             if (gl) {
                                 subFunctions.findRendererLimits(game, renderer, gl);
-                                gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+                                gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
 
                                 let deviceWebGL = Bagel.device.webgl;
@@ -6652,7 +6652,6 @@ Bagel = {
                             renderer.maxViewportSize = Infinity;
 
                             renderer.ctx = renderer.canvas.getContext("2d");
-                            renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing;
                         },
                         tick: game => {
                             let renderer = game.internal.renderer;
@@ -6686,6 +6685,8 @@ Bagel = {
                                     let flipY = Math.sign(data.height);
                                     ctx.scale(flipX, flipY);
                                     ctx.globalAlpha = data.alpha;
+                                    ctx.imageSmoothingEnabled = textures[data.texture].antialias;
+                                    ctx.imageSmoothingQuality = "high";
 
                                     let halfWidth = data.width / 2;
                                     let halfHeight = data.height / 2;
@@ -7155,22 +7156,23 @@ Bagel = {
                                     renderer.queue.textures.delete = {};
                                 }
                                 if (Object.keys(queues.new).length != 0) {
-                                    for (let texture of queues.new) {
-                                        // TODO: chose location
+                                    for (let id in queues.new) {
+                                        let queuedTexture = queues.new[id];
+                                        // TODO: choose location
 
 
                                         let chosenMap;
                                         if (actions[chosenMap] == null) actions[chosenMap] = [];
 
-                                        let position = texture.position;
-                                        actions[chosenMap].push([texture.texture, position.x, position.y, position.x + position.width, position.y + position.height]);
+                                        let position = queuedTexture.texture.position;
+                                        actions[chosenMap].push([queuedTexture.texture.texture, position.x, position.y, position.x + position.width, position.y + position.height]);
                                     }
                                     renderer.queue.textures.new = {};
                                 }
 
                                 // TODO: render textures
                                 for (let textureMapID in actions) {
-                                    
+
                                 }
                             }
                         },
@@ -7221,7 +7223,54 @@ Bagel = {
                             }
                             renderer.verticesUpdated = true;
                         },
-                        activateTextureMap: (id, game, renderer, unbind) => {
+
+                        activateTextureMap: (id, game, renderer, min=0, antialias) => {
+                            let gl = renderer.gl;
+                            let resolutions = renderer.textureMapResolutions;
+
+                            let resolution = resolutions[0];
+                            let i = 0;
+                            while (resolution < min) {
+                                resolution = resolutions[i];
+                                if (resolution == null || resolution > renderer.maxTextureSize) return false; // Too big
+                                i++;
+                            }
+
+                            let textureMap = renderer.textureSlots[id];
+                            let previousResolution = textureMap.activated? textureMap.width : 0;
+                            textureMap.activated = true;
+                            textureMap.width = resolution;
+                            textureMap.height = resolution;
+
+                            let lines = textureMap.lines;
+                            i = 0;
+                            while (i < previousResolution) {
+                                if (line[i] == null) {
+                                    lines[i] = [[0, resolution]];
+                                }
+                                else {
+                                    let last = lines[i][lines[i].length - 1];
+                                    if (last[0] + last[1] == previousResolution) {
+                                        last[1] += resolution - previousResolution;
+                                    }
+                                    else {
+                                        let width = resolution - previousResolution;
+                                        lines[i].push([resolution - width, width]);
+                                    }
+                                }
+                                i++;
+                            }
+
+                            while (i < resolution) {
+                                let line = [0, resolution];
+
+                                lines[i] = [line];
+                                i++;
+                            }
+
+                            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, resolution, resolution, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                        },
+                        renderToTextureMap: (id, game, renderer, unbind) => {
                             let gl = renderer.gl;
                             let frameBuffers = renderer.textureMapFrameBuffers;
                             let textureMap = renderer.textureSlots[id];
@@ -7256,7 +7305,7 @@ Bagel = {
                         renderToCanvas: (game, renderer) => {
                             let gl = renderer.gl;
                             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-                            gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+                            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
                             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                             gl.enable(gl.BLEND);
@@ -7371,12 +7420,19 @@ Bagel = {
 
                                 renderer.textureSlots.push({
                                     activated: false,
+                                    width: null,
+                                    height: null,
+                                    textureCount: 0,
+                                    lines: {},
                                     texture: glTexture
                                 });
                                 i++;
                             }
 
-                            Bagel.internal.subFunctions.tick.render.webgl.activateTextureMap(0, game, renderer, true); // Might as well activate it now but don't make it the active framebuffer
+                            let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
+                            // Get a texture map ready ahead of time
+                            subFunctions.activateTextureMap(0, game, renderer, 0, game.config.display.antialias.textures);
+                            subFunctions.renderToTextureMap(0, game, renderer, true);
 
                             renderer.locations.vertices = verticesLocation;
                             renderer.locations.textures = textureLocation;
@@ -7613,8 +7669,10 @@ Bagel = {
                             canvas.height = renderHeight;
                             renderer.scaleX = canvas.width / game.width;
                             renderer.scaleY = canvas.height / game.height;
-                            if (renderer.gl) {
-                                renderer.gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+
+                            let gl = renderer.gl;
+                            if (gl) {
+                                gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
                             }
                             for (let id in renderer.bitmapIndexes) { // Regenerate the texture coordinates
                                 let data = renderer.bitmapSpriteData[id];
@@ -7636,7 +7694,7 @@ Bagel = {
                     canvas.style.marginTop = Math.floor(y) + "px";
                     canvas.style.marginBottom = -Math.ceil(y) + "px";
 
-                    if (! game.config.display.antialiasing) {
+                    if (! game.config.display.antialias.canvas) {
                         Bagel.internal.tryStyles(canvas, "image-rendering", [
                             "pixelated",
                             "optimize-contrast",
@@ -7649,13 +7707,6 @@ Bagel = {
 
                     renderer.waitingWidth = renderWidth;
                     renderer.waitingHeight = renderHeight;
-
-
-                    if (renderer.type == "canvas") {
-                        if (renderer.ctx) {
-                            renderer.ctx.imageSmoothingEnabled = game.config.display.antialiasing; // It needs to be reset when the canvas is resized
-                        }
-                    }
                 },
                 calculateRenderTime: _ => {
                     let fps = 1000 / (performance.now() - Bagel.internal.frameStartTime);
@@ -7972,11 +8023,25 @@ Bagel = {
                                     },
                                     description: "The resolution for the game to be rendered at. Either \"full\", \"fixed\" or a custom resolution using an array containing the width and height (in that order). Full renders the game at the full resolution which makes it good for vector graphics. Fixed is good for pixel art because it means that resources aren't wasted rendering extra pixels as it renders at the game's width and height. And custom's good if you want to do something more advanced."
                                 },
-                                antialiasing: {
+                                antialias: {
                                     required: false,
-                                    default: false,
-                                    types: ["boolean"],
-                                    description: "If antialiasing is used or not. Antialiasing smooths out lower resolution stuff at the a slight cost to performance. However, it doesn't work well with pixel art so should be disabled for that. Disabling it also rounds coordinates during the rendering which removes fuzzy edges but can make motion less smooth."
+                                    default: {},
+                                    subcheck: {
+                                        textures: {
+                                            required: false,
+                                            default: false,
+                                            types: ["boolean"],
+                                            description: "If textures should be antialiased by default."
+                                        },
+                                        canvas: {
+                                            required: false,
+                                            default: false,
+                                            types: ["boolean"],
+                                            description: "If the canvas should be antialiased or not. You might want to enable this if you've set the resolution to something lower and need it to be upscaled better. Not recommended for pixel art."
+                                        }
+                                    },
+                                    types: ["object"],
+                                    description: "Some options about how antialiasing is handled."
                                 },
                                 renderer: {
                                     required: false,
@@ -10142,7 +10207,7 @@ Bagel = {
                 }
             },
             texture: {
-                new: (id, texture, game, overwrite, antialias=false, singleTexture=false) => {
+                new: (id, texture, game, overwrite, antialias, singleTexture=false) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Hmm, looks like you didn't specify the game properly (it's the 3rd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
@@ -10172,6 +10237,8 @@ Bagel = {
                     if (! Bagel.internal.games[game.id]) { // Game deleted
                         return;
                     }
+
+                    if (antialias == null) antialias = game.config.display.antialias.textures;
 
                     let renderer = game.internal.renderer;
                     if (game.config.isLoadingScreen) {
