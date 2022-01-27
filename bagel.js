@@ -5,6 +5,7 @@ WebGL rendererer is heavily based off of https://github.com/quidmonkey/particle_
 
 TODO
 Regenerate data for bitmap sprites that use a pending texture before it's ready
+Updating textures
 
 
 == Testing ==
@@ -5097,7 +5098,6 @@ Bagel = {
                         if (config.display.renderer == "auto") {
                             // This is just to test
                             gl = canvas.getContext("webgl", settings);
-                            console.log("A");
 
                             let deviceWebGL = Bagel.device.webgl;
                             if (gl) {
@@ -5125,7 +5125,6 @@ Bagel = {
                         if (renderer.type == "webgl") {
                             if (! gl) {
                                 gl = renderer.canvas.getContext("webgl", settings);
-                                console.log("A");
                             }
                             renderer.gl = gl;
                             if (gl) {
@@ -7165,7 +7164,7 @@ Bagel = {
                                         if (actions[chosenMap] == null) actions[chosenMap] = [];
 
                                         let position = queuedTexture.texture.position;
-                                        actions[chosenMap].push([queuedTexture.texture.texture, position.x, position.y, position.x + position.width, position.y + position.height]);
+                                        //actions[chosenMap].push([queuedTexture.texture.texture, position.x, position.y, position.x + position.width, position.y + position.height]);
                                     }
                                     renderer.queue.textures.new = {};
                                 }
@@ -9515,6 +9514,8 @@ Bagel = {
                         }
                     },
                     check: (value, ob, property, game) => {
+                        if (value == null) return;
+                        
                         let img = Bagel.internal.render.texture.get(ob.image, game);
                         if (value.width + value.x > img.width) value.width = img.width - value.x;
                         if (value.height + value.y > img.height) value.height = img.height - value.y;
