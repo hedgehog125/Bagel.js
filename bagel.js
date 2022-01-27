@@ -7267,6 +7267,7 @@ Bagel = {
                                 i++;
                             }
 
+                            gl.activeTexture(gl.TEXTURE0 + id);
                             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, resolution, resolution, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
                         },
                         renderToTextureMap: (id, game, renderer, unbind) => {
@@ -9515,7 +9516,7 @@ Bagel = {
                     },
                     check: (value, ob, property, game) => {
                         if (value == null) return;
-                        
+
                         let img = Bagel.internal.render.texture.get(ob.image, game);
                         if (value.width + value.x > img.width) value.width = img.width - value.x;
                         if (value.height + value.y > img.height) value.height = img.height - value.y;
@@ -10256,6 +10257,7 @@ Bagel = {
                     }
                     let functions = Bagel.internal.render.texture.internal;
 
+                    renderer.bitmapsUsingTextures[id] = [];
                     if (renderer.type == "webgl") {
                         textures[id] = {
                             pending: true,
@@ -10277,7 +10279,6 @@ Bagel = {
                             }
                         }
                         else {
-                            renderer.bitmapsUsingTextures[id] = [];
                             renderer.tintedTextures[id] = {};
                             renderer.tintedTextureCounts[id] = 0;
                         }
