@@ -15,6 +15,8 @@ Using a separate program for rendering textures to the atlas might be faster sin
 
 Creating, deleting and modifying the same texture on the same frame multiple times. Also how it's handled the next frame when it's not just modifying what's already been queued
 
+Are vertices scaled correctly when the drawing buffer size doesn't match the canvas dimensions?
+
 == Bugs ==
 The default loading screen results in a renderer error? Can't replicate for some reason
 
@@ -4743,12 +4745,16 @@ Bagel = {
                             vertices: new Float32Array(),
                             textureCoordinates: new Float32Array(),
                             bitmapSpriteData: [],
+
                             colorCanvas: null,
                             colorCtx: null,
                             lastBackgroundColor: null,
+
+                            tmpFrameBuffer: null,
+                            tmpFrameBufferTextureID: null,
+
                             verticesUpdated: false,
                             displayedDownscaleWarning: false,
-                            textureMapFrameBuffers: [],
                             textureMapResolutions: [1024, 2048, 4096, 8192],
 
                             textures: {},
@@ -7223,6 +7229,27 @@ Bagel = {
                             renderer.verticesUpdated = true;
                         },
 
+                        renderToTextureMap: (id, game, renderer) => {
+                            let gl = renderer.gl;
+                            let textureMap = renderer.textureSlots[id];
+
+                            let frameBuffer = renderer.tmpFrameBuffer;
+                            gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+                            gl.viewport(0, 0, textureMap.width, textureMap.height);
+                            if (renderer.tmpFrameBufferTextureID != id) {
+                                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureMap.texture, 0);
+                                renderer.tmpFrameBufferTextureID = id;
+                            }
+                        },
+                        renderToCanvas: (game, renderer) => {
+                            let gl = renderer.gl;
+                            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+                            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                            gl.enable(gl.BLEND);
+                        },
+
                         activateTextureMap: (id, game, renderer, min=0, antialias) => {
                             let gl = renderer.gl;
                             let resolutions = renderer.textureMapResolutions;
@@ -7237,6 +7264,10 @@ Bagel = {
 
                             let textureMap = renderer.textureSlots[id];
                             let previousResolution = textureMap.activated? textureMap.width : 0;
+                            let copyNeeded = textureMap.textureCount != 0;
+                            let tmpTextureID = renderer.textureSlots.length - 1;
+                            let tmpTexture = renderer.textureSlots[tmpTextureID];
+
                             textureMap.activated = true;
                             textureMap.width = resolution;
                             textureMap.height = resolution;
@@ -7267,48 +7298,23 @@ Bagel = {
                                 i++;
                             }
 
+                            if (copyNeeded) {
+                                // Make a temporary copy of this texture map
+                                Bagel.internal.subFunctions.tick.render.webgl.renderToTextureMap(id, game, renderer);
+                                gl.activeTexture(gl.TEXTURE0 + tmpTextureID);
+                                if (resolution > tmpTexture.width) {
+                                    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, previousResolution, previousResolution, 0);
+                                }
+                                else { // Reuse the texture
+                                    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, previousResolution, previousResolution, 0);
+                                }
+                            }
+
                             gl.activeTexture(gl.TEXTURE0 + id);
                             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, resolution, resolution, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-                        },
-                        renderToTextureMap: (id, game, renderer, unbind) => {
-                            let gl = renderer.gl;
-                            let frameBuffers = renderer.textureMapFrameBuffers;
-                            let textureMap = renderer.textureSlots[id];
-
-                            let existing = textureMap.frameBufferID;
-                            let frameBuffer;
-                            if (existing) {
-                                frameBuffer = existing;
+                            if (copyNeeded) {
+                                // TODO: copy back and render to display
                             }
-                            else {
-                                frameBuffer = frameBuffers.length == 2? frameBuffers[1] : gl.createFramebuffer();
-                            }
-                            if (! (unbind && existing)) {
-                                gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
-                                gl.viewport(0, 0, textureMap.width, textureMap.height);
-                            }
-                            if (! existing) {
-                                gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
-
-                                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureMap.texture, 0);
-
-                                frameBuffers.splice(0, 0, frameBuffer);
-                                if (frameBuffers.length == 3) {
-                                    frameBuffers.pop();
-                                }
-
-                                if (unbind) { // Switch back to rendering on the canvas now it's set up
-                                    Bagel.internal.subFunctions.tick.render.webgl.renderToCanvas(game, renderer);
-                                }
-                            }
-                        },
-                        renderToCanvas: (game, renderer) => {
-                            let gl = renderer.gl;
-                            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-                            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
-                            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-                            gl.enable(gl.BLEND);
                         },
 
                         init: game => {
@@ -7432,7 +7438,6 @@ Bagel = {
                             let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
                             // Get a texture map ready ahead of time
                             subFunctions.activateTextureMap(0, game, renderer, 0, game.config.display.antialias.textures);
-                            subFunctions.renderToTextureMap(0, game, renderer, true);
 
                             renderer.locations.vertices = verticesLocation;
                             renderer.locations.textures = textureLocation;
