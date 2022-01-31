@@ -7,6 +7,7 @@ TODO
 Chosen texture positions overlap
 
 Regenerate data for bitmap sprites that use a pending texture before it's ready
+Also regenerate on texture map scale update
 Updating textures
 Auto downscaling textures and log which were downscaled
 Single textures
@@ -7174,10 +7175,10 @@ Bagel = {
                                 if (Object.keys(queues.new).length != 0) {
                                     for (let id in queues.new) {
                                         let queuedTexture = queues.new[id];
-                                        queuedTexture.texture.position = Bagel.internal.subFunctions.tick.render.webgl.queues.allocateTexturePosition(game, renderer, queuedTexture.width, queuedTexture.height);
+                                        Bagel.internal.subFunctions.tick.render.webgl.queues.allocateTextureInMap(queuedTexture, game, renderer);
 
 
-                                        let position = queuedTexture.texture.position;
+                                        let position = queuedTexture.position;
                                         let chosenMap = position.textureID;
                                         if (actions[chosenMap] == null) actions[chosenMap] = [];
 
@@ -7195,8 +7196,11 @@ Bagel = {
                                     }
                                 }
                             },
-                            allocateTexturePosition: (game, renderer, width, height) => {
+                            allocateTextureInMap: (texture, game, renderer) => {
                                 let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
+
+                                let width = texture.width;
+                                let height = texture.height;
 
                                 let index = 0;
                                 while (index < renderer.maxTextureSlots - 1) {
@@ -7257,41 +7261,37 @@ Bagel = {
                                         // Update the lines
                                         let newLines = [];
                                         let done = false;
+                                        i = parseInt(i);
                                         let unchanged = lines.slice(0, i);
                                         while (i < lines.length) { // i is deliberately not reset
                                             newLines.push([]);
                                             for (a in lines[i]) { // a is reset
                                                 let line = lines[i][a];
-                                                if (a == 0) {
-                                                    if (drawY > line[1] + 1
-                                                    || drawY + height < line[1]) {
+                                                if (a == 0) { // Exit if this row is lower than the bottom of the image
+                                                    if (i >= drawY + height) {
+                                                        newLines.pop();
                                                         done = true;
                                                         break;
                                                     }
                                                 }
 
-                                                if (drawX > line[0] + line[1]
-                                                    || drawX + width < line[0]
+                                                if (drawX >= line[0] + line[1]
+                                                    || drawX + width <= line[0]
                                                 ) { // Ignore lines where it doesn't overlap with the image bounding box
                                                     newLines[newLines.length - 1].push(line);
                                                     continue;
                                                 }
 
                                                 let needsSorting = false;
-
                                                 if (line[0] < drawX) { // There's a part of the line to the left of the image
-                                                    let lineWidth = (drawX - line[0]) - 1;
-                                                    if (lineWidth != 0) {
-                                                        newLines[newLines.length - 1].push([line[0] + 1, lineWidth - 1]);
-                                                        needsSorting = true;
-                                                    }
+                                                    let lineWidth = drawX - line[0];
+                                                    newLines[newLines.length - 1].push([line[0], lineWidth]);
+                                                    needsSorting = true;
                                                 }
                                                 if (line[0] + line[1] > drawX + width) { // Part to the right
-                                                    let lineWidth = (line[1] - ((drawX + width) - line[0])) - 1;
-                                                    if (lineWidth != 0) {
-                                                        newLines[newLines.length - 1].push([drawX + width + 1, lineWidth]);
-                                                        needsSorting = true;
-                                                    }
+                                                    let lineWidth = (line[0] + line[1]) - (drawX + width);
+                                                    newLines[newLines.length - 1].push([drawX + width, lineWidth]);
+                                                    needsSorting = true;
                                                 }
 
                                                 if (needsSorting) {
@@ -7312,15 +7312,14 @@ Bagel = {
 
 
                                         textureMap.textureCount++;
-
-                                        return {
+                                        texture.position = {
                                             textureID: index,
                                             singleTexture: false,
                                             x: drawX,
-                                            y: drawY,
-                                            width: width,
-                                            height: height
+                                            y: drawY
                                         };
+                                        texture.pending = false;
+                                        return;
                                     }
                                     else {
                                         if (! subFunctions.activateTextureMap(index, game, renderer, false, textureMap.width + 1)) { // Try to expand the texture map
@@ -7482,6 +7481,11 @@ Bagel = {
                                 gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, 0, 0, previousResolution, previousResolution);
                             }
 
+                            let textureMapTexture = renderer.textures[".Internal.textureMap." + id];
+                            textureMapTexture.antialias = antialias;
+                            textureMapTexture.width = resolution;
+                            textureMapTexture.height = resolution;
+
                             return true;
                         },
 
@@ -7600,6 +7604,19 @@ Bagel = {
                                     lines: [],
                                     texture: glTexture
                                 });
+                                renderer.textures[".Internal.textureMap." + i] = {
+                                    pending: false,
+                                    position: {
+                                        textureID: i,
+                                        x: 0,
+                                        y: 0
+                                    },
+                                    texture: null,
+
+                                    antialias: false,
+                                    width: 1,
+                                    height: 1
+                                };
                                 i++;
                             }
 
@@ -10437,6 +10454,7 @@ Bagel = {
                     if (renderer.type == "webgl") {
                         textures[id] = {
                             pending: true,
+                            position: null,
                             texture: texture,
                             antialias: antialias,
                             width: texture.width,
@@ -10545,16 +10563,8 @@ Bagel = {
 
                     let renderer = game.internal.renderer;
                     let texture = renderer.textures[id];
-                    if (texture) {
-                        return renderer.type == "webgl"? {
-                            width: texture[10],
-                            height: texture[11],
-                            internal: texture
-                        } : texture;
-                    }
-                    else {
-                        return false;
-                    }
+
+                    return texture? texture : false;
                 },
                 internal: {
                     regenerateBitmapCoords: (id, renderer, game) => {
