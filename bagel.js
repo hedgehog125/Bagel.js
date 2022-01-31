@@ -4,8 +4,7 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_test
 
 TODO
-Chosen texture positions overlap
-
+Batch texture map resolution increases but still update lines
 Regenerate data for bitmap sprites that use a pending texture before it's ready
 Also regenerate on texture map scale update
 Updating textures
@@ -3091,10 +3090,10 @@ Bagel = {
                                                         required: true,
                                                         types: ["number"],
                                                         check: (value, ob, argID, game, prev, args) => {
-                                                            let textureSlots = game.internal.renderer.textureSlots;
-                                                            let combinedTexture = textureSlots[value];
+                                                            let textureMaps = game.internal.renderer.textureMaps;
+                                                            let combinedTexture = textureMaps[value];
                                                             if (combinedTexture == null || (combinedTexture.canvas == null && combinedTexture[3] == null)) {
-                                                                return "Huh, that combined texture doesn't seem to exist, hasn't been activated yet or was empty when it was deactivated. Make sure the index is between 0 and " + (textureSlots.length - 1) + ". Also make sure that that combined texture has been activated.";
+                                                                return "Huh, that combined texture doesn't seem to exist, hasn't been activated yet or was empty when it was deactivated. Make sure the index is between 0 and " + (textureMaps.length - 1) + ". Also make sure that that combined texture has been activated.";
                                                             }
                                                         },
                                                         description: "The index number of the combined texture or single texture to display."
@@ -3112,7 +3111,7 @@ Bagel = {
                                                         Bagel.internal.oops(game);
                                                     }
 
-                                                    let combinedTexture = game.internal.renderer.textureSlots[args.index];
+                                                    let combinedTexture = game.internal.renderer.textureMaps[args.index];
                                                     if (args.mini) {
                                                         combinedTexture.canvas.style = "display:block;touch-action:none;user-select:none;-webkit-tap-highlight-color:rgba(0, 0, 0, 0);border:1px solid black;background-color:white;position:absolute;top:0px;left:0px;z-index:1;";
                                                     }
@@ -3187,10 +3186,10 @@ Bagel = {
                                                         required: true,
                                                         types: ["number"],
                                                         check: (value, ob, argID, game, prev, args) => {
-                                                            let textureSlots = game.internal.renderer.textureSlots;
-                                                            let combinedTexture = textureSlots[value];
+                                                            let textureMaps = game.internal.renderer.textureMaps;
+                                                            let combinedTexture = textureMaps[value];
                                                             if (combinedTexture == null || combinedTexture.canvas == null) {
-                                                                return "Huh, that combined texture doesn't seem to exist. Make sure the index is between 0 and " + (textureSlots.length - 1) + ". Also make sure that that combined texture has been activated.";
+                                                                return "Huh, that combined texture doesn't seem to exist. Make sure the index is between 0 and " + (textureMaps.length - 1) + ". Also make sure that that combined texture has been activated.";
                                                             }
                                                         },
                                                         description: "The index number of the combined texture or single texture to hide."
@@ -3202,7 +3201,7 @@ Bagel = {
                                                         Bagel.internal.oops(game);
                                                     }
 
-                                                    let combinedTexture = game.internal.renderer.textureSlots[args.index];
+                                                    let combinedTexture = game.internal.renderer.textureMaps[args.index];
 
                                                     let id = "Bagel-debug-combinedTextureCanvas-" + game.id + "-" + args.index;
                                                     let canvas = document.querySelector(".Bagel-debug-combinedTextureCanvas#" + id);
@@ -4675,7 +4674,7 @@ Bagel = {
                             if (configRenderer != "auto" && renderer.type != configRenderer) {
                                 if (renderer.type == "webgl") {
                                     renderer.gl.getExtension("WEBGL_lose_context").loseContext();
-                                    let slots = renderer.textureSlots;
+                                    let slots = renderer.textureMaps;
                                     for (let i in slots) {
                                         if (slots[i].gl) {
                                             slots[i].gl.getExtension("WEBGL_lose_context").loseContext();
@@ -4768,13 +4767,13 @@ Bagel = {
 
                             verticesUpdated: false,
                             displayedDownscaleWarning: false,
-                            textureMapResolutions: [1024, 2048, 4096, 8192],
+                            textureMapResolutions: [256, 512, 1024, 2048, 4096, 8192],
 
                             textures: {},
-                            textureSlots: [],
-                            textureSlotsUsed: 0,
+                            textureMaps: [],
+                            textureMapsUsed: 0,
                             bitmapsUsingTextures: {},
-                            maxTextureSlots: null,
+                            maxTextureMaps: null,
                             tintedTextures: {}, // Key is the texture id, then the next key is the tint
                             tintedTextureCounts: {},
 
@@ -5284,7 +5283,7 @@ Bagel = {
                             if (renderer.type == "webgl") {
                                 if (! game.config.isLoadingScreen) {
                                     game.internal.renderer.gl.getExtension("WEBGL_lose_context").loseContext();
-                                    let slots = game.internal.renderer.textureSlots;
+                                    let slots = game.internal.renderer.textureMaps;
                                     for (let i in slots) {
                                         if (slots[i].gl) {
                                             slots[i].gl.getExtension("WEBGL_lose_context").loseContext();
@@ -6665,7 +6664,7 @@ Bagel = {
                     canvas: {
                         init: game => {
                             let renderer = game.internal.renderer;
-                            renderer.maxTextureSlots = Infinity; // Canvas renderers don't have limits
+                            renderer.maxTextureMaps = Infinity; // Canvas renderers don't have limits
                             renderer.maxTextureSize = Infinity;
                             renderer.maxViewportSize = Infinity;
 
@@ -6922,83 +6921,12 @@ Bagel = {
                                     c = 0;
                                     let b = 0;
                                     while (c < bitmapQueue.new.length) {
-                                        let box = bitmapQueue.new[c];
-                                        if (box) {
-                                            renderer.bitmapIndexes[box[1]] = previousCount + b;
-                                            box = box[0];
+                                        let data = bitmapQueue.new[c];
+                                        if (data) {
+                                            renderer.bitmapIndexes[data[1]] = previousCount + b;
+                                            data = data[0];
 
-                                            newVertices[i] = box.x - Math.abs(box.width / 2);
-                                            newVertices[i + 1] = box.y - Math.abs(box.height / 2);
-
-                                            newVertices[i + 2] = box.x + Math.abs(box.width / 2);
-                                            newVertices[i + 3] = newVertices[i + 1];
-
-                                            newVertices[i + 4] = newVertices[i];
-                                            newVertices[i + 5] = box.y + Math.abs(box.height / 2);
-
-
-                                            newVertices[i + 6] = newVertices[i];
-                                            newVertices[i + 7] = newVertices[i + 5];
-
-                                            newVertices[i + 8] = newVertices[i + 2];
-                                            newVertices[i + 9] = newVertices[i + 1];
-
-                                            newVertices[i + 10] = newVertices[i + 2];
-                                            newVertices[i + 11] = newVertices[i + 5];
-
-                                            let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
-                                            subFunctions.rotateVertices(newVertices, i, box.rotation, box.x, box.y);
-                                            subFunctions.clipVertices(newVertices, i, renderer);
-
-
-                                            // [webgltexture, index, x, y, x + width, y + height, width, height]
-                                            let texture = renderer.textures[box.image];
-                                            let textureId = texture[1];
-                                            let alpha = box.alpha;
-                                            let xZero = texture[2];
-                                            let xOne = texture[4];
-                                            if (Math.sign(box.width) == -1) {
-                                                xZero = texture[4];
-                                                xOne = texture[2];
-                                            }
-                                            let yZero = texture[3];
-                                            let yOne = texture[5];
-                                            if (Math.sign(box.height) == -1) {
-                                                yZero = texture[5];
-                                                yOne = texture[3];
-                                            }
-
-                                            newTextureCoords[a] = xZero;
-                                            newTextureCoords[a + 1] = yZero;
-                                            newTextureCoords[a + 2] = textureId;
-                                            newTextureCoords[a + 3] = alpha;
-
-                                            newTextureCoords[a + 4] = xOne;
-                                            newTextureCoords[a + 5] = yZero;
-                                            newTextureCoords[a + 6] = textureId;
-                                            newTextureCoords[a + 7] = alpha;
-
-                                            newTextureCoords[a + 8] = xZero;
-                                            newTextureCoords[a + 9] = yOne;
-                                            newTextureCoords[a + 10] = textureId;
-                                            newTextureCoords[a + 11] = alpha;
-
-
-                                            newTextureCoords[a + 12] = xZero;
-                                            newTextureCoords[a + 13] = yOne;
-                                            newTextureCoords[a + 14] = textureId;
-                                            newTextureCoords[a + 15] = alpha;
-
-
-                                            newTextureCoords[a + 16] = xOne;
-                                            newTextureCoords[a + 17] = yZero;
-                                            newTextureCoords[a + 18] = textureId;
-                                            newTextureCoords[a + 19] = alpha;
-
-                                            newTextureCoords[a + 20] = xOne;
-                                            newTextureCoords[a + 21] = yOne;
-                                            newTextureCoords[a + 22] = textureId;
-                                            newTextureCoords[a + 23] = alpha;
+                                            Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, newVertices, newTextureCoords, renderer);
 
                                             i += 12;
                                             a += 24;
@@ -7203,10 +7131,10 @@ Bagel = {
                                 let height = texture.height;
 
                                 let index = 0;
-                                while (index < renderer.maxTextureSlots - 1) {
+                                while (index < renderer.maxTextureMaps - 1) {
                                     subFunctions.activateTextureMap(index, game, renderer, false);
 
-                                    let textureMap = renderer.textureSlots[index];
+                                    let textureMap = renderer.textureMaps[index];
 
                                     let lines = textureMap.lines;
 
@@ -7316,7 +7244,8 @@ Bagel = {
                                             textureID: index,
                                             singleTexture: false,
                                             x: drawX,
-                                            y: drawY
+                                            y: drawY,
+                                            clip: subFunctions.clipTextureCoords(drawX, drawY, width, height, textureMap.width)
                                         };
                                         texture.pending = false;
                                         return;
@@ -7328,7 +7257,7 @@ Bagel = {
                                     }
                                 }
 
-                                if (index == renderer.maxTextureSlots) {
+                                if (index == renderer.maxTextureMaps) {
                                     if (! game.error) {
                                         console.error("Huh, that wasn't supposed to happen. Bagel.js ran out of textures. Try and reduce the number your'e using (tip: canvas sprites have a separate texture for every clone by default) or use lower resolution textures. If you can't do either, you can try using the \"canvas\" renderer instead.\nYou can see the texture utilisation using \"Game.debug.textures.showCombined(<combined texture index>)\".");
                                         Bagel.internal.oops(game);
@@ -7336,6 +7265,88 @@ Bagel = {
                                     return;
                                 }
                             }
+                        },
+
+                        generateVertices: (i, data, vertices, textureCoords, renderer) => {
+                            let halfWidth = Math.abs(data.width / 2);
+                            let halfHeight = Math.abs(data.height / 2);
+                            let left = data.x - halfWidth;
+                            let top = data.y - halfHeight;
+                            let right = data.x + halfWidth;
+                            let bottom = data.y + halfHeight;
+                            vertices.set([
+                                left,
+                                top,
+
+                                right,
+                                top,
+
+                                left,
+                                bottom,
+
+                                left,
+                                bottom,
+
+                                right,
+                                top,
+
+                                right,
+                                bottom
+                            ], i);
+
+
+                            let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
+                            subFunctions.rotateVertices(vertices, i, data.rotation, data.x, data.y);
+                            subFunctions.clipVertices(vertices, i, renderer);
+
+
+                            let texture = renderer.textures[data.image];
+                            let clip = texture.position.clip;
+                            let textureID = texture.position.textureID;
+                            let alpha = data.alpha;
+                            let xZero = clip.xZero;
+                            let xOne = clip.xOne;
+                            if (Math.sign(data.width) == -1) {
+                                xZero = clip.xOne;
+                                xOne = clip.xZero;
+                            }
+                            let yZero = clip.yZero;
+                            let yOne = clip.yOne;
+                            if (Math.sign(data.height) == -1) {
+                                yZero = clip.yOne;
+                                yOne = clip.yZero;
+                            }
+                            textureCoords.set([
+                                xZero,
+                                yZero,
+                                textureID,
+                                alpha,
+
+                                xOne,
+                                yZero,
+                                textureID,
+                                alpha,
+
+                                xZero,
+                                yOne,
+                                textureID,
+                                alpha,
+
+                                xZero,
+                                yOne,
+                                textureID,
+                                alpha,
+
+                                xOne,
+                                yZero,
+                                textureID,
+                                alpha,
+
+                                xOne,
+                                yOne,
+                                textureID,
+                                alpha
+                            ], i * 2);
                         },
                         rotateVertices: (vertices, i, angle, cx, cy) => {
                             let rad = Bagel.maths.degToRad(angle - 90);
@@ -7384,10 +7395,16 @@ Bagel = {
                             }
                             renderer.verticesUpdated = true;
                         },
+                        clipTextureCoords: (x, y, width, height, resolution) => ({
+                            xZero: (x + 0.5) / resolution,
+                            yZero: (y + 0.5) / resolution,
+                            xOne: (x + width - 0.5) / resolution,
+                            yOne: (y + height - 0.5) / resolution
+                        }),
 
                         renderToTextureMap: (id, game, renderer) => {
                             let gl = renderer.gl;
-                            let textureMap = renderer.textureSlots[id];
+                            let textureMap = renderer.textureMaps[id];
 
                             let frameBuffer = renderer.tmpFrameBuffer;
                             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
@@ -7422,13 +7439,13 @@ Bagel = {
                                 i++;
                             }
 
-                            let textureMap = renderer.textureSlots[id];
+                            let textureMap = renderer.textureMaps[id];
                             let previousResolution = textureMap.activated? textureMap.width : 0;
                             if (resolution == previousResolution) return true;
 
                             let copyNeeded = textureMap.textureCount != 0;
-                            let tmpTextureID = renderer.textureSlots.length - 1;
-                            let tmpTexture = renderer.textureSlots[tmpTextureID];
+                            let tmpTextureID = renderer.textureMaps.length - 1;
+                            let tmpTexture = renderer.textureMaps[tmpTextureID];
 
                             textureMap.activated = true;
                             textureMap.width = resolution;
@@ -7485,6 +7502,7 @@ Bagel = {
                             textureMapTexture.antialias = antialias;
                             textureMapTexture.width = resolution;
                             textureMapTexture.height = resolution;
+                            textureMapTexture.position.clip = subFunctions.clipTextureCoords(0, 0, resolution, resolution, resolution);
 
                             return true;
                         },
@@ -7493,7 +7511,8 @@ Bagel = {
                             let renderer = game.internal.renderer;
                             let gl = renderer.gl;
 
-                            let compileShader = Bagel.internal.subFunctions.tick.render.webgl.compileShader;
+                            let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
+                            let compileShader = subFunctions.compileShader;
                             let vertex = compileShader(gl.VERTEX_SHADER, `
                                 attribute vec2 a_vertices;
                                 attribute vec4 a_textcoord;
@@ -7511,7 +7530,7 @@ Bagel = {
                             `, gl, game);
 
                             let textureCount = Bagel.device.webgl.textureCountLimit;
-                            renderer.maxTextureSlots = textureCount;
+                            renderer.maxTextureMaps = textureCount;
                             renderer.maxTextureSize = Bagel.device.webgl.textureSizeLimit;
                             renderer.maxViewportSize = Bagel.device.webgl.viewportSizeLimit;
 
@@ -7596,7 +7615,7 @@ Bagel = {
                                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
                                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
-                                renderer.textureSlots.push({
+                                renderer.textureMaps.push({
                                     activated: false,
                                     width: null,
                                     height: null,
@@ -7604,12 +7623,15 @@ Bagel = {
                                     lines: [],
                                     texture: glTexture
                                 });
-                                renderer.textures[".Internal.textureMap." + i] = {
+
+                                let id = ".Internal.textureMap." + i;
+                                renderer.textures[id] = {
                                     pending: false,
                                     position: {
                                         textureID: i,
                                         x: 0,
-                                        y: 0
+                                        y: 0,
+                                        clip: subFunctions.clipTextureCoords(0, 0, 1, 1, 1)
                                     },
                                     texture: null,
 
@@ -7617,10 +7639,10 @@ Bagel = {
                                     width: 1,
                                     height: 1
                                 };
+                                renderer.bitmapsUsingTextures[id] = [];
                                 i++;
                             }
 
-                            let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
                             // Get a texture map ready ahead of time
                             subFunctions.activateTextureMap(0, game, renderer, 0, game.config.display.antialias.textures);
 
@@ -10162,9 +10184,9 @@ Bagel = {
                     }
                     return true;
                 },
-                update: (id, box, game, check=true, actualTextureID) => {
+                update: (id, data, game, check=true, actualTextureID) => {
                     if (id == null) {
-                        return Bagel.internal.render.bitmapSprite.new(box, game, check);
+                        return Bagel.internal.render.bitmapSprite.new(data, game, check);
                     }
 
                     if (Bagel.internal.getTypeOf(game) != "object") {
@@ -10178,8 +10200,8 @@ Bagel = {
                     }
 
                     if (check) {
-                        box = Bagel.check({
-                            ob: box,
+                        data = Bagel.check({
+                            ob: data,
                             where: "the function Bagel.internal.render.update",
                             syntax: Bagel.internal.checks.bitmapSprite,
                             game: game
@@ -10191,12 +10213,12 @@ Bagel = {
                     if (game.config.isLoadingScreen) {
                         renderer.loadingScreenBitmaps[id] = true;
                         if (! actualTextureID) {
-                            box.image = ".Internal.loadingScreen." + box.image;
+                            data.image = ".Internal.loadingScreen." + data.image;
                         }
                     }
 
-                    if (game.internal.renderer.textures[box.image] == null) {
-                        console.error("Oh no! Bagel.js couldn't find the texture " + JSON.stringify(box.image) + " for your bitmap sprite. Make sure your \"image\" argument (part of the data argument) is correct.");
+                    if (game.internal.renderer.textures[data.image] == null) {
+                        console.error("Oh no! Bagel.js couldn't find the texture " + JSON.stringify(data.image) + " for your bitmap sprite. Make sure your \"image\" argument (part of the data argument) is correct.");
                         Bagel.internal.oops(game);
                     }
 
@@ -10205,119 +10227,38 @@ Bagel = {
                         Bagel.internal.oops(game);
                     }
                     else {
-                        if (renderer.bitmapSpriteData[id].image != box.image) { // The image has changed
+                        if (renderer.bitmapSpriteData[id].image != data.image) { // The image has changed
                             let usingTextures = renderer.bitmapsUsingTextures[renderer.bitmapSpriteData[id].image];
                             let index = usingTextures.indexOf(id);
-                            usingTextures = usingTextures.filter((value, currentIndex) => currentIndex != index); // Remove the old
-                            renderer.bitmapsUsingTextures[box.image].push(id); // Add the new
+                            usingTextures.splice(index, 1); // Remove the old
+                            renderer.bitmapsUsingTextures[data.image].push(id); // Add the new
                         }
-                        renderer.bitmapSpriteData[id] = box;
+                        renderer.bitmapSpriteData[id] = data;
 
                         if (renderer.type == "webgl") {
                             if (renderer.bitmapIndexes[id] === true) { // Still pending to be added
-                                let oldBox = renderer.queue.bitmap.new.find(item => item != null && item[1] == id);
-                                oldBox[0] = box;
+                                let oldData = renderer.queue.bitmap.new.find(item => item != null && item[1] == id);
+                                data[0] = data;
                             }
                             else {
                                 // Not really any faster to queue it, so just update it now
-                                let vertices = renderer.vertices;
-                                let textureCoords = renderer.textureCoordinates;
-
                                 let i = renderer.bitmapIndexes[id] * 12;
-
-                                let halfWidth = Math.abs(box.width / 2);
-                                let halfHeight = Math.abs(box.height / 2);
-                                let left = box.x - halfWidth;
-                                let top = box.y - halfHeight;
-                                let right = box.x + halfWidth;
-                                let bottom = box.y + halfHeight;
-                                vertices.set([
-                                    left,
-                                    top,
-
-                                    right,
-                                    top,
-
-                                    left,
-                                    bottom,
-
-                                    left,
-                                    bottom,
-
-                                    right,
-                                    top,
-
-                                    right,
-                                    bottom
-                                ], i);
-
-
-                                let subFunctions = Bagel.internal.subFunctions.tick.render.webgl;
-                                subFunctions.rotateVertices(vertices, i, box.rotation, box.x, box.y);
-                                subFunctions.clipVertices(vertices, i, renderer);
-
-
-                                let texture = renderer.textures[box.image];
-                                let textureID = texture[1];
-                                let alpha = box.alpha;
-                                let xZero = texture[2];
-                                let xOne = texture[4];
-                                if (Math.sign(box.width) == -1) {
-                                    xZero = texture[4];
-                                    xOne = texture[2];
-                                }
-                                let yZero = texture[3];
-                                let yOne = texture[5];
-                                if (Math.sign(box.height) == -1) {
-                                    yZero = texture[5];
-                                    yOne = texture[3];
-                                }
-                                textureCoords.set([
-                                    xZero,
-                                    yZero,
-                                    textureID,
-                                    alpha,
-
-                                    xOne,
-                                    yZero,
-                                    textureID,
-                                    alpha,
-
-                                    xZero,
-                                    yOne,
-                                    textureID,
-                                    alpha,
-
-                                    xZero,
-                                    yOne,
-                                    textureID,
-                                    alpha,
-
-                                    xOne,
-                                    yZero,
-                                    textureID,
-                                    alpha,
-
-                                    xOne,
-                                    yOne,
-                                    textureID,
-                                    alpha
-                                ], i * 2);
+                                Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer);
 
                                 renderer.verticesUpdated = true;
                             }
                         }
                         else {
                             let old = renderer.scaledBitmaps[id];
-                            if (box.tint != old.tint || (old.tint && box.image != old.image)) { // Tint has changed
+                            if (data.tint != old.tint || (data.tint && data.image != data.image)) { // Tint has changed
                                 if (old.tint) { // Had a tint before
                                     Bagel.internal.render.bitmapSprite.internal.reduceCanvasTint(renderer, old.image, old.tint);
                                 }
                                 if (box.tint) {
-                                    Bagel.internal.render.bitmapSprite.internal.canvasTint(renderer, box.image, box.tint);
+                                    Bagel.internal.render.bitmapSprite.internal.canvasTint(renderer, data.image, data.tint);
                                 }
                             }
-                            renderer.scaledBitmaps[id] = Bagel.internal.subFunctions.tick.render.canvas.scaleData(box, renderer);
+                            renderer.scaledBitmaps[id] = Bagel.internal.subFunctions.tick.render.canvas.scaleData(data, renderer);
                         }
                     }
                 },
@@ -10454,7 +10395,9 @@ Bagel = {
                     if (renderer.type == "webgl") {
                         textures[id] = {
                             pending: true,
-                            position: null,
+                            position: {
+                                clip: {}
+                            },
                             texture: texture,
                             antialias: antialias,
                             width: texture.width,

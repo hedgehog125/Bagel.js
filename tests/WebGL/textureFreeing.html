@@ -13,6 +13,24 @@ game = Bagel.init({
     id: "game",
     state: "test",
     game: {
+        sprites: [
+            {
+                id: "TextureMap",
+                left: 0,
+                top: 0,
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "test"
+                        }
+                    ]
+                },
+                img: ".Internal.textureMap.0",
+                width: 200,
+                height: 200
+            }
+        ],
         scripts: {
             init: [
                 {
