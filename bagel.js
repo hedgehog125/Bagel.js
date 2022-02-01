@@ -12,6 +12,8 @@ Auto downscaling textures and log which were downscaled
 Single textures
 Update renderer calls in internal plugin, add single texture option to canvases as an argument
 Deactivate textures when count is 0
+Change mode description for canvas sprites, add single texture and antialias arguments
+Use auto renderer by default
 
 == Testing ==
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
@@ -50,6 +52,8 @@ Pause videos on state change
 Resume playing audio from the position it would be in rather than the start. Maybe play muted if no autoplay?
 
 Audio is still apparently broken in Safari. Sounds can only play once? Safari tells Bagel.js the audio is playing even when it isn't. e.g onplay fires, the promise resolves and paused is false but currentTime is still 0 even after a delay
+
+Functions for x/y don't work (and maybe width/height), see the layer demo because it uses it
 
 == Low priority bugs ==
 Upscale unmute button when antialiasing is enabled
@@ -259,7 +263,7 @@ Bagel = {
                                             img = canvas;
                                         }
 
-                                        Bagel.internal.render.texture.new(asset.id, img, game, false, "static");
+                                        Bagel.internal.render.texture.new(asset.id, img, game);
                                         ready(img);
                                     };
                                 })(img, asset, game, ready);
@@ -1641,7 +1645,7 @@ Bagel = {
                                     sprite.scaleX = canvas.width / sprite.width;
                                     sprite.scaleY = canvas.height / sprite.height;
 
-                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game, false, sprite.mode);
+                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game);
                                     sprite.internal.renderUpdate = false;
                                 },
                                 onVisible: (sprite, newBitmap) => {
@@ -2057,7 +2061,7 @@ Bagel = {
                                 internal.canvas.width = 1;
                                 internal.canvas.height = 1;
 
-                                Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, game, false, "static");
+                                Bagel.internal.render.texture.new(sprite.internal.canvasID, sprite.internal.canvas, game);
 
                                 internal.ctx = internal.canvas.getContext("2d");
                                 plugin.vars.font.prerender(sprite, plugin, true); // Half prerender
@@ -5626,7 +5630,7 @@ Bagel = {
                     (game => {
                         missingImage.onload = _ => {
                             if (! Bagel.internal.render.texture.get(".Internal.missing", game)) {
-                                Bagel.internal.render.texture.new(".Internal.missing", missingImage, game, false, "static");
+                                Bagel.internal.render.texture.new(".Internal.missing", missingImage, game);
                             }
                         };
                     })(game);
@@ -6703,7 +6707,7 @@ Bagel = {
                                     let flipY = Math.sign(data.height);
                                     ctx.scale(flipX, flipY);
                                     ctx.globalAlpha = data.alpha;
-                                    ctx.imageSmoothingEnabled = textures[data.texture].antialias;
+                                    ctx.imageSmoothingEnabled = textures[data.image].antialias;
                                     ctx.imageSmoothingQuality = "high";
 
                                     let halfWidth = data.width / 2;
@@ -6857,7 +6861,7 @@ Bagel = {
                         },
                         getTint: (data, game, renderer) => {
                             if (data.tint) return renderer.tintedTextures[data.image][data.tint][0];
-                            else return renderer.textures[data.image];
+                            else return renderer.textures[data.image].texture;
                         }
                     },
                     webgl: {
@@ -7133,7 +7137,7 @@ Bagel = {
 
                                 let index = 0;
                                 while (index < renderer.maxTextureMaps - 1) {
-                                    subFunctions.activateTextureMap(index, game, renderer, false);
+                                    subFunctions.activateTextureMap(index, game, renderer, 0, false);
 
                                     let textureMap = renderer.textureMaps[index];
 
@@ -7252,7 +7256,7 @@ Bagel = {
                                         return;
                                     }
                                     else {
-                                        if (! subFunctions.activateTextureMap(index, game, renderer, false, textureMap.width + 1)) { // Try to expand the texture map
+                                        if (! subFunctions.activateTextureMap(index, game, renderer, textureMap.width + 1, false)) { // Try to expand the texture map
                                             index++; // Otherwise try the next one
                                         }
                                     }
@@ -7455,7 +7459,7 @@ Bagel = {
                             let lines = textureMap.lines;
                             i = 0;
                             while (i < previousResolution) {
-                                if (line[i] == null) {
+                                if (lines[i] == null) {
                                     lines[i] = [[0, resolution]];
                                 }
                                 else {
@@ -10315,7 +10319,7 @@ Bagel = {
                             }
                         }
 
-                        let base = Bagel.internal.render.texture.get(id, game);
+                        let base = Bagel.internal.render.texture.get(id, game).texture;
                         let canvas, ctx;
                         if (renderer.tintedTextures[id][tint]) {
                             if (! reapplying) return; // The tint already exists
@@ -10344,7 +10348,7 @@ Bagel = {
                 }
             },
             texture: {
-                new: (id, texture, game, overwrite, antialias, singleTexture=false) => {
+                new: (id, texture, game, overwrite, antialias, singleTexture=false, actualID) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Hmm, looks like you didn't specify the game properly (it's the 3rd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");

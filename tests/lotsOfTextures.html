@@ -11,7 +11,7 @@
 
 otherImages = [];
 i = 0;
-while (i < 100) {
+while (i < 10) {
     otherImages.push({
         id: "Bagel" + (i + 2),
         src: "../assets/imgs/bagel.png"
@@ -68,6 +68,9 @@ game = Bagel.init({
         loading: {
             skip: false,
             mode: "preload"
+        },
+        display: {
+            renderer: "webgl"
         }
     }
 });
