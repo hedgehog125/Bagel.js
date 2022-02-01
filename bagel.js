@@ -301,7 +301,8 @@ Bagel = {
                                     snd.preload = "none";
                                     (duration => {
                                         Object.defineProperty(snd, "duration", {
-                                            get: _ => duration
+                                            value: duration,
+                                            writable: false
                                         });
                                     })(asset.duration);
                                     ready(snd);
