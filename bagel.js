@@ -4,7 +4,9 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_test
 
 TODO
-Vertices have to be regenerated when texture coordinates change in the loading screen for some reason (currently being done). See lots of textures demo. Should just be able to update the texture coordinates. Also still a weird flash in lots of textures, something to do with not updating texture coordinates?
+Vertices have to be regenerated when texture coordinates change in the loading screen for some reason (currently being done). See lots of textures demo. Should just be able to update the texture coordinates. Also still a weird flash in lots of textures, something to do with not updating texture coordinates? But there's also some lag when just displaying a static texture
+
+The visual glitch happens because the wrong x coordinate is provided for some reason and not updated. Something to do with NaN?
 
 The loading screen lag issue is fixed when the canvas is appended to the DOM. Something to do with it being desynchronized by default? The context option doesn't seem to make a difference
 
@@ -6927,7 +6929,6 @@ Bagel = {
 
                                     let oldVerticesEnd = c;
                                     previousCount = c / 12;
-                                    let a = c * 2;
                                     i = oldVerticesEnd;
                                     c = 0;
                                     let b = 0;
@@ -6937,10 +6938,10 @@ Bagel = {
                                             renderer.bitmapIndexes[data[1]] = previousCount + b;
                                             data = data[0];
 
+                                            console.log(data.x);
                                             Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, newVertices, newTextureCoords, renderer);
 
                                             i += 12;
-                                            a += 24;
                                             b++;
                                         }
                                         c++;
@@ -8589,7 +8590,7 @@ Bagel = {
                                                             }
                                                             let maxAngle = ((game.vars.loading.progress / 100) * 360) - 90;
                                                             if (maxAngle > game.vars.angle) {
-                                                                game.vars.velocity += 0.01; // 5
+                                                                game.vars.velocity += 5; // 5
                                                                 game.vars.angle += game.vars.velocity;
                                                                 game.vars.velocity *= 0.9;
                                                                 if (maxAngle <= game.vars.angle) {
