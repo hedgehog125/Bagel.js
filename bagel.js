@@ -23,6 +23,8 @@ Use auto renderer by default
 Try using activateTextureMap to shrink them periodically, it'll only do it if it doesn't cut any textures off
 Texture downscaling
 
+Mention that functions as values for x, y, widths and heights were removed in the changelog
+
 == Testing ==
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
@@ -61,8 +63,6 @@ Resume playing audio from the position it would be in rather than the start. May
 
 Audio is still apparently broken in Safari. Sounds can only play once? Safari tells Bagel.js the audio is playing even when it isn't. e.g onplay fires, the promise resolves and paused is false but currentTime is still 0 even after a delay
 
-Functions for x/y don't work (and maybe width/height), see the layer demo because it uses it
-
 == Low priority bugs ==
 Upscale unmute button when antialiasing is enabled
 
@@ -84,7 +84,7 @@ Use texsubimage2d for updating the parts of textures that were updated. It's als
 put in front of and behind layer operations. Should also work for groups like clones. Would make layer operations unnecessary a lot of the time. e.g spaceships in front of individual stars in joined together entry
 
 = Features =
-Text rotation? Negative widths and heights? Changing them should set font size?
+Text rotation? Negative widths and heights? Changing them should set font size? Would simplify the loading screen and error screen
 
 Cropping for canvases
 Tints for canvases and text. Maybe used instead of rerendering?
@@ -464,20 +464,18 @@ Bagel = {
                                     default: "centered",
                                     types: [
                                         "number",
-                                        "string",
-                                        "function"
+                                        "string"
                                     ],
-                                    description: "The x position for the sprite. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                    description: "The x position for the sprite. Can also be set to \"centered\" to centre it along the x axis."
                                 },
                                 y: {
                                     required: false,
                                     default: "centered",
                                     types: [
                                         "number",
-                                        "string",
-                                        "function"
+                                        "string"
                                     ],
-                                    description: "The y position for the sprite. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                    description: "The y position for the sprite. Can also be set to \"centered\" to centre it along the y axis."
                                 },
                                 left: {
                                     required: false,
@@ -684,20 +682,8 @@ Bagel = {
                                             }
                                         }
 
-                                        if (typeof value == "function") {
-                                            if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first for this
-                                                return ".rerun";
-                                            }
-                                            else {
-                                                sprite[property] = value(triggerSprite, game); // Avoid the setter
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property == "y");
-                                                triggerSprite.internal.renderUpdate = true;
-                                                return;
-                                            }
-                                        }
-
                                         // It's invalid if it wasn't any of those valid values
-                                        return "Oops, this can only be a function, a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
+                                        return "Oops, this can only be a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".";
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
                                         if (! game.loaded) { // The game needs to have loaded first
@@ -779,36 +765,6 @@ Bagel = {
                                                 return;
                                             }
                                         }
-                                        if (typeof value == "function") {
-                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
-
-                                            let img;
-                                            if (sprite.img) {
-                                                img = Bagel.get.asset.img(sprite.img, triggerSprite.game, true);
-                                                if (! img) {
-                                                    img = Bagel.internal.render.texture.get(sprite.img, triggerSprite.game);
-                                                }
-                                                if (! img) {
-                                                    return "Hmm, Bagel.js couldn't find an image asset or texture with the id " + JSON.stringify(sprite.img) + ". Make sure you added it in Game.game.assets.imgs or if you're making or using a plugin, that the texture is created before it's accessed.";
-                                                }
-
-                                                if (typeof img == "boolean") return ".rerun";
-                                                // Update the scale
-                                                let scaleX = sprite.width / img.width;
-                                                let scaleY = sprite.height / img.height;
-                                                sprite.scale = (scaleX + scaleY) / 2; // Use the average of the two
-                                            }
-
-                                            if (! initialTrigger) {
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property == "height");
-                                                plugin.vars.sprite.resetCrop(triggerSprite, img? img : {
-                                                    width: 1,
-                                                    height: 1
-                                                });
-                                            }
-                                            triggerSprite.internal.renderUpdate = true;
-                                            return;
-                                        }
                                         if (value == null) {
                                             if (sprite.scale) {
                                                 if (sprite.img == null) {
@@ -842,7 +798,7 @@ Bagel = {
                                             }
                                         }
 
-                                        return "Hmm. This can only be a function, a multiple of its image " + property + " (e.g 1x, 2x, 0.3x etc.) or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".\nIf you tried to set the other width/height attribute, you'll need to define this one as well.";
+                                        return "Hmm. This can only be a multiple of its image " + property + " (e.g 1x, 2x, 0.3x etc.) or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".\nIf you tried to set the other width/height attribute, you'll need to define this one as well.";
                                     }
                                 },
                                 property: {
@@ -1165,20 +1121,18 @@ Bagel = {
                                     default: "centered",
                                     types: [
                                         "number",
-                                        "string",
-                                        "function"
+                                        "string"
                                     ],
-                                    description: "The x position for the canvas. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                    description: "The x position for the canvas. Can also be set to \"centered\" to centre it along the x axis."
                                 },
                                 y: {
                                     required: false,
                                     default: "centered",
                                     types: [
                                         "number",
-                                        "string",
-                                        "function"
+                                        "string"
                                     ],
-                                    description: "The y position for the canvas. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                    description: "The y position for the canvas. Can also be set to \"centered\" to centre it along the y axis."
                                 },
                                 left: {
                                     required: false,
@@ -1207,7 +1161,7 @@ Bagel = {
                                         "number",
                                         "function"
                                     ],
-                                    description: "The width for the canvas. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width * 0.2\""
+                                    description: "The width for the canvas."
                                 },
                                 height: {
                                     required: true,
@@ -1215,7 +1169,7 @@ Bagel = {
                                         "number",
                                         "function"
                                     ],
-                                    description: "The height for the canvas. Can also be a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height * 0.2\""
+                                    description: "The height for the canvas."
                                 },
                                 angle: {
                                     required: false,
@@ -1366,19 +1320,8 @@ Bagel = {
                                             }
                                         }
 
-                                        if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first for the last one
-                                            return ".rerun";
-                                        }
-
-                                        if (typeof value == "function") {
-                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
-                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property != "x");
-                                            triggerSprite.internal.renderUpdate = true;
-                                            return;
-                                        }
-
                                         // It's invalid if it wasn't any of those valid values
-                                        console.error("Oops, this can only be a function, a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        console.error("Oops, this can only be a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
                                         Bagel.internal.oops(game);
                                     },
                                     dimensions: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
@@ -1387,18 +1330,6 @@ Bagel = {
                                             plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
                                             triggerSprite.internal.renderUpdate = true;
                                             valid = true;
-                                        }
-
-                                        if (typeof value == "function") {
-                                            if (game.loaded && (! initialTrigger)) {
-                                                sprite[property] = value(triggerSprite, game); // Avoid the setter
-                                                plugin.vars.sprite.updateAnchors(triggerSprite, property == "width", property != "width");
-                                                triggerSprite.internal.renderUpdate = true;
-                                                valid = true;
-                                            }
-                                            else {
-                                                return ".rerun";
-                                            }
                                         }
 
                                         if (triggerSprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
@@ -1428,7 +1359,7 @@ Bagel = {
                                         }
 
                                         if (! valid) {
-                                            console.error("Oops, this can only be a function or a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                            console.error("Oops, this can only be a number. In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
                                             Bagel.internal.oops(game);
                                         }
                                     }
@@ -1756,20 +1687,18 @@ Bagel = {
                                     default: "centered",
                                     types: [
                                         "number",
-                                        "string",
-                                        "function"
+                                        "string"
                                     ],
-                                    description: "The x position for the text. Can also be set to \"centered\" to centre it along the x axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.width - 50\""
+                                    description: "The x position for the text. Can also be set to \"centered\" to centre it along the x axis."
                                 },
                                 y: {
                                     required: false,
                                     default: "centered",
                                     types: [
                                         "number",
-                                        "string",
-                                        "function"
+                                        "string"
                                     ],
-                                    description: "The y position for the text. Can also be set to \"centered\" to centre it along the y axis, or set to a function that returns a position when the game loads. e.g:\n\"(me, game) => game.height - 50\""
+                                    description: "The y position for the text. Can also be set to \"centered\" to centre it along the y axis."
                                 },
                                 left: {
                                     required: false,
@@ -1926,19 +1855,8 @@ Bagel = {
                                             }
                                         }
 
-                                        if ((! game.loaded) || initialTrigger) { // The game needs to have loaded first for the last one
-                                            return ".rerun";
-                                        }
-
-                                        if (typeof value == "function") {
-                                            sprite[property] = value(triggerSprite, game); // Avoid the setter
-                                            plugin.vars.sprite.updateAnchors(triggerSprite, property == "x", property == "y");
-                                            triggerSprite.internal.renderUpdate = true;
-                                            return;
-                                        }
-
                                         // It's invalid if it wasn't any of those valid values
-                                        console.error("Oops, this can only be a function, a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
+                                        console.error("Oops, this can only be a number or the string \"centered\". In the sprite " + JSON.stringify(triggerSprite.id) + "." + property + ". You tried to set it to " + JSON.stringify(value) + ".");
                                         Bagel.internal.oops(game);
                                     },
                                     rerender: (sprite, value, property, game, plugin, triggerSprite, step, initialTrigger) => {
@@ -2347,7 +2265,7 @@ Bagel = {
                                         },
                                         fn: args => {
                                             if (Bagel.internal.pwaInitialized) {
-                                                console.error("Erm, you can only run this function once per page. The PWA's already initialized.");
+                                                console.error("Erm, you can only run this function once per page. The PWA's already initialised.");
                                             }
                                             if (args.worker) {
                                                 if (navigator.serviceWorker) {
@@ -3106,10 +3024,12 @@ Bagel = {
                                                         required: true,
                                                         types: ["number"],
                                                         check: (value, ob, argID, game, prev, args) => {
+                                                            if (game.internal.renderer.type != "webgl") return;
                                                             let textureMaps = game.internal.renderer.textureMaps;
                                                             let combinedTexture = textureMaps[value];
-                                                            if (combinedTexture == null || (combinedTexture.canvas == null && combinedTexture[3] == null)) {
-                                                                return "Huh, that combined texture doesn't seem to exist, hasn't been activated yet or was empty when it was deactivated. Make sure the index is between 0 and " + (textureMaps.length - 1) + ". Also make sure that that combined texture has been activated.";
+
+                                                            if (combinedTexture == null) {
+                                                                return "Huh, that combined texture doesn't seem to exist. Make sure the index is between 0 and " + (textureMaps.length - 1) + ". Also make sure that that combined texture has been activated if you want to see anything.";
                                                             }
                                                         },
                                                         description: "The index number of the combined texture or single texture to display."
@@ -3122,75 +3042,46 @@ Bagel = {
                                                     }
                                                 },
                                                 fn: (game, args, plugin) => {
-                                                    if (game.internal.renderer.type != "webgl") {
+                                                    let renderer = game.internal.renderer;
+                                                    if (renderer.type != "webgl") {
                                                         console.error("Oh no! This function only works on games that are using the \"webgl\" renderer. Textures aren't combined in the other renderers.");
                                                         Bagel.internal.oops(game);
                                                     }
 
-                                                    let combinedTexture = game.internal.renderer.textureMaps[args.index];
-                                                    if (args.mini) {
-                                                        combinedTexture.canvas.style = "display:block;touch-action:none;user-select:none;-webkit-tap-highlight-color:rgba(0, 0, 0, 0);border:1px solid black;background-color:white;position:absolute;top:0px;left:0px;z-index:1;";
-                                                    }
-                                                    else {
-                                                        combinedTexture.canvas.style = "display:block;touch-action:none;user-select:none;-webkit-tap-highlight-color:rgba(0, 0, 0, 0);margin:0;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);border:1px solid black;";
+                                                    let combinedTexture = renderer.textureMaps[args.index];
+                                                    if (! combinedTexture.active) {
+                                                        console.warn("This combined texture isn't activated. But its contents will be displayed once it is.");
                                                     }
 
-                                                    let canvas = combinedTexture.canvas? combinedTexture.canvas : combinedTexture[3];
-                                                    Bagel.internal.tryStyles(canvas, "image-rendering", [
-                                                        "pixelated",
-                                                        "optimize-contrast",
-                                                        "-moz-crisp-edges",
-                                                        "-o-crisp-edges",
-                                                        "-webkit-optimize-contrast",
-                                                        "optimizeSpeed"
-                                                    ]);
-
-
-                                                    let width = window.innerWidth;
-                                                    let height = window.innerHeight;
+                                                    let width = game.width / (args.mini? 2 : 1);
+                                                    let height = game.height / (args.mini? 2 : 1);
                                                     if (width > height) {
                                                         width = height;
                                                     }
                                                     else {
                                                         height = width;
                                                     }
-                                                    // Subtract 2 because of the 1 pixel border
-                                                    if (args.mini) {
-                                                        canvas.style.width = ((width / 4) - 2) + "px";
-                                                        canvas.style.height = ((height / 4) - 2) + "px";
-                                                    }
-                                                    else {
-                                                        canvas.style.width = (width - 2) + "px";
-                                                        canvas.style.height = (height - 2) + "px";
-                                                    }
 
-                                                    canvas.className = "Bagel-debug-combinedTextureCanvas";
-                                                    canvas.id = "Bagel-debug-combinedTextureCanvas-" + game.id + "-" + args.index;
-
-                                                    if (combinedTexture[0]) {
-                                                        console.log("This texture or combined texture is currently innactive but here's the contents of its canvas.");
-                                                    }
-                                                    else {
-                                                        console.log(
-                                                            "Also, here's some info about this " + (combinedTexture.singleTexture? "single texture" : "combined texture")
-                                                            + ":\n"
-                                                            + "Single texture: " + combinedTexture.singleTexture + "\n"
-                                                            + ((! combinedTexture.singleTexture)? ("Texture count: " + combinedTexture.textureCount + "\n") : "")
-                                                            + "Resolution: " + canvas.width + "x" + canvas.height + "\n"
-                                                            + "GL context active: " + (combinedTexture.gl != null) + "\n"
-                                                        );
-                                                    }
-                                                    if (document.querySelector("Bagel-debug-combinedTextureCanvas#" + canvas.id)) { // Already in DOM
-                                                        return false;
-                                                    }
-                                                    else {
-                                                        document.body.appendChild(canvas);
-                                                        if (! args.mini) {
-                                                            game.internal.renderer.canvas.hidden = true;
-                                                            game.internal.renderer.canvas.style.display = "";
-                                                        }
-                                                        return true;
-                                                    }
+                                                    return game.add.sprite({
+                                                        id: ".Internal.debug.textureMap." + args.index,
+                                                        ...(args.mini? {
+                                                            left: 0,
+                                                            top: 0
+                                                        } : {}),
+                                                        scripts: {
+                                                            main: [
+                                                                {
+                                                                    code: me => {
+                                                                        me.layer.bringToFront();
+                                                                    },
+                                                                    stateToRun: game.state
+                                                                }
+                                                            ]
+                                                        },
+                                                        img: ".Internal.textureMap." + args.index,
+                                                        width: width,
+                                                        height: height
+                                                    });
                                                 }
                                             }
                                         },
@@ -3201,13 +3092,6 @@ Bagel = {
                                                     index: {
                                                         required: true,
                                                         types: ["number"],
-                                                        check: (value, ob, argID, game, prev, args) => {
-                                                            let textureMaps = game.internal.renderer.textureMaps;
-                                                            let combinedTexture = textureMaps[value];
-                                                            if (combinedTexture == null || combinedTexture.canvas == null) {
-                                                                return "Huh, that combined texture doesn't seem to exist. Make sure the index is between 0 and " + (textureMaps.length - 1) + ". Also make sure that that combined texture has been activated.";
-                                                            }
-                                                        },
                                                         description: "The index number of the combined texture or single texture to hide."
                                                     }
                                                 },
@@ -3219,19 +3103,12 @@ Bagel = {
 
                                                     let combinedTexture = game.internal.renderer.textureMaps[args.index];
 
-                                                    let id = "Bagel-debug-combinedTextureCanvas-" + game.id + "-" + args.index;
-                                                    let canvas = document.querySelector(".Bagel-debug-combinedTextureCanvas#" + id);
-                                                    if (canvas) {
-                                                        document.body.removeChild(canvas);
-                                                        if (document.getElementsByClassName("Bagel-debug-combinedTextureCanvas").length == 0) {
-                                                            game.internal.renderer.canvas.hidden = false;
-                                                            game.internal.renderer.canvas.style.display = "block";
-                                                        }
-                                                        return true;
+                                                    let sprite = game.get.sprite(".Internal.debug.textureMap." + args.index, true);
+                                                    if (! sprite) {
+                                                        console.error("Huh, that texture map doesn't seem to be being displayed at the moment.");
+                                                        Bagel.internal.oops(game);
                                                     }
-                                                    else {
-                                                        return false;
-                                                    }
+                                                    sprite.delete();
                                                 }
                                             }
                                         },
@@ -4682,6 +4559,7 @@ Bagel = {
                                 }
                             }
                             else {
+                                Bagel.internal.subFunctions.init.loadingScreen(game);
                                 subFunctions.loading(game);
                                 game.scriptTime = performance.now() - start;
                             }
@@ -4809,7 +4687,8 @@ Bagel = {
 
                             lastRender: new Date(),
                             canvas: document.createElement("canvas"),
-                            ratio: game.width / game.height
+                            ratio: game.width / game.height,
+                            initialized: false
                         },
                         ids: [],
                         idIndex: {},
@@ -5289,7 +5168,7 @@ Bagel = {
                                 let textures = renderer.loadingScreenTextures;
                                 for (let id in textures) {
                                     if (textures[id]) {
-                                        Bagel.internal.render.texture.delete(id, game, true, false, true);
+                                        Bagel.internal.render.texture.delete(id, game, true, true);
                                     }
                                 }
                             }
@@ -5506,6 +5385,7 @@ Bagel = {
                 },
                 loadingScreen: game => {
                     if (! game.config.loading.skip) {
+                        if (game.internal.loadingScreen) return;
                         Bagel.internal.saveCurrent();
                         Bagel.internal.current.plugin = game.internal.plugins.Internal;
 
@@ -5579,6 +5459,21 @@ Bagel = {
                     }
                 },
                 errorScreen: (game, code) => {
+                    for (let sprite of game.game.sprites) {
+                        if (sprite) sprite.delete();
+                    }
+                    let renderer = game.internal.renderer;
+                    for (let id in renderer.bitmapSpriteData) {
+                        if (renderer.bitmapSpriteData[id]) {
+                            Bagel.internal.render.bitmapSprite.delete(id, game);
+                        }
+                    }
+                    for (let id in renderer.textures) {
+                        if (id[0] != ".") {
+                            Bagel.internal.render.texture.delete(id, game);
+                        }
+                    }
+
                     game.config.loading.animation = Bagel.internal.errorGameObject; // So a message can be displayed to the user
                     game.internal.assets.loading++; // So the loading screen triggers
                     game.loaded = false;
@@ -5625,7 +5520,7 @@ Bagel = {
                     }
                 },
                 rendererInit: game => {
-                    if (game.config.isLoadingScreen) {
+                    if (game.config.isLoadingScreen || game.internal.renderer.initialized) {
                         return;
                     }
 
@@ -5644,6 +5539,7 @@ Bagel = {
                         };
                     })(game);
                     missingImage.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAF0lEQVQYVwXBAQEAAACCIPo/2mAoWWrmOPoF/8JfnIkAAAAASUVORK5CYII=";
+                    game.internal.renderer.initialized = true;
                 },
                 findRendererLimits: (game, renderer, gl) => {
                     let deviceWebGL = Bagel.device.webgl;
@@ -7503,7 +7399,7 @@ Bagel = {
                             }
 
                             let textureMap = renderer.textureMaps[id];
-                            let previousResolution = textureMap.activated? textureMap.width : 0;
+                            let previousResolution = textureMap.active? textureMap.width : 0;
                             if (resolution == previousResolution) return true;
 
                             let copyNeeded = textureMap.textureCount != 0;
@@ -7511,7 +7407,7 @@ Bagel = {
                             let tmpTextureID = renderer.textureMaps.length - 1;
                             let tmpTexture = renderer.textureMaps[tmpTextureID];
 
-                            textureMap.activated = true;
+                            textureMap.active = true;
                             textureMap.width = resolution;
                             textureMap.height = resolution;
 
@@ -7732,7 +7628,7 @@ Bagel = {
 
                                 if (i == textureCount - 1) { // The temporary texture
                                     renderer.textureMaps.push({
-                                        activated: true,
+                                        active: true,
                                         width: 1,
                                         height: 1,
                                         texture: glTexture
@@ -7740,7 +7636,7 @@ Bagel = {
                                 }
                                 else {
                                     renderer.textureMaps.push({
-                                        activated: false,
+                                        active: false,
                                         width: null,
                                         height: null,
                                         textureCount: 0,
@@ -8569,7 +8465,7 @@ Bagel = {
                                                                     me.canvas.width = me.vars.img.width;
                                                                     me.canvas.height = me.canvas.width;
 
-                                                                    document.body.appendChild(me.canvas);
+                                                                    //document.body.appendChild(me.canvas);
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
@@ -10587,7 +10483,7 @@ Bagel = {
                     }
                 },
                 update: (id, texture, game) => Bagel.internal.render.texture.new(id, texture, game, true),
-                delete: (id, game, replaceSpriteTextures=true, keepGL, actualID) => {
+                delete: (id, game, replaceSpriteTextures=true, actualID) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
                             console.error("Oops, looks like you didn't specify the game properly (it's the 2nd argument). It's supposed to be an object but you used " + Bagel.internal.an(Bagel.internal.getTypeOf(game)) + ".");
@@ -10999,7 +10895,6 @@ Bagel = {
                     {
                         id: "Text",
                         type: "text",
-                        y: me => me.game.height / 1.5,
                         vars: {
                             ready: false, // Set by the disc slot sprite
                             alphaVel: 0
@@ -11009,8 +10904,10 @@ Bagel = {
                             init: [
                                 {
                                     code: (me, game) => {
+                                        me.y = game.height / 1.5;
+
                                         let code = game.vars.loading.game.internal.errorCode;
-                                        me.font = (Math.min(game.width, game.height) / 20) + "px Helvetica";
+                                        me.size = Math.min(game.width, game.height) / 20;
                                         if (code == 0) {
                                             me.text = "Looks like this device doesn't meet this game's minimum requirements.";
                                             me.visible = false;

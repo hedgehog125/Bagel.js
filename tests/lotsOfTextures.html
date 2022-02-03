@@ -9,27 +9,21 @@
 <script src="../bagel.js"></script>
 <script>
 
-otherImages = [];
-i = 0;
-while (i < 100) {
-    otherImages.push({
-        id: "Bagel" + (i + 2),
-        src: "../assets/imgs/bagel.png"
-    });
-    i++;
-}
-
 game = Bagel.init({
     id: "Bagel",
     state: "game",
+    vars: {
+        textureTarget: 10000,
+        textureCount: 0,
+        speed: 2
+    },
     game: {
         assets: {
             imgs: [
                 {
                     id: "Bagel",
                     src: "../assets/imgs/bagel.png"
-                },
-                ...otherImages
+                }
             ],
             snds: []
         },
@@ -42,6 +36,9 @@ game = Bagel.init({
                             code: me => {
                                 me.x = game.width / 2;
                                 me.y = game.height / 2;
+
+                                me.vars.bagel = game.get.asset.img("Bagel");
+                                game.debug.textures.showCombined(0);
                             },
                             stateToRun: "game"
                         }
@@ -50,6 +47,16 @@ game = Bagel.init({
                         {
                             code: me => {
                                 me.angle++;
+
+                                let vars = game.vars;
+                                let i = 0;
+                                while (i < vars.speed) {
+                                    if (vars.textureCount < vars.textureTarget) {
+                                        Bagel.internal.render.texture.new("Bagel" + vars.textureCount, me.vars.bagel, game);
+                                        vars.textureCount++;
+                                    }
+                                    i++;
+                                }
                             },
                             stateToRun: "game"
                         }
@@ -66,7 +73,7 @@ game = Bagel.init({
     height: 450,
     config: {
         loading: {
-            skip: false,
+            skip: true,
             mode: "preload"
         },
         display: {
@@ -74,18 +81,5 @@ game = Bagel.init({
         }
     }
 });
-
-/*
-setInterval(_ => {
-    game.internal.renderer.canvas.toBlob(blob => {
-        let img = new Image();
-        img.src = URL.createObjectURL(blob);
-        img.style.width = "25x";
-        img.style.height = "25px";
-        img.style.border = "1px solid black";
-        document.body.appendChild(img);
-    });
-}, 15);
-*/
 
 </script>
