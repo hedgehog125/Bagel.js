@@ -24,6 +24,7 @@ Try using activateTextureMap to shrink them periodically, it'll only do it if it
 Texture downscaling
 
 Mention that functions as values for x, y, widths and heights were removed in the changelog
+Error in spritesheet demo
 
 == Testing ==
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
@@ -50,7 +51,7 @@ Add bitmapSprite cropping and tinting to the webgl renderer
 
 Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
 
-Full stops are too low in bitmap text
+Full stops are too low in bitmap text. Same with a lot of characters, they get cut off in the word wrap demo
 Text is weird in the loading screen at different game dimensions. Maybe text in general? Probably due to setting widths and heights
 
 Send to back can cause a crash in the update bitmap function. Maybe requires combination of it and bringToFront in another sprite?
