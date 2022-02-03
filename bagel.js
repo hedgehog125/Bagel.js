@@ -1118,6 +1118,7 @@ Bagel = {
                                     let internal = sprite.internal;
                                     if (! internal.imgWaiting) {
                                         let properties = sprite.internal.Bagel.properties;
+
                                         return newBitmap({
                                             x: properties.x,
                                             y: properties.y,
@@ -6938,7 +6939,6 @@ Bagel = {
                                             renderer.bitmapIndexes[data[1]] = previousCount + b;
                                             data = data[0];
 
-                                            console.log(data.x);
                                             Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, newVertices, newTextureCoords, renderer);
 
                                             i += 12;
@@ -10368,7 +10368,7 @@ Bagel = {
                         if (renderer.type == "webgl") {
                             if (renderer.bitmapIndexes[id] === true) { // Still pending to be added
                                 let oldData = renderer.queue.bitmap.new.find(item => item != null && item[1] == id);
-                                data[0] = data;
+                                oldData[0] = data;
                             }
                             else {
                                 // Not really any faster to queue it, so just update it now
