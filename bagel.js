@@ -4,7 +4,9 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_test
 
 TODO
-Vertices have to be regenerated when texture coordinates change in the loading screen for some reason (currently being done). See lots of textures demo. Should just be able to update the texture coordinates. Also still a weird flash in lots of textures, something to do with not updating texture coordinates? But there's also some lag when just displaying a static texture
+Vertices have to be regenerated when texture coordinates change in the loading screen for some reason (currently being done). See lots of textures demo. Should just be able to update the texture coordinates.
+
+Does alpha still work after increasing the size of a texture map?
 
 The visual glitch happens because the wrong x coordinate is provided for some reason and not updated. Something to do with NaN?
 
@@ -1612,12 +1614,15 @@ Bagel = {
                                 onInvisible: (sprite, deleteBitmap) => deleteBitmap(sprite.internal.Bagel.renderID, sprite.game),
                                 whileVisible: (sprite, updateBitmap, newBitmap, deleteBitmap, game, plugin) => {
                                     let internal = sprite.internal;
+                                    let properties = internal.Bagel.properties;
+                                    let current = Bagel.internal.current;
+
                                     if (sprite.updateRes) { // If the canvas resolution should be modified by Bagel.js
                                         let width;
                                         let height;
                                         if (sprite.fullRes) {
-                                            width = sprite.width * sprite.game.internal.renderer.scaleX;
-                                            height = sprite.height * sprite.game.internal.renderer.scaleY;
+                                            width = sprite.width * game.internal.renderer.scaleX;
+                                            height = sprite.height * game.internal.renderer.scaleY;
                                         }
                                         else {
                                             width = sprite.width;
@@ -1644,39 +1649,40 @@ Bagel = {
                                     if (! internal.prerendered) {
                                         if (internal.prerenderBase) {
                                             sprite.prerender();
+                                            if (! properties.visible) return;
                                         }
                                     }
 
                                     let output;
                                     if (sprite.render) {
-                                        let current = Bagel.internal.current;
                                         Bagel.internal.saveCurrent();
                                         current.plugin = null;
                                         current.sprite = sprite;
 
-                                        output = sprite.render(sprite, sprite.game, sprite.ctx, sprite.canvas, sprite.scaleX, sprite.scaleY);
+                                        output = sprite.render(sprite, game, sprite.ctx, sprite.canvas, sprite.scaleX, sprite.scaleY);
 
                                         Bagel.internal.loadCurrent();
+                                        if (! properties.visible) return;
                                     }
 
 
-                                    if (sprite.updated || sprite.internal.canvasUpdated || (sprite.mode == "animated" && output !== true) || (sprite.mode != "animated" && output === true)) {
-                                        Bagel.internal.render.texture.update(sprite.internal.canvasID, sprite.canvas, sprite.game);
-                                        sprite.internal.canvasUpdated = false;
+                                    if (sprite.updated || internal.canvasUpdated || (sprite.mode == "animated" && output !== true) || (sprite.mode != "animated" && output === true)) {
+                                        Bagel.internal.render.texture.update(internal.canvasID, sprite.canvas, game);
+                                        internal.canvasUpdated = false;
                                         sprite.updated = false;
                                         plugin.vars.sprite.updateAnchors(sprite, true, true);
                                     }
-                                    if (sprite.internal.renderUpdate) {
-                                        sprite.internal.renderUpdate = false;
-                                        updateBitmap(sprite.internal.Bagel.renderID, {
-                                            x: sprite.x,
-                                            y: sprite.y,
-                                            width: sprite.width,
-                                            height: sprite.height,
-                                            image: sprite.internal.canvasID,
-                                            rotation: sprite.angle,
-                                            alpha: sprite.alpha
-                                        }, sprite.game, false);
+                                    if (internal.renderUpdate) {
+                                        internal.renderUpdate = false;
+                                        updateBitmap(internal.Bagel.renderID, {
+                                            x: properties.x,
+                                            y: properties.y,
+                                            width: properties.width,
+                                            height: properties.height,
+                                            image: internal.canvasID,
+                                            rotation: properties.angle,
+                                            alpha: properties.alpha
+                                        }, game, false);
                                     }
                                 }
                             }
@@ -4648,7 +4654,11 @@ Bagel = {
                                 add: 0,
                                 delete: 0
                             },
-                            locations: {},
+                            locations: {
+                                vertices: 0,
+                                texCoords: 1,
+                                images: null
+                            },
                             buffers: {},
                             vertices: new Float32Array(),
                             textureCoordinates: new Float32Array(),
@@ -6880,7 +6890,7 @@ Bagel = {
 
                                 if (queue.length != 0) {
                                     let vertices = Array.from(renderer.vertices);
-                                    let textCoords = Array.from(renderer.textureCoordinates);
+                                    let texCoords = Array.from(renderer.textureCoordinates);
                                     let bitmapIndexes = renderer.bitmapIndexes;
 
                                     for (let i in queue) {
@@ -6900,15 +6910,15 @@ Bagel = {
                                                 }
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
-                                                thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
-                                                textCoords.splice(originalIndex * 24, 24);
+                                                texCoords.splice(originalIndex * 24, 24);
 
 
                                                 vertices.push(...thisBitmapVertices); // Add the bitmap back
-                                                textCoords.push(...thisBitmapTextureCoords);
+                                                texCoords.push(...thisBitmapTextureCoords);
 
 
                                                 c = 0;
@@ -6928,14 +6938,14 @@ Bagel = {
                                                 }
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
-                                                thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
-                                                textCoords.splice(originalIndex * 24, 24);
+                                                texCoords.splice(originalIndex * 24, 24);
 
                                                 vertices.splice((originalIndex * 12) + 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
-                                                textCoords.splice((originalIndex * 24) + 24, 0, ...thisBitmapTextureCoords);
+                                                texCoords.splice((originalIndex * 24) + 24, 0, ...thisBitmapTextureCoords);
 
                                                 bitmapIndexes[bitmapIndexes.indexOf(originalIndex + 1)]--; // Swap the indexes
                                                 bitmapIndexes[id]++;
@@ -6948,14 +6958,14 @@ Bagel = {
                                                 }
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
-                                                thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
-                                                textCoords.splice(originalIndex * 24, 24);
+                                                texCoords.splice(originalIndex * 24, 24);
 
                                                 vertices.splice(0, 0, ...thisBitmapVertices); // Add it back in at the start
-                                                textCoords.splice(0, 0, ...thisBitmapTextureCoords);
+                                                texCoords.splice(0, 0, ...thisBitmapTextureCoords);
 
 
                                                 c = 0;
@@ -6975,14 +6985,14 @@ Bagel = {
                                                 }
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
-                                                thisBitmapTextureCoords = textCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
-                                                textCoords.splice(originalIndex * 24, 24);
+                                                texCoords.splice(originalIndex * 24, 24);
 
                                                 vertices.splice((originalIndex * 12) - 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
-                                                textCoords.splice((originalIndex * 24) - 24, 0, ...thisBitmapTextureCoords);
+                                                texCoords.splice((originalIndex * 24) - 24, 0, ...thisBitmapTextureCoords);
 
                                                 bitmapIndexes[bitmapIndexes.indexOf(originalIndex - 1)]++; // Swap the indexes
                                                 bitmapIndexes[id]--;
@@ -6990,9 +7000,9 @@ Bagel = {
                                     }
 
                                     vertices = new Float32Array(vertices);
-                                    textCoords = new Float32Array(textCoords);
+                                    texCoords = new Float32Array(texCoords);
                                     renderer.vertices = vertices;
-                                    renderer.textureCoordinates = textCoords;
+                                    renderer.textureCoordinates = texCoords;
 
 
                                     renderer.queue.bitmap.layer = [];
@@ -7532,12 +7542,12 @@ Bagel = {
                             let compileShader = subFunctions.compileShader;
                             let vertex = compileShader(gl.VERTEX_SHADER, `
                                 attribute vec2 a_vertices;
-                                attribute vec4 a_textcoord;
+                                attribute vec4 a_texCoords;
 
                                 varying vec4 v_texcoord;
 
                                 void main () {
-                                    v_texcoord = a_textcoord;
+                                    v_texcoord = a_texCoords;
                                     gl_Position = vec4(
                                         a_vertices,
                                         0,
@@ -7589,13 +7599,19 @@ Bagel = {
                             let program = gl.createProgram();
                             gl.attachShader(program, vertex);
                             gl.attachShader(program, fragment);
+
+                            gl.bindAttribLocation(program, renderer.locations.vertices, "a_vertices");
+                            gl.bindAttribLocation(program, renderer.locations.texCoords, "a_texCoords");
+
                             gl.linkProgram(program);
+                            /*
                             if (! gl.getProgramParameter(program, gl.LINK_STATUS)) { // Error
                                 console.error("Err... a Bagel.js shader program failed to link. That wasn't supposed to happen.");
                                 console.log(gl.getProgramInfoLog(program));
                                 gl.deleteProgram(program); // Delete the program
                                 Bagel.internal.oops(game);
                             }
+                            */
                             gl.useProgram(program);
 
                             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -7605,14 +7621,14 @@ Bagel = {
                             renderer.locations.images = gl.getUniformLocation(program, "u_images");
                             gl.uniform1iv(renderer.locations.images, [...Array(textureCount).keys()]);
 
-                            let verticesLocation = gl.getAttribLocation(program, "a_vertices");
+                            let verticesLocation = renderer.locations.vertices;
                             gl.enableVertexAttribArray(verticesLocation); // Enable it
                             renderer.buffers.vertices = gl.createBuffer();
                             gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.vertices);
                             gl.vertexAttribPointer(verticesLocation, 2, gl.FLOAT, false, 0, 0);
                             gl.bufferData(gl.ARRAY_BUFFER, renderer.vertices, gl.DYNAMIC_DRAW);
 
-                            let textureLocation = gl.getAttribLocation(program, "a_textcoord");
+                            let textureLocation = renderer.locations.texCoords;
                             gl.enableVertexAttribArray(textureLocation); // Enable it
                             renderer.buffers.images = gl.createBuffer();
                             gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.images);
@@ -7675,10 +7691,6 @@ Bagel = {
                             subFunctions.activateTextureMap(0, game, renderer, 0, game.config.display.antialias.textures);
 
                             renderer.tmpFrameBuffer = gl.createFramebuffer();
-
-                            renderer.locations.vertices = verticesLocation;
-                            renderer.locations.textures = textureLocation;
-
 
                             renderer.webGLInitialized = true;
                         },
@@ -8475,6 +8487,19 @@ Bagel = {
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
+                                                        ],
+                                                        main: [
+                                                            {
+                                                                code: (me, game) => {
+                                                                    if (! me.visible) {
+                                                                        game.vars.delay++;
+                                                                        if (game.vars.delay == 10) {
+                                                                            game.vars.loading.done = true;
+                                                                        }
+                                                                    }
+                                                                },
+                                                                stateToRun: "loading"
+                                                            }
                                                         ]
                                                     },
                                                     render: (me, game, ctx, canvas) => {
@@ -8514,24 +8539,13 @@ Bagel = {
                                                             ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
                                                         }
                                                         else {
-                                                            if (game.vars.delay == 0) {
-                                                                game.vars.velocity += 1;
-                                                                me.width -= game.vars.velocity;
-                                                                me.height -= game.vars.velocity;
-                                                                game.vars.velocity *= 0.9;
+                                                            game.vars.velocity += 1;
+                                                            me.width -= game.vars.velocity;
+                                                            me.height -= game.vars.velocity;
+                                                            game.vars.velocity *= 0.9;
 
-                                                                if (me.width <= 0) {
-                                                                    me.width = 1;
-                                                                    me.height = 1;
-                                                                    ctx.clearRect(0, 0, 1, 1);
-                                                                    game.vars.delay++;
-                                                                }
-                                                            }
-                                                            else {
-                                                                game.vars.delay++;
-                                                                if (game.vars.delay > 10) {
-                                                                    game.vars.loading.done = true;
-                                                                }
+                                                            if (me.width <= 1) {
+                                                                me.visible = false;
                                                             }
                                                             return true;
                                                         }
@@ -10093,7 +10107,6 @@ Bagel = {
                         }
                         Bagel.internal.oops(Bagel.internal.current.game);
                     }
-
 
                     if (check) {
                         data = Bagel.check({
