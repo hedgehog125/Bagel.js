@@ -7060,6 +7060,7 @@ Bagel = {
                                         let action = actions[textureMapID][i];
 
                                         gl.texSubImage2D(gl.TEXTURE_2D, 0, action[1], action[2], gl.RGBA, gl.UNSIGNED_BYTE, action[0]);
+                                        console.log("Sub image");
                                     }
                                 }
 
@@ -7488,6 +7489,7 @@ Bagel = {
 
                             gl.activeTexture(gl.TEXTURE0 + id);
                             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, resolution, resolution, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                            console.log("Texture map created");
                             if (copyNeeded) { // Copy it back
                                 subFunctions.renderToTextureMap(tmpTextureID, game, renderer);
                                 gl.activeTexture(gl.TEXTURE0 + id);
@@ -7699,6 +7701,8 @@ Bagel = {
 
                             subFunctions.renderToCanvas(game, renderer);
 
+                            renderer.backgroundColor = [1, 0, 0, 1];
+
                             gl.clearColor(...renderer.backgroundColor);
                             gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -7714,6 +7718,10 @@ Bagel = {
 
                                 gl.drawArrays(gl.TRIANGLES, 0, renderer.vertices.length / 2);
                             }
+
+                            let hmm = new Uint8Array(4);
+                            gl.readPixels(renderer.canvas.width / 2.2, renderer.canvas.height / 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, hmm);
+                            console.log(hmm.toString());
                         }
                     }
                 },
@@ -8466,7 +8474,9 @@ Bagel = {
                                                                     me.canvas.width = me.vars.img.width;
                                                                     me.canvas.height = me.canvas.width;
 
-                                                                    //document.body.appendChild(me.canvas);
+                                                                    me.canvas.style.visibility = "hidden";
+                                                                    document.body.appendChild(me.canvas);
+                                                                    console.log("Sprite made visible, vertices are generated and it's rendered this frame");
                                                                 },
                                                                 stateToRun: "loading"
                                                             }
@@ -8509,6 +8519,7 @@ Bagel = {
                                                             ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset the scaling
                                                         }
                                                         else {
+                                                            return;
                                                             if (game.vars.delay == 0) {
                                                                 game.vars.velocity += 1;
                                                                 me.width -= game.vars.velocity;
