@@ -5521,9 +5521,12 @@ Bagel = {
                     }
                 },
                 rendererInit: game => {
-                    if (game.config.isLoadingScreen || game.internal.renderer.initialized) {
+                    let renderer = game.internal.renderer;
+                    if (game.config.isLoadingScreen) {
+                        Bagel.internal.render.texture.new(".Internal.missing", renderer.missingTexture, game);
                         return;
                     }
+                    if (game.internal.renderer.initialized) return;
 
                     let rendererType = game.internal.renderer.type;
                     let renderers = Bagel.internal.subFunctions.tick.render;
@@ -5531,16 +5534,18 @@ Bagel = {
                         renderers[rendererType].init(game);
                     }
 
-                    let missingImage = new Image();
-                    (game => {
-                        missingImage.onload = _ => {
-                            if (! Bagel.internal.render.texture.get(".Internal.missing", game)) {
-                                Bagel.internal.render.texture.new(".Internal.missing", missingImage, game);
-                            }
-                        };
-                    })(game);
-                    missingImage.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAF0lEQVQYVwXBAQEAAACCIPo/2mAoWWrmOPoF/8JfnIkAAAAASUVORK5CYII=";
-                    game.internal.renderer.initialized = true;
+                    let missingTexture = document.createElement("canvas");
+                    missingTexture.width = 2;
+                    missingTexture.height = 2;
+                    let ctx = missingTexture.getContext("2d");
+
+                    ctx.fillRect(0, 0, 2, 2);
+                    ctx.fillStyle = "#f0f";
+                    ctx.fillRect(1, 0, 1, 1);
+                    ctx.fillRect(0, 1, 1, 1);
+
+                    renderer.missingTexture = missingTexture;
+                    renderer.initialized = true;
                 },
                 findRendererLimits: (game, renderer, gl) => {
                     let deviceWebGL = Bagel.device.webgl;
