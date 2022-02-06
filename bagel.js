@@ -4543,14 +4543,12 @@ Bagel = {
                             if (game.state != internal.lastPrepState) {
                                 if (internal.assets.loading == 0) {
                                     Bagel.internal.triggerPluginListener("prepState", game, game.state);
-                                    if (internal.assets.loading == 0) { // Something needs to load
+                                    if (internal.assets.loading == 0) {
                                         internal.lastPrepState = game.state;
                                     }
-                                    else {
+                                    else { // Something needs to load
                                         game.loaded = false;
-                                        if (internal.loadingScreen == null) {
-                                            Bagel.internal.subFunctions.init.loadingScreen(game); // Init it
-                                        }
+                                        Bagel.internal.subFunctions.init.loadingScreen(game);
                                     }
                                 }
                             }
@@ -4677,7 +4675,6 @@ Bagel = {
                             textureMapResolutions: [256, 512, 1024, 2048, 4096, 8192],
                             textures: {},
                             textureMaps: [],
-                            textureMapsUsed: 0,
                             bitmapsUsingTextures: {},
                             maxTextureMaps: null,
                             tintedTextures: {}, // Key is the texture id, then the next key is the tint
@@ -5554,7 +5551,9 @@ Bagel = {
                     ctx.fillRect(1, 0, 1, 1);
                     ctx.fillRect(0, 1, 1, 1);
 
+                    Bagel.internal.render.texture.new(".Internal.missing", missingTexture, game);
                     renderer.missingTexture = missingTexture;
+
                     renderer.initialized = true;
                 },
                 findRendererLimits: (game, renderer, gl) => {
