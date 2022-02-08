@@ -4,12 +4,8 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_test
 
 TODO
-Vertices have to be regenerated when texture coordinates change in the loading screen for some reason (currently being done). See lots of textures demo. Should just be able to update the texture coordinates.
+Update lines when deleting a texture
 
-The loading screen lag issue is fixed when the canvas is appended to the DOM. Something to do with it being desynchronized by default? The context option doesn't seem to make a difference
-
-Regenerate data for bitmap sprites that use a pending texture before it's ready
-Updating textures
 Auto downscaling textures and log which were downscaled
 Single textures
 Update renderer calls in internal plugin, add single texture option to canvases as an argument
@@ -18,6 +14,8 @@ Change mode description for canvas sprites, add single texture and antialias arg
 Use auto renderer by default
 Try using activateTextureMap to shrink them periodically, it'll only do it if it doesn't cut any textures off
 Texture downscaling
+
+The loading screen lag issue is fixed when the canvas is appended to the DOM. Something to do with it being desynchronized by default? The context option doesn't seem to make a difference
 
 Mention that functions as values for x, y, widths and heights were removed in the changelog
 Error in spritesheet demo
