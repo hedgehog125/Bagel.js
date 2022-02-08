@@ -6,10 +6,6 @@ WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_te
 TODO
 Vertices have to be regenerated when texture coordinates change in the loading screen for some reason (currently being done). See lots of textures demo. Should just be able to update the texture coordinates.
 
-Does alpha still work after increasing the size of a texture map?
-
-The visual glitch happens because the wrong x coordinate is provided for some reason and not updated. Something to do with NaN?
-
 The loading screen lag issue is fixed when the canvas is appended to the DOM. Something to do with it being desynchronized by default? The context option doesn't seem to make a difference
 
 Batch texture map resolution increases but still update lines
@@ -7059,7 +7055,7 @@ Bagel = {
 
                                                 bitmapsRegenerated[i] = true;
 
-                                                subFunctions.generateVertices(index * 12, renderer.bitmapSpriteData[id], renderer.vertices, renderer.textureCoordinates, renderer, false); // Only regenerates texture coords, not vertices
+                                                subFunctions.generateVertices(index * 12, renderer.bitmapSpriteData[id], renderer.vertices, renderer.textureCoordinates, renderer, true); // Only regenerates texture coords, not vertices
                                             }
                                             renderer.verticesUpdated = true;
                                         }
@@ -7089,7 +7085,7 @@ Bagel = {
                                             if (index === true) continue;
                                             if (bitmapsRegenerated[id]) continue;
 
-                                            subFunctions.generateVertices(index * 12, renderer.bitmapSpriteData[id], renderer.vertices, renderer.textureCoordinates, renderer, false); // Only regenerates texture coords, not vertices
+                                            subFunctions.generateVertices(index * 12, renderer.bitmapSpriteData[id], renderer.vertices, renderer.textureCoordinates, renderer, true); // Only regenerates texture coords, not vertices
                                         }
                                     }
                                     renderer.verticesUpdated = true;
