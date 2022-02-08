@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        WebGL Using a Pending Texture
+    </title>
+</head>
+<body bgColor="blue"></body>
+
+<script src="../../bagel.js"></script>
+<script>
+
+game = Bagel.init({
+    id: "game",
+    state: "game",
+    game: {
+        assets: {
+            imgs: [
+                {
+                    id: "Bagel",
+                    src: "../../assets/imgs/bagel.png"
+                }
+            ]
+        },
+        sprites: [
+            {
+                id: "Test",
+                img: ".Internal.missing",
+                vars: {
+                    waitAFrame: false,
+                    done: false
+                },
+                scripts: {
+                    init: [
+                        {
+                            code: null,
+                            stateToRun: "game"
+                        }
+                    ],
+                    main: [
+                        {
+                            code: me => {
+                                if (me.vars.waitAFrame) {
+                                    if (! me.vars.done) {
+                                        Bagel.internal.render.texture.new("Bagel 2", game.get.asset.img("Bagel"), game);
+                                        me.img = "Bagel 2";
+                                        me.vars.done = true;
+                                    }
+                                }
+                                else {
+                                    me.vars.waitAFrame = true;
+                                }
+                            },
+                            stateToRun: "game"
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    width: 800,
+    height: 450,
+    config: {
+        loading: {
+            mode: "preload"
+        },
+        display: {
+            renderer: "webgl"
+        }
+    }
+});
+
+</script>

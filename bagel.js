@@ -8,9 +8,7 @@ Vertices have to be regenerated when texture coordinates change in the loading s
 
 The loading screen lag issue is fixed when the canvas is appended to the DOM. Something to do with it being desynchronized by default? The context option doesn't seem to make a difference
 
-Batch texture map resolution increases but still update lines
 Regenerate data for bitmap sprites that use a pending texture before it's ready
-Also regenerate on texture map scale update
 Updating textures
 Auto downscaling textures and log which were downscaled
 Single textures
@@ -4635,6 +4633,7 @@ Bagel = {
                                 bitmap: {
                                     new: [],
                                     delete: {},
+                                    update: {},
                                     layer: []
                                 },
                                 textures: {
@@ -4645,7 +4644,7 @@ Bagel = {
                                 }
                             },
                             queueLengths: {
-                                add: 0,
+                                new: 0,
                                 delete: 0
                             },
                             locations: {
@@ -6802,8 +6801,8 @@ Bagel = {
                                 let gl = renderer.gl;
                                 let bitmapQueue = renderer.queue.bitmap;
 
-                                if (renderer.queueLengths.add != 0 || renderer.queueLengths.delete != 0) {
-                                    let toAdd = renderer.queueLengths.add - renderer.queueLengths.delete;
+                                if (renderer.queueLengths.new != 0 || renderer.queueLengths.delete != 0) {
+                                    let toAdd = renderer.queueLengths.new - renderer.queueLengths.delete;
                                     let newVertices = new Float32Array(renderer.vertices.length + (toAdd * 12));
                                     let newTextureCoords = new Float32Array(renderer.textureCoordinates.length + (toAdd * 24));
                                     let bitmapIndexes = renderer.bitmapIndexes;
@@ -6855,20 +6854,22 @@ Bagel = {
                                     }
 
 
-                                    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.images);
-                                    gl.bufferData(gl.ARRAY_BUFFER, newTextureCoords, gl.STATIC_DRAW);
-
-                                    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.vertices);
-                                    gl.bufferData(gl.ARRAY_BUFFER, newVertices, gl.DYNAMIC_DRAW);
-                                    renderer.verticesUpdated = false; // If anything was waiting to be sent to the GPU then it will have been sent by this request
-
+                                    renderer.verticesUpdated = true;
                                     renderer.vertices = newVertices;
                                     renderer.textureCoordinates = newTextureCoords;
 
                                     bitmapQueue.new = [];
                                     bitmapQueue.delete = {};
-                                    renderer.queueLengths.add = 0;
+                                    renderer.queueLengths.new = 0;
                                     renderer.queueLengths.delete = 0;
+                                }
+
+                                for (let id in bitmapQueue.update) {
+                                    let data = renderer.bitmapSpriteData[id];
+                                    let i = renderer.bitmapIndexes[id] * 12;
+
+                                    Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer);
+                                    renderer.verticesUpdated = true;
                                 }
                             },
                             bitmapLayers: game => {
@@ -10136,7 +10137,7 @@ Bagel = {
                         renderer.bitmapIndexes[id] = true;
 
                         renderer.queue.bitmap.new.push([data, id]); // Queue it to be added rather than just adding it as adding multiple at a time is more efficient
-                        renderer.queueLengths.add++;
+                        renderer.queueLengths.new++;
 
                         if (game.config.isLoadingScreen) {
                             renderer.loadingScreenBitmaps[id] = true;
@@ -10184,10 +10185,11 @@ Bagel = {
                             if (typeof renderer.bitmapIndexes[id] == "boolean") { // Hasn't been processed yet
                                 let queue = renderer.queue.bitmap.new;
                                 queue[queue.findIndex(value => value && value[1] == id)] = null;
-                                renderer.queueLengths.add--;
+                                renderer.queueLengths.new--;
                             }
                             else {
                                 renderer.queue.bitmap.delete[renderer.bitmapIndexes[id]] = true;
+                                delete renderer.queue.bitmap.update[id];
                                 renderer.queueLengths.delete++;
                             }
                         }
@@ -10257,7 +10259,8 @@ Bagel = {
                         }
                     }
 
-                    if (game.internal.renderer.textures[data.image] == null) {
+                    let texture = game.internal.renderer.textures[data.image];
+                    if (texture == null) {
                         console.error("Oh no! Bagel.js couldn't find the texture " + JSON.stringify(data.image) + " for your bitmap sprite. Make sure your \"image\" argument (part of the data argument) is correct.");
                         Bagel.internal.oops(game);
                     }
@@ -10281,11 +10284,16 @@ Bagel = {
                                 oldData[0] = data;
                             }
                             else {
-                                // Not really any faster to queue it, so just update it now
-                                let i = renderer.bitmapIndexes[id] * 12;
-                                Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer);
+                                if (texture.pending) { // Needs to be queued because the coordinates aren't known yet
+                                    renderer.queue.bitmap.update[id] = true;
+                                }
+                                else {
+                                    // Not really any faster to queue it, so just update it now
+                                    let i = renderer.bitmapIndexes[id] * 12;
+                                    Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer);
 
-                                renderer.verticesUpdated = true;
+                                    renderer.verticesUpdated = true;
+                                }
                             }
                         }
                         else {
