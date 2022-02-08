@@ -4633,7 +4633,6 @@ Bagel = {
                                 bitmap: {
                                     new: [],
                                     delete: {},
-                                    update: {},
                                     layer: []
                                 },
                                 textures: {
@@ -6862,14 +6861,6 @@ Bagel = {
                                     bitmapQueue.delete = {};
                                     renderer.queueLengths.new = 0;
                                     renderer.queueLengths.delete = 0;
-                                }
-
-                                for (let id in bitmapQueue.update) {
-                                    let data = renderer.bitmapSpriteData[id];
-                                    let i = renderer.bitmapIndexes[id] * 12;
-
-                                    Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer);
-                                    renderer.verticesUpdated = true;
                                 }
                             },
                             bitmapLayers: game => {
@@ -10284,16 +10275,11 @@ Bagel = {
                                 oldData[0] = data;
                             }
                             else {
-                                if (texture.pending) { // Needs to be queued because the coordinates aren't known yet
-                                    renderer.queue.bitmap.update[id] = true;
-                                }
-                                else {
-                                    // Not really any faster to queue it, so just update it now
-                                    let i = renderer.bitmapIndexes[id] * 12;
-                                    Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer);
+                                // Not really any faster to queue it, so just update it now
+                                let i = renderer.bitmapIndexes[id] * 12;
+                                Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer);
 
-                                    renderer.verticesUpdated = true;
-                                }
+                                renderer.verticesUpdated = true;
                             }
                         }
                         else {
