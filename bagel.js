@@ -5089,12 +5089,7 @@ Bagel = {
                     renderer.canvas.height = game.height;
 
 
-                    if (game.config.display.mode == "fill") {
-                        renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // From Phaser (https://phaser.io)
-                    }
-                    else {
-                        renderer.canvas.style = "display: block; touch-action: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"; // CSS from Phaser (https://phaser.io)
-                    }
+                    renderer.canvas.style = "display:block;touch-action:none;user-select:none;-webkit-tap-highlight-color:rgba(0, 0, 0, 0);"; // From Phaser (https://phaser.io)
 
                     (game => {
                         game.add = {
@@ -5491,7 +5486,7 @@ Bagel = {
                             }
                             if (game.config.display.mode == "fill") {
                                 let p = document.createElement("p");
-                                p.style = "position: absolute;top:0;bottom:0;left:0;right:0;margin:auto;";
+                                p.style = "position:absolute;top:0;bottom:0;left:0;right:0;margin:auto;";
                                 p.appendChild(game.internal.renderer.canvas);
                                 document.body.appendChild(p);
                             }
@@ -7849,98 +7844,100 @@ Bagel = {
                     Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
                 },
                 scaleCanvas: game => {
-                    let width = window.innerWidth;
-                    let height = window.innerHeight;
-                    let renderer = game.internal.renderer;
-                    let ratio = renderer.ratio;
-                    let wHeight = width / ratio;
-                    if (height > wHeight) {
-                        height = wHeight;
-                    }
-                    else {
-                        if (height != wHeight) {
-                            width = height * ratio;
-                        }
-                    }
-                    let renderWidth, renderHeight;
-                    let res = game.config.display.resolution;
-                    if (res == "full") {
-                        renderWidth = width * window.devicePixelRatio;
-                        renderHeight = height * window.devicePixelRatio;
-                    }
-                    else {
-                        if (res == "fixed") {
-                            renderWidth = game.width;
-                            renderHeight = game.height;
+                    if (game.config.display.mode == "fill") {
+                        let width = window.innerWidth;
+                        let height = window.innerHeight;
+                        let renderer = game.internal.renderer;
+                        let ratio = renderer.ratio;
+                        let wHeight = width / ratio;
+                        if (height > wHeight) {
+                            height = wHeight;
                         }
                         else {
-                            renderWidth = res[0];
-                            renderHeight = res[1];
-                        }
-                    }
-
-                    renderWidth = Math.ceil(renderWidth); // The canvas width has to be a whole number
-                    renderHeight = Math.ceil(renderHeight);
-                    width = Math.round(width);
-                    height = Math.round(height);
-
-                    let max = renderer.maxViewportSize;
-                    if (renderWidth > max || renderHeight > max) { // Cap it
-                        if (renderWidth > renderHeight) {
-                            renderWidth = max;
-                            renderHeight = Math.ceil(renderWidth / ratio);
-                        }
-                        else {
-                            renderHeight = max;
-                            renderWidth = Math.ceil(renderHeight * ratio);
-                        }
-                    }
-
-                    let canvas = renderer.canvas;
-                    if (canvas.width != renderWidth || canvas.height != renderHeight) {
-                        if (renderer.waitingWidth == renderWidth && renderer.waitingHeight == renderHeight) {
-                            canvas.width = renderWidth;
-                            canvas.height = renderHeight;
-                            renderer.scaleX = canvas.width / game.width;
-                            renderer.scaleY = canvas.height / game.height;
-
-                            let gl = renderer.gl;
-                            if (gl) {
-                                gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+                            if (height != wHeight) {
+                                width = height * ratio;
                             }
-                            for (let id in renderer.bitmapIndexes) { // Regenerate the texture coordinates
-                                let data = renderer.bitmapSpriteData[id];
-                                if (data) {
-                                    Bagel.internal.render.bitmapSprite.update(id, data, game, false, true);
+                        }
+                        let renderWidth, renderHeight;
+                        let res = game.config.display.resolution;
+                        if (res == "full") {
+                            renderWidth = width * window.devicePixelRatio;
+                            renderHeight = height * window.devicePixelRatio;
+                        }
+                        else {
+                            if (res == "fixed") {
+                                renderWidth = game.width;
+                                renderHeight = game.height;
+                            }
+                            else {
+                                renderWidth = res[0];
+                                renderHeight = res[1];
+                            }
+                        }
+
+                        renderWidth = Math.ceil(renderWidth); // The canvas width has to be a whole number
+                        renderHeight = Math.ceil(renderHeight);
+                        width = Math.round(width);
+                        height = Math.round(height);
+
+                        let max = renderer.maxViewportSize;
+                        if (renderWidth > max || renderHeight > max) { // Cap it
+                            if (renderWidth > renderHeight) {
+                                renderWidth = max;
+                                renderHeight = Math.ceil(renderWidth / ratio);
+                            }
+                            else {
+                                renderHeight = max;
+                                renderWidth = Math.ceil(renderHeight * ratio);
+                            }
+                        }
+
+                        let canvas = renderer.canvas;
+                        if (canvas.width != renderWidth || canvas.height != renderHeight) {
+                            if (renderer.waitingWidth == renderWidth && renderer.waitingHeight == renderHeight) {
+                                canvas.width = renderWidth;
+                                canvas.height = renderHeight;
+                                renderer.scaleX = canvas.width / game.width;
+                                renderer.scaleY = canvas.height / game.height;
+
+                                let gl = renderer.gl;
+                                if (gl) {
+                                    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+                                }
+                                for (let id in renderer.bitmapIndexes) { // Regenerate the texture coordinates
+                                    let data = renderer.bitmapSpriteData[id];
+                                    if (data) {
+                                        Bagel.internal.render.bitmapSprite.update(id, data, game, false, true);
+                                    }
                                 }
                             }
                         }
+                        canvas.style.width = width + "px";
+                        canvas.style.height = height + "px";
+                        renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
+                        renderer.styleHeight = height;
+
+                        let x = (window.innerWidth - width) / 2; // From Phaser (https://phaser.io)
+                        canvas.style.marginLeft = Math.floor(x) + "px";
+                        canvas.style.marginRight = -Math.ceil(x) + "px";
+                        let y = (window.innerHeight - height) / 2;
+                        canvas.style.marginTop = Math.floor(y) + "px";
+                        canvas.style.marginBottom = -Math.ceil(y) + "px";
+
+                        if (! game.config.display.antialias.canvas) {
+                            Bagel.internal.tryStyles(canvas, "image-rendering", [
+                                "pixelated",
+                                "optimize-contrast",
+                                "-moz-crisp-edges",
+                                "-o-crisp-edges",
+                                "-webkit-optimize-contrast",
+                                "optimizeSpeed"
+                            ]);
+                        }
+
+                        renderer.waitingWidth = renderWidth;
+                        renderer.waitingHeight = renderHeight;
                     }
-                    canvas.style.width = width + "px";
-                    canvas.style.height = height + "px";
-                    renderer.styleWidth = width; // These will be numbers which saves resources when doing calculations with them (no parsing needed)
-                    renderer.styleHeight = height;
-
-                    let x = (window.innerWidth - width) / 2; // From Phaser (https://phaser.io)
-                    canvas.style.marginLeft = Math.floor(x) + "px";
-                    canvas.style.marginRight = -Math.ceil(x) + "px";
-                    let y = (window.innerHeight - height) / 2;
-                    canvas.style.marginTop = Math.floor(y) + "px";
-                    canvas.style.marginBottom = -Math.ceil(y) + "px";
-
-                    if (! game.config.display.antialias.canvas) {
-                        Bagel.internal.tryStyles(canvas, "image-rendering", [
-                            "pixelated",
-                            "optimize-contrast",
-                            "-moz-crisp-edges",
-                            "-o-crisp-edges",
-                            "-webkit-optimize-contrast",
-                            "optimizeSpeed"
-                        ]);
-                    }
-
-                    renderer.waitingWidth = renderWidth;
-                    renderer.waitingHeight = renderHeight;
                 },
                 calculateRenderTime: _ => {
                     let fps = 1000 / (performance.now() - Bagel.internal.frameStartTime);

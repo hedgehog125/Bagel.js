@@ -5,7 +5,7 @@
     </title>
 </head>
 <body bgColor="blue">
-    <p id="delayText" style="color: #EFEFEF"></p>
+    <p hidden id="delayText" style="color: #EFEFEF"></p>
 </body>
 
 <script src="../../bagel.js"></script>
@@ -222,7 +222,8 @@ const init = _ => {
                 mode: "preload"
             },
             display: {
-                renderer: "webgl"
+                renderer: "webgl",
+                mode: "static"
             }
         }
     });
