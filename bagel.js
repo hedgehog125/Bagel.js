@@ -5511,13 +5511,6 @@ Bagel = {
                         })(game);
                         return;
                     }
-
-                    let sprites = game.game.sprites;
-                    for (let i in sprites) {
-                        if (sprites[i] != null) {
-                            Bagel.internal.subFunctions.createSprite.triggerListeners(sprites[i], game);
-                        }
-                    }
                 },
                 rendererInit: game => {
                     let renderer = game.internal.renderer;
@@ -6188,7 +6181,6 @@ Bagel = {
                         handler.init(sprite, game, current.plugin);
                     }
                     if (game.loaded && game.internal.pluginsDone) {
-                        subFunctions.triggerListeners(sprite, game);
                         Bagel.internal.processSprite(sprite);
                     }
                     Bagel.internal.loadCurrent();
@@ -10178,7 +10170,6 @@ Bagel = {
                             }
                             else {
                                 renderer.queue.bitmap.delete[renderer.bitmapIndexes[id]] = true;
-                                delete renderer.queue.bitmap.update[id];
                                 renderer.queueLengths.delete++;
                             }
                         }
@@ -10698,10 +10689,13 @@ Bagel = {
             return rerun;
         },
         processSprite: sprite => {
+            let internal = sprite.internal;
+            let subFunctions = Bagel.internal.subFunctions.createSprite;
             let game = sprite.game;
-            let rerun = [...sprite.internal.Bagel.rerunListeners]; // The clone is so running the listeners doesn't affect which listeners are triggered
-            sprite.internal.Bagel.rerunListeners = [];
-            sprite.internal.Bagel.rerunIndex = {};
+
+            let rerun = [...internal.Bagel.rerunListeners]; // The clone is so running the listeners doesn't affect which listeners are triggered
+            internal.Bagel.rerunListeners = [];
+            internal.Bagel.rerunIndex = {};
 
             let noReruns = true;
             for (let c in rerun) {
@@ -10710,10 +10704,14 @@ Bagel = {
                     noReruns = false;
                 }
             }
-            if (sprite.internal.Bagel.rendererNotInitialized) {
+            if (! internal.Bagel.listenersInitiallyTriggered) {
+                internal.Bagel.listenersInitiallyTriggered = true;
+                subFunctions.triggerListeners(sprite, game);
+            }
+            if (internal.Bagel.rendererNotInitialized) {
                 if (noReruns) {
-                    sprite.internal.Bagel.rendererNotInitialized = false;
-                    Bagel.internal.subFunctions.createSprite.initRender(sprite, game);
+                    internal.Bagel.rendererNotInitialized = false;
+                    subFunctions.initRender(sprite, game);
                 }
             }
 
