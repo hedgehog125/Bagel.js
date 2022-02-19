@@ -21,6 +21,7 @@ const init = _ => {
         game: {
             assets: {
                 imgs: [
+                    // Removing this will reduce the delay
                     {
                         id: "Bagel",
                         src: "../../assets/imgs/bagel.png"
@@ -222,8 +223,7 @@ const init = _ => {
                 mode: "preload"
             },
             display: {
-                renderer: "webgl",
-                mode: "static"
+                renderer: "webgl"
             }
         }
     });

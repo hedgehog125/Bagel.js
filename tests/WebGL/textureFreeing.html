@@ -12,6 +12,14 @@
 game = Bagel.init({
     id: "game",
     state: "test",
+    vars: {
+        stage: 0,
+        deleteQueue: [],
+        deleteOrder: [],
+        count: 100,
+        textures: {},
+        deleteTick: 0
+    },
     game: {
         sprites: [
             {
@@ -27,24 +35,133 @@ game = Bagel.init({
                     ]
                 },
                 img: ".Internal.textureMap.0",
-                width: 200,
-                height: 200
+                width: 256,
+                height: 256
             },
             {
-                id: "Red",
-                left: 200,
-                top: 0,
+                id: "LineChecker",
+                type: "canvas",
+                updateRes: false,
+                fullRes: false,
+                singleTexture: true, // So it doesn't interfere with the texture map
+                mode: "animated",
                 scripts: {
                     init: [
                         {
-                            code: null,
+                            code: me => {
+                                me.width = 256;
+                                me.height = 256;
+                                me.right = game.width;
+                                me.top = 0;
+
+                                me.canvas.width = 256;
+                                me.canvas.height = 256;
+                            },
                             stateToRun: "test"
                         }
                     ]
                 },
-                img: "Red",
-                width: 200,
-                height: 200
+                render: (me, game, ctx, canvas) => {
+                    let renderer = game.internal.renderer;
+                    let gl = renderer.gl;
+                    if (me.vars.linesWas == null) {
+                        me.vars.linesWas = JSON.parse(JSON.stringify(renderer.textureMaps[0].lines));
+                        me.vars.lastQueue = JSON.parse(JSON.stringify(renderer.queue));
+                        return;
+                    }
+
+                    let texture = Bagel.internal.render.texture.get(".Internal.textureMap.0", game);
+
+                    if (texture.width != 256) {
+                        console.log("Texture map resolution is wrong");
+                        debugger;
+                        return;
+                    }
+
+                    let glData = new Uint8Array(256 * 256 * 4);
+                    gl.readPixels(0, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, glData); // Slightly hacky but it works
+
+                    let logged = false;
+                    let newRow = [];
+                    let newLine = [0, 0];
+                    let i = 0;
+                    while (i < glData.length) {
+                        let isBlank = glData.slice(i, i + 4).join("") == "255255255255"; // Background colour
+                        let x = (i / 4) % 256;
+                        let y = 255 - Math.floor((i / 4) / 256);
+
+                        let cacheIsBlank = false;
+                        for (let line of me.vars.linesWas[y]) {
+                            if (x >= line[0] && x < line[0] + line[1]) {
+                                cacheIsBlank = true;
+                                break;
+                            }
+                        }
+                        if (isBlank != cacheIsBlank) {
+                            console.log("Pixel " + [x, y] + " is incorrect.");
+                            console.log("Expected:", isBlank);
+                            console.log("Actual:", cacheIsBlank);
+                            console.log("Queue:", me.vars.lastQueue);
+                            console.log("Cache:", me.vars.linesWas[y]);
+
+                            logged = true;
+                        }
+
+                        if (isBlank) {
+                            newLine[1]++;
+                        }
+                        else {
+                            if (newLine[1] != 0) {
+                                newRow.push(newLine);
+                            }
+                            newLine = [x + 1, 0];
+
+                            glData.set([0, 255, 0, 255], i);
+                        }
+                        i += 4;
+                        if ((i / 4) % 256 == 0) {
+                            if (newLine[1] != 0) {
+                                newRow.push(newLine);
+                            }
+                            newLine = [0, 0];
+
+                            if (newRow.toString() != me.vars.linesWas[y].toString()) {
+                                console.log("============");
+                                console.log("Line " + y + " is incorrect.");
+                                console.log("Expected:", newRow);
+                                console.log("Actual:", me.vars.linesWas[y]);
+                                console.log("Queue:", me.vars.lastQueue);
+
+                                debugger;
+                                return;
+                            }
+                            newRow = [];
+                        }
+                    }
+
+                    if (logged) {
+                        debugger;
+                        return;
+                    }
+
+
+                    let ctxData = new ImageData(256, 256);
+                    i = 0;
+                    let c = glData.length - ((256 + 1) * 4);
+                    while (i < glData.length) {
+                        ctxData.data.set(glData.slice(c, c + (256 * 4)), i);
+                        i += 256 * 4;
+                        c -= 256 * 4;
+                    }
+                    ctx.clearRect(0, 0, 256, 256);
+                    ctx.putImageData(ctxData, 0, 0);
+
+
+                    me.vars.linesWas = JSON.parse(JSON.stringify(renderer.textureMaps[0].lines));
+                    me.vars.lastQueue = JSON.parse(JSON.stringify(renderer.queue));
+                },
+                width: 1,
+                height: 1
             }
         ],
         scripts: {
@@ -67,8 +184,11 @@ game = Bagel.init({
                         redCtx.fillRect(0, 0, redSquare.width, redSquare.height);
                         blueCtx.fillRect(0, 0, blueSquare.width, blueSquare.height);
 
-                        Bagel.internal.render.texture.new("Red", redSquare, game);
-                        Bagel.internal.render.texture.new("Blue", blueSquare, game);
+                        let vars = game.vars;
+                        vars.textures.red = redSquare;
+                        vars.textures.blue = blueSquare;
+
+                        vars.lineCheckSprite = game.get.sprite("LineChecker");
                     },
                     stateToRun: "test"
                 }
@@ -76,21 +196,76 @@ game = Bagel.init({
             main: [
                 {
                     code: _ => {
+                        let vars = game.vars;
+                        let textureFns = Bagel.internal.render.texture;
 
+                        let redSquare = vars.textures.red;
+                        let blueSquare = vars.textures.blue;
+
+                        if (vars.stage == 0) {
+                            let i = 0;
+                            while (i < vars.count) {
+                                let id;
+                                if (i % 2 == 0) {
+                                    id = "Red" + (i / 2);
+                                    textureFns.new(id, redSquare, game);
+                                }
+                                else {
+                                    id = "Blue" + ((i - 1) / 2);
+                                    textureFns.new(id, blueSquare, game);
+                                }
+
+                                vars.deleteQueue.push(id);
+                                i++;
+                            }
+
+                            let inOrder = new Array(vars.count).fill(0).map((value, index) => index);
+                            let newOrder = [];
+                            i = 0;
+                            while (i < vars.count) {
+                                let index = Math.round(Math.random() * (inOrder.length - 1));
+
+                                newOrder.push(inOrder[index]);
+                                inOrder.splice(index, 1);
+                                i++;
+                            }
+                            vars.deleteOrder = newOrder;
+
+                            vars.stage++;
+                        }
+                        else {
+                            textureFns.delete(vars.deleteQueue[vars.deleteOrder[vars.deleteTick]], game);
+
+                            vars.deleteTick++;
+                            if (vars.deleteTick == vars.count) {
+                                vars.stage = 0;
+                                vars.deleteTick = 0;
+                            }
+                        }
                     },
                     stateToRun: "test"
                 }
             ]
         }
     },
-    width: 800,
-    height: 450,
+    width: 512, // Slightly weird resolution, so the texture map is displayed properly
+    height: 256,
     config: {
         loading: {
             mode: "preload"
         },
         display: {
-            renderer: "webgl"
+            renderer: "webgl",
+            resolution: "fixed"
+        },
+        input: {
+            mouse: {
+                enableContextMenu: true // So you can right click and save it as an image for analysis
+            }
+        },
+
+        debug: {
+            webGLClearDeletedTextures: true
         }
     }
 });

@@ -9,11 +9,13 @@ Update lines when deleting a texture
 Auto downscaling textures and log which were downscaled
 Single textures
 Update renderer calls in internal plugin, add single texture option to canvases as an argument
-Deactivate textures when count is 0
+Deactivate textures when count is 0. Maybe shrink where possible?
 Change mode description for canvas sprites, add single texture and antialias arguments
 Use auto renderer by default
 Try using activateTextureMap to shrink them periodically, it'll only do it if it doesn't cut any textures off
 Texture downscaling
+What happens if a texture dimensions are changed by changing the source data while it's still pending? (without calling update)
+What happens if you queue a texture update with the same dimensions and then resize the texture without queuing an update? When processing the queue, it should cancel it and then add it to the new queue
 
 The loading screen lag issue is fixed when the canvas is appended to the DOM. Something to do with it being desynchronized by default? The context option doesn't seem to make a difference
 
@@ -70,13 +72,7 @@ Is storing the combined textures as images more efficient when they are deactiva
 webP is actually supported in desktop Safari Big Sur and later. (the browser version doesn't matter)
 
 = Optimisations =
-Use bitmap text in loading screen instead of images
-
-Keep textures in single textures unless memory pressure, maybe animated textures should stay longer? Remove explainations on technical details about how the textures work as it's too complicated already.
-
-Use texsubimage2d for updating the parts of textures that were updated. It's also faster even when the whole image needs to be updated. Might make single textures less necessary?
-
-put in front of and behind layer operations. Should also work for groups like clones. Would make layer operations unnecessary a lot of the time. e.g spaceships in front of individual stars in joined together entry
+Only regenerate texture coordinates for the textures that were there before the texture map resize
 
 = Features =
 Text rotation? Negative widths and heights? Changing them should set font size? Would simplify the loading screen and error screen
@@ -1057,9 +1053,11 @@ Bagel = {
                                     Bagel.internal.oops(game);
                                 }
                                 else if (specified == 2) {
-                                    let img = game.get.asset.img(properties.img, true) || Bagel.internal.render.texture.get(properties.img, game);
-                                    if (typeof img == "object") {
-                                        properties.scale = ((properties.width / img.width) + (properties.height / img.width)) / 2;
+                                    if (properties.img != null) {
+                                        let img = game.get.asset.img(properties.img, true) || Bagel.internal.render.texture.get(properties.img, game);
+                                        if (typeof img == "object") {
+                                            properties.scale = ((properties.width / img.width) + (properties.height / img.width)) / 2;
+                                        }
                                     }
                                 }
                             },
@@ -1200,6 +1198,7 @@ Bagel = {
                                     types: ["function"],
                                     description: "Prerenders the canvas. Called when the canvas sprite is first made and when the resolution is updated. The arguments provided are: \"sprite\", \"game\", \"ctx\", \"canvas\", \"scaleX\" and \"scaleY\"."
                                 },
+
                                 mode: {
                                     required: false,
                                     default: "auto",
@@ -1209,7 +1208,13 @@ Bagel = {
                                         }
                                     },
                                     types: ["string"],
-                                    description: "Tells Bagel.js how to optimise for this canvas. It's not important in the canvas renderer but in the WebGL renderer, the value determines how the texture is handled internally.\n\"auto\" will detect when you render to the canvas and update the texture after. This adds a slight overhead.\n\"static\" will assume the canvas won't be updated frequently but you can still update it by returning true from the function you set for your \"render\" argument.\nLastly \"animated\" will assume the canvas will be updated every frame, you can return true if you haven't though.\n\nFor all of these modes, Bagel.js can optimise differently depending on how you use it on a second by second basis. A the texture of even a static canvas can become a more memory intensive but faster to update single texture if it's updated on 3 consecutive frames (auto and animated become a single texture after 1). If any canvas isn't updated at all for a whole second, it'll become part of a combined texture to reduce memory usage. \"auto\" will also use a single texture if less than 80% of the total textures supported by the GPU are being used. Both \"auto\" and \"static\" canvases will be moved to a combined texture once updated if 90% of textures are being used or will be moved before an update if 100% of textures are full and a new WebGL texture is required.\nIn most circumstances, the \"mode\" argument only specifies the start point and in the case of \"auto\", how the renders will be detected."
+                                    description: "(Ignored if using the canvas renderer) How updates to the canvas should be detected.\n\"auto\" will detect any time you render to the canvas but adds a slight overhead.\n\"static\" only updates when the prerender function is run or when you return true from the render function.\nLastly \"animated\" works in the reverse and assumes it's updated unless you return true from the render function."
+                                },
+                                singleTexture: {
+                                    required: false,
+                                    default: false,
+                                    types: ["boolean"],
+                                    description: "(Ignored if using the canvas renderer) If a single texture should be used for the canvas or not. This can offer marginally better performance if the canvas resolution changes frequently but it's almost always best to be set to false due to the extra memory usage."
                                 }
                             },
                             cloneArgs: {
@@ -1280,7 +1285,11 @@ Bagel = {
                                     },
                                     mode: "replace"
                                 },
+
                                 mode: {
+                                    mode: "replace"
+                                },
+                                singleTexture: {
                                     mode: "replace"
                                 }
                             },
@@ -1582,7 +1591,7 @@ Bagel = {
                                     sprite.scaleX = canvas.width / sprite.width;
                                     sprite.scaleY = canvas.height / sprite.height;
 
-                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game);
+                                    Bagel.internal.render.texture.new(sprite.internal.canvasID, canvas, sprite.game, false, false, sprite.singleTexture);
                                     sprite.internal.renderUpdate = false;
                                 },
                                 onVisible: (sprite, newBitmap) => {
@@ -1659,7 +1668,7 @@ Bagel = {
 
 
                                     if (sprite.updated || internal.canvasUpdated || (sprite.mode == "animated" && output !== true) || (sprite.mode != "animated" && output === true)) {
-                                        Bagel.internal.render.texture.update(internal.canvasID, sprite.canvas, game);
+                                        Bagel.internal.render.texture.update(internal.canvasID, sprite.canvas, game, false, sprite.singleTexture);
                                         internal.canvasUpdated = false;
                                         sprite.updated = false;
                                         plugin.vars.sprite.updateAnchors(sprite, true, true);
@@ -2149,9 +2158,11 @@ Bagel = {
                                     downloadElement.download = args.fileName;
                                     downloadElement.href = url;
                                     (downloadElement => {
-                                        downloadElement.onclick = () => downloadElement.remove();
+                                        downloadElement.onclick = _ => downloadElement.remove();
                                     })(downloadElement);
                                     downloadElement.style.display = "none";
+
+                                    Bagel.internal.createDocBodyIfNeeded();
                                     document.body.appendChild(downloadElement);
                                     downloadElement.click();
                                 }
@@ -4963,7 +4974,10 @@ Bagel = {
                             }
                             Bagel.internal.inputAction.input(); // Run anything queued for an action
                         }, false);
-                        canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+                        if (! game.config.input.mouse.enableContextMenu) {
+                            canvas.addEventListener("contextmenu", e => e.preventDefault());
+                        }
                         if (! previousGames) { // Only need to do this once
                             document.addEventListener("keydown", e => {
                                 for (let i in Bagel.internal.games) {
@@ -5481,9 +5495,7 @@ Bagel = {
                             document.getElementById(game.config.display.htmlElementID).appendChild(game.internal.renderer.canvas);
                         }
                         else {
-                            if (document.body == null) {
-                                document.body = document.createElement("body");
-                            }
+                            Bagel.internal.createDocBodyIfNeeded();
                             if (game.config.display.mode == "fill") {
                                 let p = document.createElement("p");
                                 p.style = "position:absolute;top:0;bottom:0;left:0;right:0;margin:auto;";
@@ -7004,15 +7016,26 @@ Bagel = {
                                 }
                                 if (Object.keys(queues.delete).length != 0) {
                                     for (let id in queues.delete) {
-                                        let position = queues.delete[id].position;
+                                        let texture = queues.delete[id];
+                                        let position = texture.position;
 
+                                        if (game.config.debug.webGLClearDeletedTextures) {
+                                            let mapID = position.textureID;
+                                            if (actions[mapID] == null) actions[mapID] = [];
 
+                                            actions[mapID].push([null, position.x, position.y, texture.width, texture.height]);
+                                        }
+
+                                        subFunctions.queues.freeTextureSpace(position.textureID, position.x, position.y, texture.width, texture.height, renderer);
                                     }
                                     renderer.queue.textures.delete = {};
                                 }
                                 if (Object.keys(queues.new).length != 0) {
                                     for (let id in queues.new) {
                                         let queuedTexture = queues.new[id];
+                                        queuedTexture.width = queuedTexture.texture.width; // In case it was resized while it was in the queue
+                                        queuedTexture.height = queuedTexture.texture.height;
+
                                         subFunctions.queues.allocateTextureInMap(queuedTexture, game, renderer);
 
 
@@ -7046,7 +7069,12 @@ Bagel = {
                                     for (let i in actions[textureMapID]) {
                                         let action = actions[textureMapID][i];
 
-                                        gl.texSubImage2D(gl.TEXTURE_2D, 0, action[1], action[2], gl.RGBA, gl.UNSIGNED_BYTE, action[0]);
+                                        if (action[0]) {
+                                            gl.texSubImage2D(gl.TEXTURE_2D, 0, action[1], action[2], gl.RGBA, gl.UNSIGNED_BYTE, action[0]);
+                                        }
+                                        else { // Debug clear
+                                            gl.texSubImage2D(gl.TEXTURE_2D, 0, action[1], action[2], action[3], action[4], gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(action[3] * action[4] * 4));
+                                        }
                                     }
                                 }
 
@@ -7078,7 +7106,27 @@ Bagel = {
                                 let index = 0;
                                 while (index < renderer.maxTextureMaps - 1) {
                                     let textureMap = renderer.textureMaps[index];
-                                    subFunctions.activateTextureMap(index, game, renderer, textureMap.width, false);
+                                    if (texture.position.singleTexture) { // TODO: handle when there aren't enough texture slots
+                                        if (textureMap.active) {
+                                            index++;
+                                            continue;
+                                        }
+                                        subFunctions.activateSingleTexture(index, game, renderer, texture.width, texture.height, false);
+
+                                        textureMap.textureCount = 1;
+                                        texture.position = {
+                                            textureID: index,
+                                            singleTexture: true,
+                                            x: 0,
+                                            y: 0,
+                                            clip: subFunctions.clipTextureCoords(0, 0, texture.width, texture.height, textureMap.width, textureMap.height)
+                                        };
+                                        texture.pending = false;
+                                        return;
+                                    }
+                                    else {
+                                        subFunctions.activateTextureMap(index, game, renderer, textureMap.width, false);
+                                    }
 
                                     let lines = textureMap.lines;
 
@@ -7209,6 +7257,64 @@ Bagel = {
                                         Bagel.internal.oops(game);
                                     }
                                     return;
+                                }
+                            },
+                            freeTextureSpace: (mapID, x, y, width, height, renderer) => {
+                                let textureMap = renderer.textureMaps[mapID];
+
+                                let lines = textureMap.lines;
+                                let i = y;
+                                let c = 0;
+                                while (i < lines.length) {
+                                    if (c == height) { // Processed all the rows affected by the image
+                                        break;
+                                    }
+                                    let row = lines[i];
+
+                                    if (row.length == 0) { // Nothing to combine it with
+                                        row.push([x, width]);
+                                        i++;
+                                        c++;
+                                        continue;
+                                    }
+
+                                    let a = 1;
+                                    if (row.length == 1) {
+                                        if (row[0][0] > x) {
+                                            row.splice(0, 0, [x, width]);
+                                        }
+                                        else {
+                                            row.push([x, width]);
+                                        }
+                                    }
+                                    else {
+                                        while (a < row.length) {
+                                            let line = row[a];
+                                            let prevLine = row[a - 1];
+
+                                            if (prevLine[0] < x && line[0] > x) {
+                                                row.splice(a - 1, 0, [x, width]);
+                                                break;
+                                            }
+                                            a++;
+                                        }
+                                    }
+
+                                    a = 1;
+                                    while (a < row.length) {
+                                        let line = row[a];
+                                        let prevLine = row[a - 1];
+
+                                        let overlap = (prevLine[0] + prevLine[1]) - line[0];
+                                        if (overlap >= 0) {
+                                            prevLine[1] += line[1] - overlap;
+                                            row.splice(a, 1);
+                                            continue;
+                                        }
+                                        a++;
+                                    }
+                                    c++;
+                                    i++;
                                 }
                             }
                         },
@@ -7342,11 +7448,11 @@ Bagel = {
                             }
                             renderer.verticesUpdated = true;
                         },
-                        clipTextureCoords: (x, y, width, height, resolution) => ({
-                            xZero: (x + 0.5) / resolution,
-                            yZero: (y + 0.5) / resolution,
-                            xOne: (x + width - 0.5) / resolution,
-                            yOne: (y + height - 0.5) / resolution
+                        clipTextureCoords: (x, y, width, height, xResolution, yResolution = xResolution) => ({
+                            xZero: (x + 0.5) / xResolution,
+                            yZero: (y + 0.5) / yResolution,
+                            xOne: (x + width - 0.5) / xResolution,
+                            yOne: (y + height - 0.5) / yResolution
                         }),
 
                         renderToTextureMap: (id, game, renderer) => {
@@ -7504,6 +7610,17 @@ Bagel = {
                             renderer.queue.textures.resizedTextureMaps[id] = true;
 
                             return true;
+                        },
+                        activateSingleTexture: (id, game, renderer, width, height, antialias) => {
+                            let gl = renderer.gl;
+                            let textureMap = renderer.textureMaps[id];
+
+                            textureMap.active = true;
+                            textureMap.width = width;
+                            textureMap.height = height;
+
+                            gl.activeTexture(gl.TEXTURE0 + id);
+                            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
                         },
 
                         init: game => {
@@ -7841,7 +7958,7 @@ Bagel = {
                     }
                 },
                 tick: _ => {
-                    Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
+                    requestAnimationFrame.call(window, Bagel.internal.tick);
                 },
                 scaleCanvas: game => {
                     if (game.config.display.mode == "fill") {
@@ -8394,10 +8511,16 @@ Bagel = {
                                             default: 0.5,
                                             types: ["number"],
                                             description: "The sensitivity for scrolling with the scroll wheel."
+                                        },
+                                        enableContextMenu: {
+                                            required: false,
+                                            default: false,
+                                            types: ["boolean"],
+                                            description: "If the context menu should appear or not when right clicking on the canvas."
                                         }
                                     },
                                     types: ["object"],
-                                    description: ""
+                                    description: "Some options about how mouse inputs are handled."
                                 }
                             },
                             types: ["object"],
@@ -8625,6 +8748,33 @@ Bagel = {
                             default: false,
                             types: ["boolean"],
                             description: "If this game is a loading screen or not. Used internally."
+                        },
+
+                        debug: {
+                            required: false,
+                            default: {},
+                            check: value => {
+                                let allFalse = true;
+                                for (let i in value) {
+                                    if (value[i]) {
+                                        allFalse = false;
+                                        break;
+                                    }
+                                }
+                                if (allFalse) return;
+
+                                console.warn("Some Bagel.js debugging options are on for this game. These can impact performance.");
+                            },
+                            subcheck: {
+                                webGLClearDeletedTextures: {
+                                    required: false,
+                                    default: false,
+                                    types: ["boolean"],
+                                    description: "If textures should be cleared over in texture maps when they are deleted. This can make it easier to see what's happening internally but reduces performance."
+                                }
+                            },
+                            types: ["object"],
+                            description: "A few options related to debugging."
                         }
                     },
                     types: ["object"],
@@ -10476,7 +10626,7 @@ Bagel = {
                         };
                     }
                 },
-                update: (id, texture, game) => Bagel.internal.render.texture.new(id, texture, game, true),
+                update: (id, texture, game, antialias, singleTexture) => Bagel.internal.render.texture.new(id, texture, game, true, antialias, singleTexture),
                 delete: (id, game, replaceSpriteTextures=true, actualID) => {
                     if (Bagel.internal.getTypeOf(game) != "object") {
                         if (game) {
@@ -10511,7 +10661,7 @@ Bagel = {
                             delete renderer.queue.textures.update[id];
 
                             if (! texture.pending) { // It hasn't been properly made yet otherwise so doesn't need deleting
-                                 renderer.queue.textures.delete[id] = true;
+                                renderer.queue.textures.delete[id] = texture;
                             }
                         }
                         else {
@@ -10585,6 +10735,11 @@ Bagel = {
                     element.style[property] = values[i];
                     return;
                 }
+            }
+        },
+        createDocBodyIfNeeded: _ => {
+            if (document.body == null) {
+                document.body = document.createElement("body");
             }
         },
 
@@ -10953,7 +11108,6 @@ Bagel = {
             state: "game"
         },
 
-        requestAnimationFrame: window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame,
         debug: {
             add: message => {
                 Bagel.internal.debug.queue.push(message);
@@ -11445,4 +11599,4 @@ Bagel = {
     },
     version: "1.6a"
 };
-Bagel.internal.requestAnimationFrame.call(window, Bagel.internal.tick);
+requestAnimationFrame.call(window, Bagel.internal.tick);
