@@ -64,11 +64,11 @@ game = Bagel.init({
                 render: (me, game, ctx, canvas) => {
                     let renderer = game.internal.renderer;
                     let gl = renderer.gl;
-                    if (me.vars.linesWas == null) {
-                        me.vars.linesWas = JSON.parse(JSON.stringify(renderer.textureMaps[0].lines));
+                    if (me.vars.lastQueue == null) {
                         me.vars.lastQueue = JSON.parse(JSON.stringify(renderer.queue));
                         return;
                     }
+                    let lines = renderer.textureMaps[0].lines;
 
                     let texture = Bagel.internal.render.texture.get(".Internal.textureMap.0", game);
 
@@ -91,7 +91,7 @@ game = Bagel.init({
                         let y = 255 - Math.floor((i / 4) / 256);
 
                         let cacheIsBlank = false;
-                        for (let line of me.vars.linesWas[y]) {
+                        for (let line of lines[y]) {
                             if (x >= line[0] && x < line[0] + line[1]) {
                                 cacheIsBlank = true;
                                 break;
@@ -102,7 +102,8 @@ game = Bagel.init({
                             console.log("Expected:", isBlank);
                             console.log("Actual:", cacheIsBlank);
                             console.log("Queue:", me.vars.lastQueue);
-                            console.log("Cache:", me.vars.linesWas[y]);
+                            console.log("Cache:", lines[y]);
+                            // glData.slice(i - (256 * 4), i)
 
                             logged = true;
                         }
@@ -125,11 +126,11 @@ game = Bagel.init({
                             }
                             newLine = [0, 0];
 
-                            if (newRow.toString() != me.vars.linesWas[y].toString()) {
+                            if (newRow.toString() != lines[y].toString()) {
                                 console.log("============");
                                 console.log("Line " + y + " is incorrect.");
                                 console.log("Expected:", newRow);
-                                console.log("Actual:", me.vars.linesWas[y]);
+                                console.log("Actual:", lines[y]);
                                 console.log("Queue:", me.vars.lastQueue);
 
                                 debugger;
@@ -156,8 +157,6 @@ game = Bagel.init({
                     ctx.clearRect(0, 0, 256, 256);
                     ctx.putImageData(ctxData, 0, 0);
 
-
-                    me.vars.linesWas = JSON.parse(JSON.stringify(renderer.textureMaps[0].lines));
                     me.vars.lastQueue = JSON.parse(JSON.stringify(renderer.queue));
                 },
                 width: 1,

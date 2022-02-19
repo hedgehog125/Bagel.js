@@ -7265,10 +7265,7 @@ Bagel = {
                                 let lines = textureMap.lines;
                                 let i = y;
                                 let c = 0;
-                                while (i < lines.length) {
-                                    if (c == height) { // Processed all the rows affected by the image
-                                        break;
-                                    }
+                                while (c < height) {
                                     let row = lines[i];
 
                                     if (row.length == 0) { // Nothing to combine it with
@@ -7278,36 +7275,19 @@ Bagel = {
                                         continue;
                                     }
 
+                                    let index = row.findIndex(value => value[0] > x);
+                                    if (index == -1) {
+                                        index = row.length;
+                                    }
+                                    row.splice(index, 0, [x, width]);
+
                                     let a = 1;
-                                    if (row.length == 1) {
-                                        if (row[0][0] > x) {
-                                            row.splice(0, 0, [x, width]);
-                                        }
-                                        else {
-                                            row.push([x, width]);
-                                        }
-                                    }
-                                    else {
-                                        while (a < row.length) {
-                                            let line = row[a];
-                                            let prevLine = row[a - 1];
-
-                                            if (prevLine[0] < x && line[0] > x) {
-                                                row.splice(a - 1, 0, [x, width]);
-                                                break;
-                                            }
-                                            a++;
-                                        }
-                                    }
-
-                                    a = 1;
                                     while (a < row.length) {
                                         let line = row[a];
                                         let prevLine = row[a - 1];
 
-                                        let overlap = (prevLine[0] + prevLine[1]) - line[0];
-                                        if (overlap >= 0) {
-                                            prevLine[1] += line[1] - overlap;
+                                        if (prevLine[0] + prevLine[1] == line[0]) {
+                                            prevLine[1] += line[1];
                                             row.splice(a, 1);
                                             continue;
                                         }
