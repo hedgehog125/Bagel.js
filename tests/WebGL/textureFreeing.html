@@ -17,8 +17,26 @@ game = Bagel.init({
         deleteQueue: [],
         deleteOrder: [],
         count: 100,
-        textures: {},
-        deleteTick: 0
+        deleteTick: 0,
+        createTick: 0,
+        colorLoops: 10,
+
+        newTexture: i => {
+            let canvas = document.createElement("canvas");
+            canvas.width = Math.round(Math.random() * 19) + 1;
+            canvas.height = Math.round(Math.random() * 19) + 1;
+
+            let ctx = canvas.getContext("2d");
+            let value = ((i / game.vars.count) * (150 * game.vars.colorLoops));
+            ctx.fillStyle = "rgb(" + [
+                (value % 150) + 105,
+                Math.floor(value / 150) * game.vars.colorLoops,
+                0
+            ] + ")";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            return canvas;
+        }
     },
     game: {
         sprites: [
@@ -78,10 +96,50 @@ game = Bagel.init({
                         return;
                     }
 
+                    // Check texture bounds for overlaps
+                    let logged = false;
+                    for (let i in renderer.textures) {
+                        if (i.includes(".Internal.textureMap")) continue;
+
+                        let testTexture = renderer.textures[i];
+                        let x = testTexture.position.x;
+                        let y = testTexture.position.y;
+                        let x2 = x + testTexture.width;
+                        let y2 = y + testTexture.height;
+
+                        for (let c in renderer.textures) {
+                            if (c == i) continue;
+                            if (c.includes(".Internal.textureMap")) continue;
+
+                            let testTexture2 = renderer.textures[c];
+                            if (testTexture.position.textureID != testTexture2.position.textureID) continue;
+
+                            let otherX = testTexture2.position.x;
+                            let otherY = testTexture2.position.y;
+                            let otherX2 = otherX + testTexture2.width;
+                            let otherY2 = otherY + testTexture2.height;
+
+                            if (
+                                x2 > otherX
+                                && x < otherX2
+                                && y2 > otherY
+                                && y < otherY2
+                            ) {
+                                console.log(`Texture ${i} overlaps with ${c}.`);
+                                logged = true;
+                            }
+                        }
+                    }
+
+                    if (logged) {
+                        debugger;
+                        return;
+                    }
+
+
                     let glData = new Uint8Array(256 * 256 * 4);
                     gl.readPixels(0, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, glData); // Slightly hacky but it works
 
-                    let logged = false;
                     let newRow = [];
                     let newLine = [0, 0];
                     let i = 0;
@@ -125,7 +183,6 @@ game = Bagel.init({
                                 newRow.push(newLine);
                             }
                             newLine = [0, 0];
-
                             if (newRow.toString() != lines[y].toString()) {
                                 console.log("============");
                                 console.log("Line " + y + " is incorrect.");
@@ -145,17 +202,13 @@ game = Bagel.init({
                         return;
                     }
 
-
-                    let ctxData = new ImageData(256, 256);
-                    i = 0;
-                    let c = glData.length - ((256 + 1) * 4);
-                    while (i < glData.length) {
-                        ctxData.data.set(glData.slice(c, c + (256 * 4)), i);
-                        i += 256 * 4;
-                        c -= 256 * 4;
+                    ctx.fillStyle = "green";
+                    ctx.fillRect(0, 0, 256, 256);
+                    for (let y in lines) {
+                        for (let line of lines[y]) {
+                            ctx.clearRect(line[0], y, line[1], 1);
+                        }
                     }
-                    ctx.clearRect(0, 0, 256, 256);
-                    ctx.putImageData(ctxData, 0, 0);
 
                     me.vars.lastQueue = JSON.parse(JSON.stringify(renderer.queue));
                 },
@@ -167,27 +220,7 @@ game = Bagel.init({
             init: [
                 {
                     code: _ => {
-                        let redSquare = document.createElement("canvas");
-                        let blueSquare = document.createElement("canvas");
-                        let redCtx = redSquare.getContext("2d");
-                        let blueCtx = blueSquare.getContext("2d");
-
-                        redSquare.width = 10;
-                        redSquare.height = 10;
-                        blueSquare.width = 10;
-                        blueSquare.height = 10;
-
-                        redCtx.fillStyle = "red";
-                        blueCtx.fillStyle = "blue";
-
-                        redCtx.fillRect(0, 0, redSquare.width, redSquare.height);
-                        blueCtx.fillRect(0, 0, blueSquare.width, blueSquare.height);
-
-                        let vars = game.vars;
-                        vars.textures.red = redSquare;
-                        vars.textures.blue = blueSquare;
-
-                        vars.lineCheckSprite = game.get.sprite("LineChecker");
+                        game.vars.lineCheckSprite = game.get.sprite("LineChecker");
                     },
                     stateToRun: "test"
                 }
@@ -198,39 +231,31 @@ game = Bagel.init({
                         let vars = game.vars;
                         let textureFns = Bagel.internal.render.texture;
 
-                        let redSquare = vars.textures.red;
-                        let blueSquare = vars.textures.blue;
-
                         if (vars.stage == 0) {
-                            let i = 0;
-                            while (i < vars.count) {
-                                let id;
-                                if (i % 2 == 0) {
-                                    id = "Red" + (i / 2);
-                                    textureFns.new(id, redSquare, game);
+                            let texture = vars.newTexture(vars.createTick);
+
+                            id = "Texture" + vars.createTick;
+                            textureFns.new(id, texture, game);
+
+                            vars.deleteQueue.push(id);
+
+                            vars.createTick++;
+                            if (vars.createTick == vars.count) {
+                                let inOrder = new Array(vars.count).fill(0).map((value, index) => index);
+                                let newOrder = [];
+                                i = 0;
+                                while (i < vars.count) {
+                                    let index = Math.round(Math.random() * (inOrder.length - 1));
+
+                                    newOrder.push(inOrder[index]);
+                                    inOrder.splice(index, 1);
+                                    i++;
                                 }
-                                else {
-                                    id = "Blue" + ((i - 1) / 2);
-                                    textureFns.new(id, blueSquare, game);
-                                }
+                                vars.deleteOrder = newOrder;
 
-                                vars.deleteQueue.push(id);
-                                i++;
+                                vars.stage = 1;
+                                vars.createTick = 0;
                             }
-
-                            let inOrder = new Array(vars.count).fill(0).map((value, index) => index);
-                            let newOrder = [];
-                            i = 0;
-                            while (i < vars.count) {
-                                let index = Math.round(Math.random() * (inOrder.length - 1));
-
-                                newOrder.push(inOrder[index]);
-                                inOrder.splice(index, 1);
-                                i++;
-                            }
-                            vars.deleteOrder = newOrder;
-
-                            vars.stage++;
                         }
                         else {
                             textureFns.delete(vars.deleteQueue[vars.deleteOrder[vars.deleteTick]], game);

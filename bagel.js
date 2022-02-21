@@ -4,11 +4,7 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_test
 
 TODO
-Update lines when deleting a texture
-
 Auto downscaling textures and log which were downscaled
-Single textures
-Update renderer calls in internal plugin, add single texture option to canvases as an argument
 Deactivate textures when count is 0. Maybe shrink where possible?
 Change mode description for canvas sprites, add single texture and antialias arguments
 Use auto renderer by default
@@ -23,6 +19,8 @@ Mention that functions as values for x, y, widths and heights were removed in th
 Error in spritesheet demo
 
 == Testing ==
+How does cropping work on texturemaps? They don't have the offset in their coordinates
+
 Should the loading screen use the full resolution? Need to commit to a set resolution otherwise. Dots are slightly off due to the resolution. Laggy in firefox
 
 Using a separate program for rendering textures to the atlas might be faster since it reduces the complication. Only vertices and texture coordinates are needed compared to also having the alpha, texture id and tint.
@@ -72,6 +70,8 @@ Is storing the combined textures as images more efficient when they are deactiva
 webP is actually supported in desktop Safari Big Sur and later. (the browser version doesn't matter)
 
 = Optimisations =
+Predict where there will likely be space in texturemaps and check there first. Maybe starting with skipping trying the y coordinates that a failed texture allocation was in. Might need to be able to go back and try slower allocation if it otherwise can't find a spot, should be a warning
+
 Only regenerate texture coordinates for the textures that were there before the texture map resize
 
 = Features =
@@ -7134,11 +7134,14 @@ Bagel = {
                                     let i = 0;
                                     let a = 0;
                                     let drawX = 0;
+                                    let offset;
                                     let drawY = 0;
                                     for (i in lines) {
                                         for (a in lines[i]) {
                                             let line = lines[i][a];
 
+                                            let minClearance = line[1];
+                                            offset = 0;
                                             if (width <= line[1]) {
                                                 let c = 0;
                                                 let d = i;
@@ -7147,25 +7150,51 @@ Bagel = {
                                                 drawX = line[0];
                                                 drawY = y;
 
-                                                let valid = false;
+                                                let valid = true;
                                                 while (c < height) { // Check the rows to see if there's space
-                                                    if (lines[d].length == 0) { // Make sure a row hasn't been skipped
+                                                    if (lines[d].length == 0) { // No space on this line
                                                         valid = false;
                                                         break;
                                                     }
                                                     y++;
                                                     d++;
-                                                    valid = false;
+
+                                                    let minOffsetIndex = -1;
+                                                    let minOffset = Infinity;
                                                     for (let b in lines[d]) {
                                                         let newLine = lines[d][b];
-                                                        if (newLine[0] <= line[0]) { // Make sure the line starts at the same x position or before
-                                                            valid = true;
-                                                            break;
+
+                                                        let availableWhenCombined = newLine[1] - Math.max(line[0] - newLine[0], 0);
+                                                        if (availableWhenCombined >= width + offset) { // There might be more pixels available but anything left of the original point can't be used
+                                                            let overlap = newLine[0] - line[0]; // How much the texture to the left overlaps into this texture
+                                                            if (overlap <= 0) { // No offset needed
+                                                                minOffsetIndex = b;
+                                                                minOffset = 0;
+                                                                break;
+                                                            }
+                                                            else { // Offset needed, this line goes into the original point
+                                                                if (width + overlap <= minClearance) {
+                                                                    if (overlap < minOffset) {
+                                                                        minOffset = overlap;
+                                                                        minOffsetIndex = b;
+                                                                    }
+                                                                }
+                                                            }
                                                         }
                                                     }
-                                                    if (! valid) {
+                                                    if (minOffsetIndex == -1) {
+                                                        valid = false;
                                                         break;
                                                     }
+
+                                                    if (minOffset > offset) offset = minOffset;
+
+                                                    // Calculate the clearance and update if it's smaller
+                                                    let nextLine = lines[d][minOffsetIndex + 1];
+                                                    let endPoint = (nextLine? nextLine[0] : textureMap.width) - 1;
+                                                    let clearance = (drawX + offset + width) - endPoint;
+                                                    if (clearance < minClearance) minClearance = clearance;
+
                                                     c++;
                                                 }
                                                 if (valid) {
@@ -7180,50 +7209,37 @@ Bagel = {
                                     }
 
                                     if (foundPosition) {
+                                        drawX += offset;
+
                                         // Update the lines
                                         let newLines = [];
-                                        let done = false;
                                         i = parseInt(i);
                                         let unchanged = lines.slice(0, i);
                                         while (i < lines.length) { // i is deliberately not reset
                                             newLines.push([]);
                                             for (a in lines[i]) { // a is reset
                                                 let line = lines[i][a];
-                                                if (a == 0) { // Exit if this row is lower than the bottom of the image
-                                                    if (i >= drawY + height) {
-                                                        newLines.pop();
-                                                        done = true;
-                                                        break;
-                                                    }
-                                                }
 
-                                                if (drawX >= line[0] + line[1]
-                                                    || drawX + width <= line[0]
+                                                if (line[0] >= drawX + width
+                                                    || line[0] + line[1] < drawX
                                                 ) { // Ignore lines where it doesn't overlap with the image bounding box
                                                     newLines[newLines.length - 1].push(line);
                                                     continue;
                                                 }
 
-                                                let needsSorting = false;
                                                 if (line[0] < drawX) { // There's a part of the line to the left of the image
                                                     let lineWidth = drawX - line[0];
                                                     newLines[newLines.length - 1].push([line[0], lineWidth]);
-                                                    needsSorting = true;
                                                 }
                                                 if (line[0] + line[1] > drawX + width) { // Part to the right
                                                     let lineWidth = (line[0] + line[1]) - (drawX + width);
                                                     newLines[newLines.length - 1].push([drawX + width, lineWidth]);
-                                                    needsSorting = true;
                                                 }
-
-                                                if (needsSorting) {
-                                                    newLines[newLines.length - 1].sort((first, second) => first[0] - second[0]);
-                                                }
-                                            }
-                                            if (done) {
-                                                break;
                                             }
                                             i++;
+                                            if (i == drawY + height) { // Lower than the bottom of the texture
+                                                break;
+                                            }
                                         }
                                         let afterLines = lines.slice(i, lines.length);
                                         textureMap.lines = [
@@ -7571,7 +7587,7 @@ Bagel = {
                             textureMapTexture.antialias = antialias;
                             textureMapTexture.width = resolution;
                             textureMapTexture.height = resolution;
-                            textureMapTexture.position.clip = subFunctions.clipTextureCoords(0, 0, resolution, resolution, resolution);
+                            textureMapTexture.position.clip = subFunctions.clipTextureCoords(-0.5, -0.5, resolution + 0.5, resolution + 0.5, resolution);
 
 
                             // Re-clip any previously existing textures
