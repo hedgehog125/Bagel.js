@@ -12,6 +12,7 @@ Try using activateTextureMap to shrink them periodically, it'll only do it if it
 Texture downscaling
 What happens if a texture dimensions are changed by changing the source data while it's still pending? (without calling update)
 What happens if you queue a texture update with the same dimensions and then resize the texture without queuing an update? When processing the queue, it should cancel it and then add it to the new queue
+Ignore singleTexture request when there aren't enough slots
 
 The loading screen lag issue is fixed when the canvas is appended to the DOM. Something to do with it being desynchronized by default? The context option doesn't seem to make a difference
 
@@ -80,7 +81,7 @@ Text rotation? Negative widths and heights? Changing them should set font size? 
 Cropping for canvases
 Tints for canvases and text. Maybe used instead of rerendering?
 
-Renderer layers
+Renderer layers. Should do it on the GPU instead of batching everything. Requires uploading vertices every time but it's usually needed anyway and is pretty fast. Might be able to switch between vertex pointers for some though while improving performance? Probably not worth it though as rendering isn't the bottleneck
 
 Put ogg/webp support in console message
 WebP support for PWA icons
@@ -7106,7 +7107,7 @@ Bagel = {
                                 let index = 0;
                                 while (index < renderer.maxTextureMaps - 1) {
                                     let textureMap = renderer.textureMaps[index];
-                                    if (texture.position.singleTexture) { // TODO: handle when there aren't enough texture slots
+                                    if (texture.position.singleTexture) {
                                         if (textureMap.active) {
                                             index++;
                                             continue;
@@ -7119,7 +7120,7 @@ Bagel = {
                                             singleTexture: true,
                                             x: 0,
                                             y: 0,
-                                            clip: subFunctions.clipTextureCoords(0, 0, texture.width, texture.height, textureMap.width, textureMap.height)
+                                            clip: subFunctions.clipTextureCoords(-0.5, -0.5, texture.width + 0.5, texture.height + 0.5, textureMap.width, textureMap.height)
                                         };
                                         texture.pending = false;
                                         return;
