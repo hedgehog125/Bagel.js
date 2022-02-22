@@ -13,6 +13,7 @@ Texture downscaling
 What happens if a texture dimensions are changed by changing the source data while it's still pending? (without calling update)
 What happens if you queue a texture update with the same dimensions and then resize the texture without queuing an update? When processing the queue, it should cancel it and then add it to the new queue
 Ignore singleTexture request when there aren't enough slots
+Check crops
 
 The loading screen lag issue is fixed when the canvas is appended to the DOM. Something to do with it being desynchronized by default? The context option doesn't seem to make a difference
 
@@ -37,14 +38,10 @@ Antialiased textures, both in canvas and WebGL renderers
 Updating WebGL textures, changing settings that require recreating
 
 == Bugs ==
-The default loading screen results in a renderer error? Can't replicate for some reason
-
 Prevent upscale aspect ratio from being different to the source unless an option is enabled.
 
 Change WebGL rounding to match canvas <==========
 Add bitmapSprite cropping and tinting to the webgl renderer
-
-Texture space can be used by multiple textures if the resolution of the textures is changed enough. Requires multiple to change on the same frame?
 
 Full stops are too low in bitmap text. Same with a lot of characters, they get cut off in the word wrap demo
 Text is weird in the loading screen at different game dimensions. Maybe text in general? Probably due to setting widths and heights
@@ -76,6 +73,10 @@ Predict where there will likely be space in texturemaps and check there first. M
 Only regenerate texture coordinates for the textures that were there before the texture map resize
 
 = Features =
+Offline PWA page when assets are missing (in the service worker directly).
+Trigger error screen when an asset fails to load. Get the plugin to call a specific function with the error code. Maybe have teapot 418 error code easter egg
+The service worker can have new data sent to it using postMessage, see: https://web.dev/off-main-thread/#what-code-should-you-move-to-a-web-worker
+
 Text rotation? Negative widths and heights? Changing them should set font size? Would simplify the loading screen and error screen
 
 Cropping for canvases
@@ -134,8 +135,6 @@ Gamepad support
 
 
 = Tweaks =
-Move currentFPS and maximumPossibleFPS to game.debug. Also add render percentage time, script time and render time
-
 Tidy up canvas prerendering by using the prerender property of canvas sprites
 
 Fix spelling errors
@@ -5020,7 +5019,6 @@ Bagel = {
                         };
                         let canvas = renderer.canvas;
 
-
                         if (config.display.renderer == "auto") {
                             // This is just to test
                             gl = canvas.getContext("webgl", settings);
@@ -7352,16 +7350,35 @@ Bagel = {
 
                             let texture = renderer.textures[data.image];
                             let clip = texture.position.clip;
-                            let textureID = texture.position.textureID;
+                            let textureMapID = texture.position.textureID;
+                            let textureMap = renderer.textureMaps[textureMapID];
                             let alpha = data.alpha;
-                            let xZero = clip.xZero;
-                            let xOne = clip.xOne;
+
+                            let xZero, xOne;
+                            if (data.crop) {
+                                let clipX = textureMap.clipX;
+                                xZero = clip.xZero + (data.crop.x * clipX);
+                                xOne = xZero + (data.crop.width * clipX);
+                            }
+                            else {
+                                xZero = clip.xZero;
+                                xOne = clip.xOne;
+                            }
                             if (Math.sign(data.width) == -1) {
                                 xZero = clip.xOne;
                                 xOne = clip.xZero;
                             }
-                            let yZero = clip.yZero;
-                            let yOne = clip.yOne;
+
+                            let yZero, yOne;
+                            if (data.crop) {
+                                let clipY = textureMap.clipY;
+                                yZero = clip.yZero + (data.crop.y * clipY);
+                                yOne = yZero + (data.crop.height * clipY);
+                            }
+                            else {
+                                yZero = clip.yZero;
+                                yOne = clip.yOne;
+                            }
                             if (Math.sign(data.height) == -1) {
                                 yZero = clip.yOne;
                                 yOne = clip.yZero;
@@ -7369,32 +7386,32 @@ Bagel = {
                             textureCoords.set([
                                 xZero,
                                 yZero,
-                                textureID,
+                                textureMapID,
                                 alpha,
 
                                 xOne,
                                 yZero,
-                                textureID,
+                                textureMapID,
                                 alpha,
 
                                 xZero,
                                 yOne,
-                                textureID,
+                                textureMapID,
                                 alpha,
 
                                 xZero,
                                 yOne,
-                                textureID,
+                                textureMapID,
                                 alpha,
 
                                 xOne,
                                 yZero,
-                                textureID,
+                                textureMapID,
                                 alpha,
 
                                 xOne,
                                 yOne,
-                                textureID,
+                                textureMapID,
                                 alpha
                             ], i * 2);
                         },
@@ -7501,6 +7518,8 @@ Bagel = {
                             textureMap.active = true;
                             textureMap.width = resolution;
                             textureMap.height = resolution;
+                            textureMap.clipX = 1 / resolution;
+                            textureMap.clipY = 1 / resolution;
 
                             let lines = textureMap.lines;
                             let oldLines = JSON.stringify(lines);
@@ -8390,7 +8409,7 @@ Bagel = {
                                 },
                                 renderer: {
                                     required: false,
-                                    default: "canvas",
+                                    default: "auto",
                                     check: value => {
                                         if (! ["auto", "canvas", "webgl"].includes(value)) {
                                             return "Oops. You used an invalid option. You used " + JSON.stringify(value) + ", it can only be either \"auto\", \"canvas\" or \"webgl\".";
