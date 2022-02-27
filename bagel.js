@@ -4,6 +4,10 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_test
 
 TODO
+Finish updating layer operations to work with tints <========
+
+Cropping is offset differently to the canvas, has half pixels
+
 Auto downscaling textures and log which were downscaled
 Deactivate textures when count is 0. Maybe shrink where possible?
 Change mode description for canvas sprites, add single texture and antialias arguments
@@ -4658,15 +4662,105 @@ Bagel = {
                             locations: {
                                 vertices: 0,
                                 texCoords: 1,
+                                tintCoords: 2,
                                 images: null
                             },
                             buffers: {},
                             vertices: new Float32Array(),
                             textureCoordinates: new Float32Array(),
+                            tintCoordinates: new Float32Array(),
                             bitmapSpriteData: [],
 
                             colorCanvas: null,
                             colorCtx: null,
+                            webglColourCache: {},
+                            convertColor: (color, renderer, divideBy255) => { // Browsers' bad so I have to do this myself
+                                let defaultColor = [0, 0, 0, 255];
+                                let cacheAndReturn = value => {
+                                    renderer.webglColourCache[color] = value;
+
+                                    if (divideBy255) {
+                                        return value.map(value => value / 255);
+                                    }
+                                    return value;
+                                };
+
+                                let cached = renderer.webglColourCache[color];
+                                if (cached) return cacheAndReturn(cached);
+
+                                let alpha = 255;
+                                // Alpha messes with the colour extracting so if it's in a format that specifies it, it need to extracted and removed
+                                if (color.includes("rgb")) { // Might as well handle rgb manually as well to make it a bit faster
+                                    let open = color.indexOf("(");
+                                    if (open == -1) return cacheAndReturn(defaultColor);
+                                    let close = color.indexOf(")");
+                                    if (close == -1) return cacheAndReturn(defaultColor);
+
+                                    let values = color.slice(open + 1, close).split(",");
+
+                                    let pixel = values.map(value => parseInt(value));
+                                    if (pixel.length == 3) {
+                                        pixel.push(255);
+                                    }
+
+                                    return cacheAndReturn(pixel);
+                                }
+                                else if (color.includes("#")) { // Hex
+                                    if (color.length == 4 || color.length == 5) {
+                                        let pixel = [];
+                                        let i = 1;
+                                        while (i < color.length) {
+                                            let char = color[i];
+                                            pixel.push(parseInt(char + char, 16));
+                                            i++;
+                                        }
+                                        if (pixel.length == 3) {
+                                            pixel.push(255);
+                                        }
+
+                                        return cacheAndReturn(pixel);
+                                    }
+                                    else if (color.length == 7 || color.length == 9) {
+                                        let pixel = [];
+                                        let i = 1;
+                                        while (i < color.length) {
+                                            pixel.push(parseInt(color[i] + color[i + 1], 16));
+                                            i += 2;
+                                        }
+                                        if (pixel.length == 3) {
+                                            pixel.push(255);
+                                        }
+
+                                        return cacheAndReturn(pixel);
+                                    }
+                                    return cacheAndReturn(defaultColor);
+                                }
+                                else if (color.includes("hsla")) {
+                                    let open = color.indexOf("(");
+                                    if (open == -1) return cacheAndReturn(defaultColor);
+                                    let close = color.indexOf(")");
+                                    if (close == -1) return cacheAndReturn(defaultColor);
+
+                                    let values = color.slice(open + 1, close).split(",");
+
+                                    let hsla = values.map(value => parseInt(value));
+
+                                    // I don't feel like learning how to convert this format so I'll just let the canvas do the rest
+                                    alpha = hsla[3];
+                                    color = "hsl(" + [...hsla.slice(0, 3)] + ")";
+                                } // Probably no alpha if none of these were met
+
+
+                                let ctx = renderer.colorCtx;
+                                ctx.clearRect(0, 0, 1, 1);
+                                ctx.fillStyle = color;
+
+                                ctx.fillRect(0, 0, 1, 1);
+                                let pixel = [...ctx.getImageData(0, 0, 1, 1).data];
+                                pixel[3] = alpha;
+
+                                return cacheAndReturn(pixel);
+                            },
                             lastBackgroundColor: null,
 
                             tmpFrameBuffer: null,
@@ -6800,6 +6894,8 @@ Bagel = {
                                     let toAdd = renderer.queueLengths.new - renderer.queueLengths.delete;
                                     let newVertices = new Float32Array(renderer.vertices.length + (toAdd * 12));
                                     let newTextureCoords = new Float32Array(renderer.textureCoordinates.length + (toAdd * 24));
+                                    let newTintCoords = new Float32Array(renderer.tintCoordinates.length + (toAdd * 18));
+
                                     let bitmapIndexes = renderer.bitmapIndexes;
 
                                     let startI = 0;
@@ -6812,6 +6908,7 @@ Bagel = {
                                         if (bitmapQueue.delete[id]) {
                                             newVertices.set(renderer.vertices.slice(startI, i), startC);
                                             newTextureCoords.set(renderer.textureCoordinates.slice(startI * 2, i * 2), startC * 2);
+                                            newTintCoords.set(renderer.tintCoordinates.slice(startI * 1.5, i * 1.5), startC * 1.5);
 
                                             removed++;
                                             i += 12;
@@ -6828,6 +6925,8 @@ Bagel = {
                                     }
                                     newVertices.set(renderer.vertices.slice(startI, i), startC);
                                     newTextureCoords.set(renderer.textureCoordinates.slice(startI * 2, i * 2), startC * 2);
+                                    newTintCoords.set(renderer.tintCoordinates.slice(startI * 1.5, i * 1.5), startC * 1.5);
+
 
                                     let oldVerticesEnd = c;
                                     previousCount = c / 12;
@@ -6840,7 +6939,7 @@ Bagel = {
                                             renderer.bitmapIndexes[data[1]] = previousCount + b;
                                             data = data[0];
 
-                                            Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, newVertices, newTextureCoords, renderer);
+                                            Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, newVertices, newTextureCoords, newTintCoords, renderer);
 
                                             i += 12;
                                             b++;
@@ -6852,6 +6951,7 @@ Bagel = {
                                     renderer.verticesUpdated = true;
                                     renderer.vertices = newVertices;
                                     renderer.textureCoordinates = newTextureCoords;
+                                    renderer.tintCoordinates = newTintCoords;
 
                                     bitmapQueue.new = [];
                                     bitmapQueue.delete = {};
@@ -6874,6 +6974,8 @@ Bagel = {
                                 if (queue.length != 0) {
                                     let vertices = Array.from(renderer.vertices);
                                     let texCoords = Array.from(renderer.textureCoordinates);
+                                    let tintCoords = Array.from(renderer.tintCoordinates);
+
                                     let bitmapIndexes = renderer.bitmapIndexes;
 
                                     for (let i in queue) {
@@ -6883,7 +6985,7 @@ Bagel = {
                                         }
                                         let id = queued[0];
                                         let mode = queued[1];
-                                        let originalIndex, thisBitmapVertices, thisBitmapTextureCoords, c;
+                                        let originalIndex, thisBitmapVertices, thisBitmapTextureCoords, thisBitmapTintCoords, c;
 
                                         switch (mode) { // The type of layer operation
                                             case 0: // Bring to front
@@ -6894,14 +6996,17 @@ Bagel = {
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
                                                 thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                thisBitmapTintCoords = tintCoords.slice(originalIndex * 18, (originalIndex * 18) + 18);
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
                                                 texCoords.splice(originalIndex * 24, 24);
+                                                tintCoords.splice(originalIndex * 18, 18);
 
 
                                                 vertices.push(...thisBitmapVertices); // Add the bitmap back
                                                 texCoords.push(...thisBitmapTextureCoords);
+                                                tintCoords.push(...thisBitmapTintCoords);
 
 
                                                 c = 0;
@@ -6986,6 +7091,7 @@ Bagel = {
                                     texCoords = new Float32Array(texCoords);
                                     renderer.vertices = vertices;
                                     renderer.textureCoordinates = texCoords;
+                                    renderer.tintCoordinates = tintCoords;
 
 
                                     renderer.queue.bitmap.layer = [];
@@ -7054,7 +7160,7 @@ Bagel = {
 
                                                 bitmapsRegenerated[i] = true;
 
-                                                subFunctions.generateVertices(index * 12, renderer.bitmapSpriteData[id], renderer.vertices, renderer.textureCoordinates, renderer, true); // Only regenerates texture coords, not vertices
+                                                subFunctions.generateVertices(index * 12, renderer.bitmapSpriteData[id], renderer.vertices, renderer.textureCoordinates, renderer.tintCoordinates, renderer, true); // Only regenerates texture coords, not vertices or tint coordinates
                                             }
                                             renderer.verticesUpdated = true;
                                         }
@@ -7089,7 +7195,7 @@ Bagel = {
                                             if (index === true) continue;
                                             if (bitmapsRegenerated[id]) continue;
 
-                                            subFunctions.generateVertices(index * 12, renderer.bitmapSpriteData[id], renderer.vertices, renderer.textureCoordinates, renderer, true); // Only regenerates texture coords, not vertices
+                                            subFunctions.generateVertices(index * 12, renderer.bitmapSpriteData[id], renderer.vertices, renderer.textureCoordinates, renderer.tintCoordinates, renderer, true); // Only regenerates texture coords, not vertices or tint coordinates
                                         }
                                     }
                                     renderer.verticesUpdated = true;
@@ -7314,8 +7420,8 @@ Bagel = {
                             }
                         },
 
-                        generateVertices: (i, data, vertices, textureCoords, renderer, skipVertices) => {
-                            if (! skipVertices) {
+                        generateVertices: (i, data, vertices, textureCoords, tintCoords, renderer, justTexCoords) => {
+                            if (! justTexCoords) {
                                 let halfWidth = Math.abs(data.width / 2);
                                 let halfHeight = Math.abs(data.height / 2);
                                 let left = data.x - halfWidth;
@@ -7357,7 +7463,7 @@ Bagel = {
                             let xZero, xOne;
                             if (data.crop) {
                                 let clipX = textureMap.clipX;
-                                xZero = clip.xZero + (data.crop.x * clipX);
+                                xZero = clip.xZero + ((data.crop.x - 0.5) * clipX);
                                 xOne = xZero + (data.crop.width * clipX);
                             }
                             else {
@@ -7372,7 +7478,7 @@ Bagel = {
                             let yZero, yOne;
                             if (data.crop) {
                                 let clipY = textureMap.clipY;
-                                yZero = clip.yZero + (data.crop.y * clipY);
+                                yZero = clip.yZero + ((data.crop.y - 0.5) * clipY);
                                 yOne = yZero + (data.crop.height * clipY);
                             }
                             else {
@@ -7414,6 +7520,29 @@ Bagel = {
                                 textureMapID,
                                 alpha
                             ], i * 2);
+
+                            if (! justTexCoords) {
+                                let color = [1, 1, 1];
+                                if (data.tint) {
+                                    color = renderer.convertColor(data.tint, renderer);
+                                    let multiply = color[3] * 255;
+                                    // TODO: tints don't really work, though they work slightly more in the canvas renderer
+                                    console.log(multiply)
+                                    color[0] *= multiply;
+                                    color[1] *= multiply;
+                                    color[2] *= multiply;
+
+                                    color.pop(); // Remove the alpha
+                                }
+
+                                let a = i * 1.5;
+                                let c = 0;
+                                while (c < 6) {
+                                    tintCoords.set(color, a);
+                                    a += 3;
+                                    c++;
+                                }
+                            }
                         },
                         rotateVertices: (vertices, i, angle, cx, cy) => {
                             let rad = Bagel.maths.degToRad(angle - 90);
@@ -7648,11 +7777,15 @@ Bagel = {
                             let vertex = compileShader(gl.VERTEX_SHADER, `
                                 attribute vec2 a_vertices;
                                 attribute vec4 a_texCoords;
+                                attribute vec3 a_tintCoords;
 
-                                varying vec4 v_texcoord;
+                                varying vec4 v_texCoords;
+                                varying vec3 v_tintCoords;
 
-                                void main () {
-                                    v_texcoord = a_texCoords;
+                                void main() {
+                                    v_texCoords = a_texCoords;
+                                    v_tintCoords = a_tintCoords;
+
                                     gl_Position = vec4(
                                         a_vertices,
                                         0,
@@ -7671,7 +7804,7 @@ Bagel = {
                             while (c < textureCount) { // WebGL texture accessing has to be determined at compilation so the code for all the uses has to be preprogrammed in
                                 textureCode += `
                                 else if (textureID == <c>) {
-                                    pixel = texture2D(u_images[<c>], v_texcoord.xy);
+                                    pixel = texture2D(u_images[<c>], v_texCoords.xy);
                                 }`.replaceAll("<c>", c);
                                 c++;
                             }
@@ -7679,23 +7812,24 @@ Bagel = {
                             let fragment = compileShader(gl.FRAGMENT_SHADER, `
                                 precision mediump float;
                                 uniform sampler2D u_images[<textureCount>];
-                                varying vec4 v_texcoord;
+                                varying vec4 v_texCoords;
+                                varying vec3 v_tintCoords;
 
                                 // From https://gamedev.stackexchange.com/questions/34278/can-you-dynamically-set-which-texture-to-use-in-shader
 
                                 vec4 pixel = vec4(0.0, 0.0, 0.0, 0.0);
                                 vec4 getPixel() {
-                                    int textureID = int(v_texcoord.z);
+                                    int textureID = int(v_texCoords.z);
                                     if (textureID == 0) {
-                                        pixel = texture2D(u_images[0], v_texcoord.xy);
+                                        pixel = texture2D(u_images[0], v_texCoords.xy);
                                     }[...]
                                     return pixel;
                                 }
 
                                 void main() {
                                     pixel = getPixel();
-                                    pixel.rgb *= pixel.a * v_texcoord.a;
-                                    pixel.a *= v_texcoord.a;
+                                    pixel.rgb *= (v_tintCoords * pixel.a) * v_texCoords.a;
+                                    pixel.a *= v_texCoords.a;
 
                                     gl_FragColor = pixel;
                                 }
@@ -7707,6 +7841,7 @@ Bagel = {
 
                             gl.bindAttribLocation(program, renderer.locations.vertices, "a_vertices");
                             gl.bindAttribLocation(program, renderer.locations.texCoords, "a_texCoords");
+                            gl.bindAttribLocation(program, renderer.locations.tintCoords, "v_tintCoords");
 
                             gl.linkProgram(program);
                             /*
@@ -7727,18 +7862,25 @@ Bagel = {
                             gl.uniform1iv(renderer.locations.images, [...Array(textureCount).keys()]);
 
                             let verticesLocation = renderer.locations.vertices;
-                            gl.enableVertexAttribArray(verticesLocation); // Enable it
+                            gl.enableVertexAttribArray(verticesLocation);
                             renderer.buffers.vertices = gl.createBuffer();
                             gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.vertices);
                             gl.vertexAttribPointer(verticesLocation, 2, gl.FLOAT, false, 0, 0);
                             gl.bufferData(gl.ARRAY_BUFFER, renderer.vertices, gl.DYNAMIC_DRAW);
 
                             let textureLocation = renderer.locations.texCoords;
-                            gl.enableVertexAttribArray(textureLocation); // Enable it
+                            gl.enableVertexAttribArray(textureLocation);
                             renderer.buffers.images = gl.createBuffer();
                             gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.images);
                             gl.vertexAttribPointer(textureLocation, 4, gl.FLOAT, false, 0, 0);
-                            gl.bufferData(gl.ARRAY_BUFFER, renderer.textureCoordinates, gl.STATIC_DRAW);
+                            gl.bufferData(gl.ARRAY_BUFFER, renderer.textureCoordinates, gl.DYNAMIC_DRAW);
+
+                            let tintLocation = renderer.locations.tintCoords;
+                            gl.enableVertexAttribArray(tintLocation);
+                            renderer.buffers.tintCoords = gl.createBuffer();
+                            gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.tintCoords);
+                            gl.vertexAttribPointer(tintLocation, 3, gl.FLOAT, false, 0, 0);
+                            gl.bufferData(gl.ARRAY_BUFFER, renderer.tintCoordinates, gl.DYNAMIC_DRAW);
 
                             let blankTexture = renderer.blankTexture;
 
@@ -7811,10 +7953,7 @@ Bagel = {
 
                             let backgroundColor = game.config.display.backgroundColor;
                             if (backgroundColor != renderer.lastBackgroundColor) {
-                                renderer.colorCtx.fillStyle = backgroundColor;
-                                renderer.colorCtx.fillRect(0, 0, 1, 1);
-                                let pixel = renderer.colorCtx.getImageData(0, 0, 1, 1).data;
-                                renderer.backgroundColor = [...pixel].map(value => value / 255);
+                                renderer.backgroundColor = renderer.convertColor(backgroundColor, renderer, true);
 
                                 renderer.lastBackgroundColor = backgroundColor;
                             }
@@ -7826,8 +7965,12 @@ Bagel = {
 
                             if (renderer.vertices.length != 0) {
                                 if (renderer.verticesUpdated) {
+                                    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.tintCoords);
+                                    gl.bufferData(gl.ARRAY_BUFFER, renderer.tintCoordinates, gl.DYNAMIC_DRAW);
+
                                     gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.images);
-                                    gl.bufferData(gl.ARRAY_BUFFER, renderer.textureCoordinates, gl.STATIC_DRAW);
+                                    gl.bufferData(gl.ARRAY_BUFFER, renderer.textureCoordinates, gl.DYNAMIC_DRAW);
+
                                     gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.vertices);
                                     gl.bufferData(gl.ARRAY_BUFFER, renderer.vertices, gl.DYNAMIC_DRAW);
 
@@ -9880,12 +10023,12 @@ Bagel = {
                 alpha: {
                     required: false,
                     default: 1,
-                    check: (value, box) => {
+                    check: (value, data) => {
                         if (value > 1) {
-                            box.alpha = 1;
+                            data.alpha = 1;
                         }
                         else if (value < 0) {
-                            box.alpha = 0;
+                            data.alpha = 0;
                         }
                     },
                     types: ["number"],
@@ -10429,7 +10572,7 @@ Bagel = {
                             else {
                                 // Not really any faster to queue it, so just update it now
                                 let i = renderer.bitmapIndexes[id] * 12;
-                                Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer);
+                                Bagel.internal.subFunctions.tick.render.webgl.generateVertices(i, data, renderer.vertices, renderer.textureCoordinates, renderer.tintCoordinates, renderer);
 
                                 renderer.verticesUpdated = true;
                             }
@@ -10440,7 +10583,7 @@ Bagel = {
                                 if (old.tint) { // Had a tint before
                                     Bagel.internal.render.bitmapSprite.internal.reduceCanvasTint(renderer, old.image, old.tint);
                                 }
-                                if (box.tint) {
+                                if (data.tint) {
                                     Bagel.internal.render.bitmapSprite.internal.canvasTint(renderer, data.image, data.tint);
                                 }
                             }
