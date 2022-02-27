@@ -4,16 +4,13 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_test
 
 TODO
-Finish updating layer operations to work with tints <========
-
-Cropping is offset differently to the canvas, has half pixels
+Manually tint in canvas renderer when using non-255 alpha tints
 
 Auto downscaling textures and log which were downscaled
 Deactivate textures when count is 0. Maybe shrink where possible?
 Change mode description for canvas sprites, add single texture and antialias arguments
 Use auto renderer by default
 Try using activateTextureMap to shrink them periodically, it'll only do it if it doesn't cut any textures off
-Texture downscaling
 What happens if a texture dimensions are changed by changing the source data while it's still pending? (without calling update)
 What happens if you queue a texture update with the same dimensions and then resize the texture without queuing an update? When processing the queue, it should cancel it and then add it to the new queue
 Ignore singleTexture request when there aren't enough slots
@@ -6894,7 +6891,7 @@ Bagel = {
                                     let toAdd = renderer.queueLengths.new - renderer.queueLengths.delete;
                                     let newVertices = new Float32Array(renderer.vertices.length + (toAdd * 12));
                                     let newTextureCoords = new Float32Array(renderer.textureCoordinates.length + (toAdd * 24));
-                                    let newTintCoords = new Float32Array(renderer.tintCoordinates.length + (toAdd * 18));
+                                    let newTintCoords = new Float32Array(renderer.tintCoordinates.length + (toAdd * 24));
 
                                     let bitmapIndexes = renderer.bitmapIndexes;
 
@@ -6908,7 +6905,7 @@ Bagel = {
                                         if (bitmapQueue.delete[id]) {
                                             newVertices.set(renderer.vertices.slice(startI, i), startC);
                                             newTextureCoords.set(renderer.textureCoordinates.slice(startI * 2, i * 2), startC * 2);
-                                            newTintCoords.set(renderer.tintCoordinates.slice(startI * 1.5, i * 1.5), startC * 1.5);
+                                            newTintCoords.set(renderer.tintCoordinates.slice(startI * 2, i * 2), startC * 2);
 
                                             removed++;
                                             i += 12;
@@ -6925,7 +6922,7 @@ Bagel = {
                                     }
                                     newVertices.set(renderer.vertices.slice(startI, i), startC);
                                     newTextureCoords.set(renderer.textureCoordinates.slice(startI * 2, i * 2), startC * 2);
-                                    newTintCoords.set(renderer.tintCoordinates.slice(startI * 1.5, i * 1.5), startC * 1.5);
+                                    newTintCoords.set(renderer.tintCoordinates.slice(startI * 2, i * 2), startC * 2);
 
 
                                     let oldVerticesEnd = c;
@@ -6996,12 +6993,12 @@ Bagel = {
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
                                                 thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
-                                                thisBitmapTintCoords = tintCoords.slice(originalIndex * 18, (originalIndex * 18) + 18);
+                                                thisBitmapTintCoords = tintCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
                                                 texCoords.splice(originalIndex * 24, 24);
-                                                tintCoords.splice(originalIndex * 18, 18);
+                                                tintCoords.splice(originalIndex * 24, 24);
 
 
                                                 vertices.push(...thisBitmapVertices); // Add the bitmap back
@@ -7027,13 +7024,17 @@ Bagel = {
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
                                                 thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                thisBitmapTintCoords = tintCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
                                                 texCoords.splice(originalIndex * 24, 24);
+                                                tintCoords.splice(originalIndex * 24, 24);
 
                                                 vertices.splice((originalIndex * 12) + 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
                                                 texCoords.splice((originalIndex * 24) + 24, 0, ...thisBitmapTextureCoords);
+                                                tintCoords.splice((originalIndex * 24) + 24, 0, ...thisBitmapTintCoords);
 
                                                 bitmapIndexes[bitmapIndexes.indexOf(originalIndex + 1)]--; // Swap the indexes
                                                 bitmapIndexes[id]++;
@@ -7047,13 +7048,16 @@ Bagel = {
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
                                                 thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                thisBitmapTintCoords = tintCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
                                                 texCoords.splice(originalIndex * 24, 24);
+                                                tintCoords.splice(originalIndex * 24, 24);
 
                                                 vertices.splice(0, 0, ...thisBitmapVertices); // Add it back in at the start
                                                 texCoords.splice(0, 0, ...thisBitmapTextureCoords);
+                                                tintCoords.splice(0, 0, ...thisBitmapTintCoords);
 
 
                                                 c = 0;
@@ -7074,13 +7078,16 @@ Bagel = {
 
                                                 thisBitmapVertices = vertices.slice(originalIndex * 12, (originalIndex * 12) + 12);
                                                 thisBitmapTextureCoords = texCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
+                                                thisBitmapTintCoords = tintCoords.slice(originalIndex * 24, (originalIndex * 24) + 24);
 
 
                                                 vertices.splice(originalIndex * 12, 12); // Remove the bitmap
                                                 texCoords.splice(originalIndex * 24, 24);
+                                                tintCoords.splice(originalIndex * 24, 24);
 
                                                 vertices.splice((originalIndex * 12) - 12, 0, ...thisBitmapVertices); // Insert the bitmap back in
                                                 texCoords.splice((originalIndex * 24) - 24, 0, ...thisBitmapTextureCoords);
+                                                tintCoords.splice((originalIndex * 24) - 24, 0, ...thisBitmapTintCoords);
 
                                                 bitmapIndexes[bitmapIndexes.indexOf(originalIndex - 1)]++; // Swap the indexes
                                                 bitmapIndexes[id]--;
@@ -7089,6 +7096,7 @@ Bagel = {
 
                                     vertices = new Float32Array(vertices);
                                     texCoords = new Float32Array(texCoords);
+                                    tintCoords = new Float32Array(tintCoords);
                                     renderer.vertices = vertices;
                                     renderer.textureCoordinates = texCoords;
                                     renderer.tintCoordinates = tintCoords;
@@ -7522,24 +7530,15 @@ Bagel = {
                             ], i * 2);
 
                             if (! justTexCoords) {
-                                let color = [1, 1, 1];
-                                if (data.tint) {
-                                    color = renderer.convertColor(data.tint, renderer);
-                                    let multiply = color[3] * 255;
-                                    // TODO: tints don't really work, though they work slightly more in the canvas renderer
-                                    console.log(multiply)
-                                    color[0] *= multiply;
-                                    color[1] *= multiply;
-                                    color[2] *= multiply;
+                                let color;
+                                if (data.tint) color = renderer.convertColor(data.tint, renderer, true);
+                                else color = [1, 1, 1, 0];
 
-                                    color.pop(); // Remove the alpha
-                                }
-
-                                let a = i * 1.5;
+                                let a = i * 2;
                                 let c = 0;
                                 while (c < 6) {
                                     tintCoords.set(color, a);
-                                    a += 3;
+                                    a += 4;
                                     c++;
                                 }
                             }
@@ -7777,10 +7776,10 @@ Bagel = {
                             let vertex = compileShader(gl.VERTEX_SHADER, `
                                 attribute vec2 a_vertices;
                                 attribute vec4 a_texCoords;
-                                attribute vec3 a_tintCoords;
+                                attribute vec4 a_tintCoords;
 
                                 varying vec4 v_texCoords;
-                                varying vec3 v_tintCoords;
+                                varying vec4 v_tintCoords;
 
                                 void main() {
                                     v_texCoords = a_texCoords;
@@ -7813,7 +7812,7 @@ Bagel = {
                                 precision mediump float;
                                 uniform sampler2D u_images[<textureCount>];
                                 varying vec4 v_texCoords;
-                                varying vec3 v_tintCoords;
+                                varying vec4 v_tintCoords;
 
                                 // From https://gamedev.stackexchange.com/questions/34278/can-you-dynamically-set-which-texture-to-use-in-shader
 
@@ -7828,7 +7827,9 @@ Bagel = {
 
                                 void main() {
                                     pixel = getPixel();
-                                    pixel.rgb *= (v_tintCoords * pixel.a) * v_texCoords.a;
+                                    pixel.rgb = mix(pixel.rgb, v_tintCoords.rgb, v_tintCoords.a); // Tint
+
+                                    pixel.rgb *= pixel.a * v_texCoords.a;
                                     pixel.a *= v_texCoords.a;
 
                                     gl_FragColor = pixel;
@@ -7879,7 +7880,7 @@ Bagel = {
                             gl.enableVertexAttribArray(tintLocation);
                             renderer.buffers.tintCoords = gl.createBuffer();
                             gl.bindBuffer(gl.ARRAY_BUFFER, renderer.buffers.tintCoords);
-                            gl.vertexAttribPointer(tintLocation, 3, gl.FLOAT, false, 0, 0);
+                            gl.vertexAttribPointer(tintLocation, 4, gl.FLOAT, false, 0, 0);
                             gl.bufferData(gl.ARRAY_BUFFER, renderer.tintCoordinates, gl.DYNAMIC_DRAW);
 
                             let blankTexture = renderer.blankTexture;
