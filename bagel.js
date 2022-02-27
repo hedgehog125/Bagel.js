@@ -4,8 +4,6 @@ Button sounds from: https://scratch.mit.edu/projects/42854414/ under CC BY-SA 2.
 WebGL rendererer is somewhat based off https://github.com/quidmonkey/particle_test
 
 TODO
-Manually tint in canvas renderer when using non-255 alpha tints
-
 Auto downscaling textures and log which were downscaled
 Deactivate textures when count is 0. Maybe shrink where possible?
 Change mode description for canvas sprites, add single texture and antialias arguments
