@@ -16,8 +16,7 @@ Bagel.js is my most recent attempt at creating a games framework, out of 3 in to
  * A PWA creation tool ([example](http://hedgehog125.github.io/Bagel-PWA/))
  * Scales the resolution for any device while keeping the aspect ratio
 
- * Named after my favourite type of bread (fun fact: I also used to have bagels at a coding club before they stopped selling them :(, probably inspired the name)
- (now can't go to said coding club because of the pandemic :/)
+Fun fact: it got its name because I used to get bagels at Coder Dojo Brighton before the university stopped doing them.
 
  # Getting started
  Check out the wiki [here](https://github.com/hedgehog125/Bagel.js/wiki).
